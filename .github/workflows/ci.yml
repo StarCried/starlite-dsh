@@ -1,0 +1,166 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-pin:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      present: ${{ steps.pin.outputs.present }}
+      revision: ${{ steps.pin.outputs.revision }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: pin
+        shell: bash
+        run: |
+          if [[ ! -f release/inochi2d-web.rev ]]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          revision="$(tr -d '\r\n' < release/inochi2d-web.rev)"
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+          echo "present=true" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+  core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:core
+      - run: git diff --check
+
+  runtime:
+    needs: release-pin
+    if: ${{ needs.release-pin.outputs.present == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: StarCried/inochi2d-web
+          ref: ${{ needs.release-pin.outputs.revision }}
+          path: inochi2d-web
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: inochi2d-web/package-lock.json
+      - name: Install deterministic WASM build tools
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/llvm-snapshot.gpg.key" \
+            https://apt.llvm.org/llvm-snapshot.gpg.key
+          test "$(gpg --show-keys --with-colons "$RUNNER_TEMP/llvm-snapshot.gpg.key" \
+            | awk -F: '$1 == "fpr" { print $10; exit }')" \
+            = "6084F3CF814B57C1CF12EFD515CF4D18AF4F7421"
+          sudo gpg --dearmor \
+            --output /usr/share/keyrings/apt.llvm.org.gpg \
+            "$RUNNER_TEMP/llvm-snapshot.gpg.key"
+          echo "deb [signed-by=/usr/share/keyrings/apt.llvm.org.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" \
+            | sudo tee /etc/apt/sources.list.d/llvm-20.list
+          sudo apt-get update
+          sudo apt-get install --yes lld-20
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/binaryen.tar.gz" \
+            https://github.com/WebAssembly/binaryen/releases/download/version_120/binaryen-version_120-x86_64-linux.tar.gz
+          echo "ddb097af51d1bdb17300d986b0de7d97422f1933dedb4c9eda3510e0bf4076cc  $RUNNER_TEMP/binaryen.tar.gz" \
+            | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/binaryen.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/binaryen-version_120/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/inochi2d-web/official-sdk
+          key: official-sdk-${{ runner.os }}-${{ hashFiles('inochi2d-web/tools/official-sdk/pin.json', 'inochi2d-web/tools/official-sdk/**', 'inochi2d-web/tools/build-official-sdk.mjs') }}
+      - working-directory: inochi2d-web
+        run: npm ci
+      - working-directory: inochi2d-web
+        run: npm run fixtures && npm run build:wasm && npm run build --workspace inochi2d-web && npm run test --workspace inochi2d-web
+      - run: node tools/sync-inochi2d-runtime.mjs inochi2d-web/packages/inochi2d-web/dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inochi2d-web-runtime
+          path: apps/desktop/public/runtime/inochi2d-web
+          if-no-files-found: error
+          retention-days: 1
+
+  windows-desktop:
+    needs: [core, runtime]
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - uses: actions/download-artifact@v4
+        with:
+          name: inochi2d-web-runtime
+          path: apps/desktop/public/runtime/inochi2d-web
+      - run: pnpm install --frozen-lockfile
+      - name: Stage the separately licensed release model when present
+        shell: pwsh
+        run: |
+          if (Test-Path assets/microlight/model.inp) {
+            pnpm stage:demo-model
+          }
+      - run: pnpm check
+      - run: cargo fmt --check --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - run: cargo clippy --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
+      - run: cargo clippy --locked --release --manifest-path apps/desktop/src-tauri/Cargo.toml -- -D warnings
+      - name: Rust tests (including the release model when present)
+        shell: pwsh
+        run: |
+          if (Test-Path assets/microlight/model.inp) {
+            $env:DSH_PET_DEMO_MODEL = (Resolve-Path assets/microlight/model.inp).Path
+          }
+          cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - run: pnpm desktop:build
+      - run: pnpm pack:plugin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-windows-alpha
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            packages/dsh-plugin/.pack/*.tgz
+          if-no-files-found: error
+          retention-days: 7

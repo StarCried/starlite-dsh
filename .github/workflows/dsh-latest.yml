@@ -1,0 +1,39 @@
+name: DSH latest contract
+
+on:
+  schedule:
+    - cron: "17 20 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npm install --global --prefix "$HOME/.local" @deepseek-ai/dsh@latest
+      - run: node tools/check-dsh-contract.mjs "$HOME/.local/lib/node_modules/@deepseek-ai/dsh"
+      - run: pnpm pack:plugin
+      - name: Install the packed bundle in an isolated profile
+        shell: bash
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          package="$(find packages/dsh-plugin/.pack -maxdepth 1 -name 'dsh-inochi2d-pet-*.tgz' -print -quit)"
+          test -n "$package"
+          dsh plugin --profile inochi2d-ci add "$package"
+          dsh --profile inochi2d-ci --dump-config > "$RUNNER_TEMP/dsh-config.txt"
+          grep -F "dsh-inochi2d-pet" "$RUNNER_TEMP/dsh-config.txt"

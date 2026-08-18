@@ -1,0 +1,50 @@
+{
+  "name": "dsh-inochi2d-pet",
+  "version": "0.1.0-alpha.0",
+  "description": "DeepSeek Harness status bridge for DSH Inochi2D Pet",
+  "type": "module",
+  "license": "BSD-2-Clause",
+  "author": "StarCried",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/StarCried/dsh-inochi2d-pet.git",
+    "directory": "packages/dsh-plugin"
+  },
+  "homepage": "https://github.com/StarCried/dsh-inochi2d-pet#readme",
+  "bugs": "https://github.com/StarCried/dsh-inochi2d-pet/issues",
+  "main": "./dist/index.js",
+  "exports": "./dist/index.js",
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --sourcemap",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --root ../.. packages/dsh-plugin/tests",
+    "pack:check": "pnpm build && pnpm pack --pack-destination .pack && node ../../tools/check-plugin-package.mjs"
+  },
+  "devDependencies": {
+    "@dsh-inochi2d-pet/protocol": "workspace:*",
+    "@types/node": "^24.10.0",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "inochi2d",
+    "desktop-pet"
+  ]
+}

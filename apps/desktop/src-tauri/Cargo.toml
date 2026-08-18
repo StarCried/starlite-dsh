@@ -1,0 +1,36 @@
+[package]
+name = "dsh-inochi2d-pet"
+version = "0.1.0-alpha.0"
+description = "Windows Inochi2D companion for DeepSeek Harness"
+authors = ["StarCried"]
+edition = "2021"
+license = "BSD-2-Clause"
+rust-version = "1.85"
+
+[lib]
+name = "dsh_inochi2d_pet_lib"
+# This alpha targets only the Windows desktop binary; mobile FFI artifacts add
+# an unused DLL/static library and noisy linker work.
+crate-type = ["rlib"]
+
+[[bin]]
+name = "dsh-inochi2d-pet"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+atomic-write-file = "0.3.1"
+inochi2d-pipeline = { git = "https://github.com/StarCried/inochi2d-web.git", rev = "5898db90706611893520e11cc564bb3e578d0e56" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+tauri = { version = "2.11.5", features = ["protocol-asset", "tray-icon"] }
+tauri-plugin-deep-link = "2.4.9"
+tauri-plugin-dialog = "2.7.2"
+tauri-plugin-single-instance = { version = "2.4.3", features = ["deep-link"] }
+tauri-plugin-window-state = "2.4.1"
+uuid = { version = "1.18.1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3.23.0"

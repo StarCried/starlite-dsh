@@ -1,0 +1,77 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DSH Inochi2D Pet",
+  "version": "0.1.0-alpha.0",
+  "identifier": "com.starcried.dsh-inochi2d-pet",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "DSH Inochi2D Pet",
+        "width": 480,
+        "height": 720,
+        "minWidth": 320,
+        "minHeight": 480,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false
+      },
+      {
+        "label": "settings",
+        "title": "DSH Inochi2D Pet 设置",
+        "url": "index.html?view=settings",
+        "width": 760,
+        "height": 720,
+        "minWidth": 620,
+        "minHeight": 560,
+        "resizable": true,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost http://127.0.0.1:*; worker-src 'none'; frame-src 'none'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/models/**/*"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "resources": ["resources/microlight/*"],
+    "publisher": "StarCried",
+    "copyright": "Copyright © 2026 StarCried",
+    "shortDescription": "Inochi2D desktop companion for DeepSeek Harness",
+    "longDescription": "A local-only Inochi2D desktop companion driven by DeepSeek Harness running in WSL2.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["dsh-inochi2d-pet"]
+      }
+    }
+  }
+}

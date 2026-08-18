@@ -12,7 +12,10 @@ across the WSL boundary.
 
 See the repository README for installation and compatibility details.
 
-Install the unsigned Windows companion first, then in WSL2:
+No prebuilt companion or npm package is published yet. For the current BYOM
+source preview, build and install the Windows companion and packed bundle using
+the repository development guide. After a prebuilt alpha is published, install
+the unsigned Windows companion first, then in WSL2:
 
 ```bash
 npm install -g --prefix "$HOME/.local" @deepseek-ai/dsh@latest

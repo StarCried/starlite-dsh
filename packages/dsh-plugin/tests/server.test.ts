@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PET_PROTOCOL_VERSION, type PetStateSource } from "@dsh-inochi2d-pet/protocol";
-import { startStatusServer } from "../src/server.js";
+import { isBrowserSafePort, startStatusServer } from "../src/server.js";
 
 function idleSource(): PetStateSource {
   return {
@@ -18,8 +18,18 @@ function idleSource(): PetStateSource {
 }
 
 describe("status SSE server", () => {
+  it("rejects ports blocked by browser fetch implementations", () => {
+    expect(isBrowserSafePort(0)).toBe(false);
+    expect(isBrowserSafePort(6000)).toBe(false);
+    expect(isBrowserSafePort(6667)).toBe(false);
+    expect(isBrowserSafePort(10_080)).toBe(false);
+    expect(isBrowserSafePort(8084)).toBe(true);
+    expect(isBrowserSafePort(65_535)).toBe(true);
+  });
+
   it("binds loopback, requires bearer auth, and sends the initial snapshot", async () => {
     const server = await startStatusServer(idleSource());
+    expect(isBrowserSafePort(server.port)).toBe(true);
     const endpoint = `http://127.0.0.1:${server.port}/v1/events`;
     try {
       expect((await fetch(endpoint)).status).toBe(401);

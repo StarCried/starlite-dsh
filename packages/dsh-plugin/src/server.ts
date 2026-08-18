@@ -9,6 +9,18 @@ import {
 
 const HEARTBEAT_MS = 15_000;
 const MAX_CLIENTS = 2;
+const MAX_LISTEN_ATTEMPTS = 16;
+// Fetch implementations reject these ports before a request reaches the
+// server. Port 0 can occasionally select one of them on hosts with a custom
+// ephemeral-port range, which would make an otherwise healthy bridge unusable.
+const BROWSER_BLOCKED_PORTS = new Set([
+  0, 1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69,
+  77, 79, 87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119,
+  123, 135, 137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515,
+  526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990,
+  993, 995, 1_719, 1_720, 1_723, 2_049, 3_659, 4_045, 4_190, 5_060,
+  5_061, 6_000, 6_566, 6_665, 6_666, 6_667, 6_668, 6_669, 6_697, 10_080,
+]);
 const ALLOWED_ORIGINS = new Set([
   "http://tauri.localhost",
   "https://tauri.localhost",
@@ -127,6 +139,20 @@ export async function startStatusServer(source: PetStateSource): Promise<StatusS
 }
 
 function listenLoopback(server: Server): Promise<void> {
+  return listenOnSafeLoopbackPort(server);
+}
+
+async function listenOnSafeLoopbackPort(server: Server): Promise<void> {
+  for (let attempt = 0; attempt < MAX_LISTEN_ATTEMPTS; attempt += 1) {
+    await listenOnce(server);
+    const address = server.address();
+    if (address && typeof address !== "string" && isBrowserSafePort(address.port)) return;
+    await closeServer(server);
+  }
+  throw new Error("DSH pet status server could not allocate a browser-safe port");
+}
+
+function listenOnce(server: Server): Promise<void> {
   return new Promise((resolve, reject) => {
     const onError = (error: Error) => reject(error);
     server.once("error", onError);
@@ -135,6 +161,11 @@ function listenLoopback(server: Server): Promise<void> {
       resolve();
     });
   });
+}
+
+export function isBrowserSafePort(port: number): boolean {
+  return Number.isInteger(port) && port > 0 && port <= 65_535
+    && !BROWSER_BLOCKED_PORTS.has(port);
 }
 
 async function shutdown(

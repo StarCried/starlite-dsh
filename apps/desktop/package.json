@@ -1,0 +1,26 @@
+{
+  "name": "@dsh-inochi2d-pet/desktop",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "pnpm --dir ../../packages/protocol build",
+    "build": "node ../../tools/assert-inochi2d-runtime.mjs && tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --root ../.. apps/desktop/tests",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@dsh-inochi2d-pet/protocol": "workspace:*",
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-deep-link": "2.4.9",
+    "@tauri-apps/plugin-dialog": "2.7.2"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
+    "typescript": "7.0.2",
+    "vite": "8.2.1",
+    "vitest": "4.1.10"
+  }
+}

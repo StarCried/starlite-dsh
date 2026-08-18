@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>DSH Inochi2D Pet</title>
+  </head>
+  <body>
+    <main id="pet-view" aria-label="DSH Inochi2D Pet">
+      <output id="bubble" aria-live="polite" hidden></output>
+      <div id="model" aria-label="Inochi2D model"></div>
+      <button id="empty-model" type="button" hidden>点击此处打开设置并导入 Inochi2D 模型。</button>
+    </main>
+
+    <main id="settings-view" hidden>
+      <header>
+        <h1>DSH Inochi2D Pet</h1>
+        <p>模型和会话内容仅保存在本机。</p>
+      </header>
+      <section>
+        <h2>模型</h2>
+        <div class="row">
+          <button id="choose-model" type="button">选择 .inp</button>
+          <span id="model-path">尚未选择</span>
+        </div>
+        <p id="inspection-status" role="status"></p>
+      </section>
+      <form id="settings-form">
+        <section>
+          <h2>动画映射</h2>
+          <div id="animation-mappings"></div>
+        </section>
+        <section class="preferences">
+          <h2>显示</h2>
+          <label>帧率
+            <select id="fps"><option value="60">60 FPS</option><option value="30">30 FPS</option></select>
+          </label>
+          <label>渲染 DPR 上限
+            <input id="dpr" type="number" min="1" max="1.5" step="0.1" />
+          </label>
+          <label>模型缩放
+            <input id="scale" type="number" min="0.25" max="3" step="0.05" />
+          </label>
+          <label class="check"><input id="privacy" type="checkbox" /> 固定文案隐私模式</label>
+        </section>
+        <div class="actions">
+          <button id="save-settings" type="submit">导入并保存</button>
+        </div>
+      </form>
+      <p id="settings-error" role="alert"></p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

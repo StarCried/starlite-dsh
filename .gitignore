@@ -1,0 +1,32 @@
+node_modules/
+dist/
+coverage/
+target/
+.vite/
+*.log
+*.tgz
+.DS_Store
+Thumbs.db
+release-output/
+
+# Local puppets and generated desktop data are never repository assets.
+*.inp
+*.inx
+apps/desktop/public/model/
+apps/desktop/public/runtime/
+apps/desktop/src-tauri/gen/
+
+# `tauri icon` generates every platform; this alpha tracks Windows assets only.
+apps/desktop/src-tauri/icons/android/
+apps/desktop/src-tauri/icons/ios/
+apps/desktop/src-tauri/icons/*.icns
+apps/desktop/src-tauri/icons/64x64.png
+apps/desktop/src-tauri/icons/Square*.png
+apps/desktop/src-tauri/icons/StoreLogo.png
+apps/desktop/src-tauri/icons/icon.png
+apps/desktop/src-tauri/resources/microlight/model.inp
+apps/desktop/src-tauri/resources/microlight/defaults.json
+apps/desktop/src-tauri/resources/microlight/ASSET_LICENSE.md
+
+# The release model is the only .inp path that may be deliberately tracked.
+!assets/microlight/model.inp

@@ -1,0 +1,40 @@
+{
+  "name": "dsh-inochi2d-pet-workspace",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "license": "BSD-2-Clause",
+  "author": "StarCried",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/StarCried/dsh-inochi2d-pet.git"
+  },
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "pnpm --recursive --if-present run build",
+    "lint": "oxlint --deny-warnings packages tools apps/desktop/src",
+    "typecheck": "pnpm --recursive --if-present run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check:core": "pnpm lint && pnpm typecheck && pnpm test && pnpm --dir packages/protocol build && pnpm --dir packages/dsh-plugin build && pnpm --dir tools/mock-source build && pnpm pack:plugin",
+    "desktop:dev": "pnpm --dir apps/desktop tauri dev",
+    "desktop:build": "pnpm --dir apps/desktop tauri build",
+    "pack:plugin": "pnpm --dir packages/dsh-plugin run pack:check",
+    "sync:runtime": "node tools/sync-inochi2d-runtime.mjs",
+    "stage:demo-model": "node tools/stage-demo-model.mjs",
+    "check:dsh-contract": "node tools/check-dsh-contract.mjs",
+    "check:release": "node tools/check-release.mjs",
+    "release:metadata": "node tools/generate-release-metadata.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "esbuild": "0.28.2",
+    "oxlint": "1.78.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

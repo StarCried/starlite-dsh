@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "tools/*"
+
+allowBuilds:
+  "@tauri-apps/cli": true
+  esbuild: true

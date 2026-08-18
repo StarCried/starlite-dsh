@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "../../packages/dsh-plugin/src/server.ts",
+    "../../packages/dsh-plugin/src/launcher.ts",
+    "../../packages/protocol/src/**/*.ts"
+  ]
+}

@@ -97,7 +97,7 @@ jobs:
             | sha256sum --check
           tar -xzf "$RUNNER_TEMP/binaryen.tar.gz" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/binaryen-version_120/bin" >> "$GITHUB_PATH"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/inochi2d-web/official-sdk
           key: official-sdk-${{ runner.os }}-${{ hashFiles('inochi2d-web/tools/official-sdk/pin.json', 'inochi2d-web/tools/official-sdk/**', 'inochi2d-web/tools/build-official-sdk.mjs') }}
@@ -106,7 +106,7 @@ jobs:
       - working-directory: inochi2d-web
         run: npm run fixtures && npm run build:wasm && npm run build --workspace inochi2d-web && npm run test --workspace inochi2d-web
       - run: node tools/sync-inochi2d-runtime.mjs inochi2d-web/packages/inochi2d-web/dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: inochi2d-web-runtime
           path: apps/desktop/public/runtime/inochi2d-web
@@ -132,7 +132,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: inochi2d-web-runtime
           path: apps/desktop/public/runtime/inochi2d-web
@@ -156,7 +156,7 @@ jobs:
           cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
       - run: pnpm desktop:build
       - run: pnpm pack:plugin
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: unsigned-windows-alpha
           path: |

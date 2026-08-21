@@ -13,14 +13,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.7.0
           run_install: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
@@ -32,8 +32,9 @@ jobs:
         shell: bash
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          package="$(find packages/dsh-plugin/.pack -maxdepth 1 -name 'dsh-inochi2d-pet-*.tgz' -print -quit)"
+          package="$(find packages/dsh-plugin/.pack -maxdepth 1 -type f -name 'dsh-inochi2d-pet-*.tgz' -print -quit)"
           test -n "$package"
+          package="$(realpath "$package")"
           dsh plugin --profile inochi2d-ci add "$package"
           dsh --profile inochi2d-ci --dump-config > "$RUNNER_TEMP/dsh-config.txt"
           grep -F "dsh-inochi2d-pet" "$RUNNER_TEMP/dsh-config.txt"

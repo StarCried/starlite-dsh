@@ -78,7 +78,12 @@ dsh plugin --profile inochi2d-test add \
 dsh --profile inochi2d-test --dump-config
 ```
 
-契约检查验证当前适配器依赖的实际事件签名和事件形状。每日 CI 跟踪 `@latest`；失败表示需要人工审查 DSH 变更，不能通过猜测旧事件语义来兼容。
+契约检查验证当前适配器依赖的实际事件签名和事件形状。每日 CI 跟踪 `@latest`，相关插件、协议或检查脚本推送到 `main` 时也会立即验证；失败表示需要人工审查 DSH 变更，不能通过猜测旧事件语义来兼容。
+
+DSH `0.1.5-rc.1` 的实时文本使用 `agent/assistant-stream`，嵌套工具使用
+`tool/ptc-dispatch-start` / `tool/ptc-dispatch`。适配器同时保留已验证的
+`0.1.2-rc.1` 事件支持。新文本流每次开始请求或重试时清空上一轮文本；最终回复仍来自
+`assistant/message`，只读取可见文本，不读取其中保存的原始流、工具参数或结果。
 
 ## Mock 与手工检查
 

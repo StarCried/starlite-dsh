@@ -1,6 +1,14 @@
 name: DSH latest contract
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/dsh-latest.yml
+      - tools/check-dsh-contract.mjs
+      - packages/dsh-plugin/**
+      - packages/protocol/**
+      - pnpm-lock.yaml
   schedule:
     - cron: "17 20 * * *"
   workflow_dispatch:

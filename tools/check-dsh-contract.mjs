@@ -27,6 +27,18 @@ const nestedTools = await source("dsh-tools/lib/types/types.d.ts");
 const llmTypes = await source("dsh-llm/lib/types/types.d.ts");
 const llmMessages = await source("dsh-llm/lib/types/message.d.ts");
 
+// DSH 0.1.5 moved transient chunks out of SessionEventMap. If the new stream
+// exists, validate its payload and frame shapes even if an older declaration
+// also remains. A renamed event alone is not evidence of compatibility.
+const usesAgentStream = /'agent\/assistant-stream'\s*\(/u.test(agent);
+const streamRequirements = usesAgentStream ? [
+  ["agent/assistant-stream payload", agent, /'agent\/assistant-stream'[^\n]*payload:\s*\{\s*agent:\s*Agent;\s*frame:\s*AssistantStreamFrame;/u],
+  ["assistant stream start frame", agent, /type\s+AssistantStreamFrame\s*=\s*\{\s*readonly\s+type:\s*'start';/u],
+  ["assistant stream chunk frame", agent, /\{\s*readonly\s+type:\s*'chunk';[^}]*readonly\s+chunk:\s*StreamChunk;/u],
+] : [
+  ["assistant/chunk shape", sessionTypes, /'assistant\/chunk':\s*\{[^}]*chunk:\s*StreamChunk;/u],
+];
+
 const requirements = [
   ["agent/status payload", agent, /'agent\/status'[\s\S]{0,500}payload:\s*\{[\s\S]{0,180}agent:\s*Agent;[\s\S]{0,180}status:\s*AgentStatus;/u],
   ["agent/error payload", agent, /'agent\/error'[\s\S]{0,500}payload:\s*\{[\s\S]{0,180}agent:\s*Agent;[\s\S]{0,300}error:\s*unknown;/u],
@@ -36,7 +48,7 @@ const requirements = [
   ["completed turn reason", sessionTypes, /kind:\s*'completed'/u],
   ["blocked turn reason", sessionTypes, /kind:\s*'blocked'/u],
   ["error turn reason", sessionTypes, /kind:\s*'error'/u],
-  ["assistant/chunk event", sessionTypes, /'assistant\/chunk':\s*\{/u],
+  ...streamRequirements,
   ["assistant/message event", sessionTypes, /'assistant\/message':\s*\{/u],
   ["visible text stream chunk", llmTypes, /type:\s*'text-delta';[\s\S]{0,120}text:\s*string;/u],
   ["visible reasoning stream chunk", llmTypes, /type:\s*'reasoning-delta';[\s\S]{0,120}text:\s*string;/u],
@@ -49,8 +61,8 @@ const requirements = [
   ["approval/asked event", approval, /'approval\/asked':\s*\{[\s\S]{0,180}id:\s*ApprovalRequestId;[\s\S]{0,180}toolName:\s*string;/u],
   ["approval/decided event", approval, /'approval\/decided':\s*\{[\s\S]{0,180}id:\s*ApprovalRequestId;[\s\S]{0,180}outcome:\s*ApprovalOutcome;/u],
   ["nested tool start shape", nestedTools, /interface\s+(?:Code|Ptc)DispatchStartEventData\s*\{[\s\S]{0,260}subCallId:\s*(?:Tool)?CallId;[\s\S]{0,120}name:\s*string;[\s\S]{0,120}arguments:\s*unknown;/u],
-  ["nested tool start event", nestedTools, /'tool\/code-dispatch-start':\s*(?:Code|Ptc)DispatchStartEventData/u],
-  ["nested tool finish event", nestedTools, /'tool\/code-dispatch':\s*(?:Code|Ptc)DispatchEventData/u],
+  ["nested tool start event", nestedTools, /'tool\/(?:code|ptc)-dispatch-start':\s*(?:Code|Ptc)DispatchStartEventData/u],
+  ["nested tool finish event", nestedTools, /'tool\/(?:code|ptc)-dispatch':\s*(?:Code|Ptc)DispatchEventData/u],
 ];
 
 const missing = requirements

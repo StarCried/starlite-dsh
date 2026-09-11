@@ -88,18 +88,26 @@ describe("DshStateAggregator", () => {
     expect(snapshots.at(-1)?.bubble?.text).toBe("思考中…");
   });
 
-  it("tracks normal, nested, and question tool lifecycles", async () => {
+  it.each(["code", "ptc"])("tracks normal, nested %s, and question tool lifecycles", async (dialect) => {
     const snapshots: PetSnapshot[] = [];
     const source = new DshStateAggregator();
     await source.start((snapshot) => snapshots.push(snapshot));
     source.handleSessionEvent("s", { type: "turn/start" });
 
     source.handleSessionEvent("s", {
-      type: "tool/code-dispatch-start",
+      type: `tool/${dialect}-dispatch-start`,
       data: { subCallId: "nested", name: "read_file", arguments: { path: "private" } },
     });
     expect(snapshots.at(-1)?.state).toBe("working");
-    source.handleSessionEvent("s", { type: "tool/code-dispatch", data: { subCallId: "nested", content: "private" } });
+    source.handleSessionEvent("s", {
+      type: `tool/${dialect}-dispatch-start`,
+      data: { subCallId: "parallel", name: "shell", arguments: "private" },
+    });
+    source.handleSessionEvent("s", { type: `tool/${dialect}-dispatch`, data: { subCallId: "nested", content: "private" } });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(snapshots.at(-1)?.state).toBe("working");
+    expect(snapshots.at(-1)?.bubble?.text).toBe("正在使用 shell…");
+    source.handleSessionEvent("s", { type: `tool/${dialect}-dispatch`, data: { subCallId: "parallel", content: "private" } });
     expect(snapshots.at(-1)?.state).toBe("thinking");
 
     source.handleSessionEvent("s", {

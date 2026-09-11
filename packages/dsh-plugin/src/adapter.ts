@@ -51,6 +51,12 @@ export async function startDshAdapter(
       const payload = asRecord(arguments_[0]);
       if (payload?.agent) aggregator.handleAgentError(subjectKey(payload.agent));
     });
+    subscribeRequired(context, disposers, "agent/assistant-stream", (...arguments_) => {
+      const payload = asRecord(arguments_[0]);
+      if (payload?.agent) {
+        aggregator.handleAssistantStream(subjectKey(payload.agent), payload.frame);
+      }
+    });
     subscribeRequired(context, disposers, "session/event", (...arguments_) => {
       const session = arguments_[0];
       const event = asRecord(arguments_[1]);

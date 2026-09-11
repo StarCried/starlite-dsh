@@ -120,6 +120,23 @@ export class DshStateAggregator implements PetStateSource {
     this.#changed();
   }
 
+  handleAssistantStream(key: unknown, rawFrame: unknown): void {
+    const frame = asRecord(rawFrame);
+    if (frame?.type !== "start" && frame?.type !== "chunk") return;
+    const session = this.#session(key);
+    const now = this.#clock.now();
+    if (frame.type === "start") {
+      // DSH 0.1.5 publishes live chunks outside the durable session log. A new
+      // attempt must not concatenate its text with a previous step or retry.
+      session.reasoning = undefined;
+      session.response = undefined;
+    } else {
+      handleAssistantChunk(session, frame, now);
+    }
+    session.activityAt = now;
+    this.#changed();
+  }
+
   handleApprovalRequested(key: unknown, approvalKey: string, toolName: unknown): void {
     const name = safeToolName(typeof toolName === "string" ? toolName : undefined);
     if (!approvalKey || !name) return;
@@ -167,9 +184,11 @@ export class DshStateAggregator implements PetStateSource {
         handleToolSettled(session, data);
         break;
       case "tool/code-dispatch-start":
+      case "tool/ptc-dispatch-start":
         handleToolStarted(session, data, now, "subCallId");
         break;
       case "tool/code-dispatch":
+      case "tool/ptc-dispatch":
         removeCall(session, stringField(data, "subCallId"));
         break;
       case "approval/asked":

@@ -32,3 +32,13 @@ The ignored private-bundle test is opt-in: set `DSH_PET_VRM_ASSETS` to the local
 companion output directory and run `cargo test --manifest-path
 apps/desktop/src-tauri/Cargo.toml private_companion_bundles -- --ignored`.
 No private assets are required or copied into this repository's test fixtures.
+
+## Runtime staging
+
+`pnpm sync:runtime -- <inochi2d-web dist>` stages core, Inochi2D and VRM
+from the same checkout, including hashes and license texts. Build core before
+Inochi2D and VRM upstream. Only the selected renderer is imported.
+`release/inochi2d-web.rev` pins all JavaScript components; the unchanged native
+preparation library has its own `release/inochi2d-pipeline.rev` pin. New runtime
+commits remain local until separately approved for publication; CI checkout
+requires that publication before this branch can run remotely.

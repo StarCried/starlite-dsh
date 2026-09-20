@@ -104,12 +104,12 @@ jobs:
       - working-directory: inochi2d-web
         run: npm ci
       - working-directory: inochi2d-web
-        run: npm run fixtures && npm run build:wasm && npm run build --workspace inochi2d-web && npm run test --workspace inochi2d-web
+        run: npm run fixtures && npm run build:wasm && npm run build --workspace model-widget-core && npm run build --workspace inochi2d-web && npm run build --workspace vrm-web && npm run test --workspace inochi2d-web && npm run test --workspace vrm-web
       - run: node tools/sync-inochi2d-runtime.mjs inochi2d-web/packages/inochi2d-web/dist
       - uses: actions/upload-artifact@v7
         with:
-          name: inochi2d-web-runtime
-          path: apps/desktop/public/runtime/inochi2d-web
+          name: model-runtimes
+          path: apps/desktop/public/runtime
           if-no-files-found: error
           retention-days: 1
 
@@ -134,8 +134,8 @@ jobs:
           components: clippy,rustfmt
       - uses: actions/download-artifact@v8
         with:
-          name: inochi2d-web-runtime
-          path: apps/desktop/public/runtime/inochi2d-web
+          name: model-runtimes
+          path: apps/desktop/public/runtime
       - run: pnpm install --frozen-lockfile
       - name: Stage the separately licensed release model when present
         shell: pwsh

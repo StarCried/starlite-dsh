@@ -4,126 +4,47 @@ import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-
-const execFile = promisify(execFileCallback);
-
-const workspaceRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const sourceArgument = process.argv[2] ?? process.env.INOCHI2D_WEB_DIST;
-if (!sourceArgument) {
-  throw new Error(
-    "runtime source is required: pnpm sync:runtime -- <inochi2d-web dist directory>",
-  );
-}
-const source = resolve(sourceArgument);
-const destination = resolve(
-  workspaceRoot,
-  "apps/desktop/public/runtime/inochi2d-web",
-);
-
-const destinationRelative = relative(workspaceRoot, destination);
-if (destinationRelative.startsWith("..") || isAbsolute(destinationRelative)) {
-  throw new Error("runtime destination must remain inside the workspace");
-}
-
-await assertRuntime(source);
-await rm(destination, { recursive: true, force: true });
-await mkdir(destination, { recursive: true });
-await copyRuntimeTree(source, destination);
-await copyRuntimeNotices(dirname(source), destination);
-await writeRuntimeProvenance(source, destination);
-await assertRuntime(destination);
-
-console.log(`Copied the local Inochi2D runtime to ${destination}`);
-
-async function assertRuntime(directory) {
-  const required = [
-    "index.js",
-    "widget.css",
-    "generated/inochi2d.wasm",
-  ];
-  for (const relative of required) {
-    const file = resolve(directory, relative);
-    const info = await stat(file).catch(() => undefined);
-    if (!info?.isFile()) throw new Error(`missing runtime artifact: ${file}`);
+import { RUNTIMES, assertRuntime } from "./model-runtime.mjs";
+const execFile=promisify(execFileCallback);
+const workspaceRoot=resolve(fileURLToPath(new URL("..",import.meta.url)));
+const argument=process.argv[2]??process.env.INOCHI2D_WEB_DIST;
+if(!argument)throw new Error("runtime source is required: pnpm sync:runtime -- <inochi2d-web dist directory>");
+const inochiDist=resolve(argument);
+const sourceRoot=await git(inochiDist,["rev-parse","--show-toplevel"]);
+const revision=await git(sourceRoot,["rev-parse","HEAD"]);
+const dirty=Boolean(await git(sourceRoot,["status","--porcelain"]));
+const repository=await git(sourceRoot,["remote","get-url","origin"]);
+const sources=new Map(RUNTIMES.map(name=>[name,name==="inochi2d-web"?inochiDist:resolve(sourceRoot,"packages",name,"dist")]));
+// Validate all components before replacing generated local runtime artifacts.
+for(const [name,source]of sources)await assertRuntime(name,source,false);
+for(const [name,source]of sources){
+ const output=resolve(workspaceRoot,"apps/desktop/public/runtime",name),part=relative(workspaceRoot,output);
+ if(isAbsolute(part)||part.startsWith(".."))throw new Error("runtime destination leaves workspace");
+ const packageRoot=dirname(source),pkg=JSON.parse(await readFile(resolve(packageRoot,"package.json"),"utf8"));
+ const notices=name==="model-widget-core"?["LICENSE"]:["LICENSE","THIRD_PARTY_NOTICES.md","THIRD_PARTY_LICENSES.txt"];
+ for(const notice of notices)if(!(await stat(resolve(packageRoot,notice))).isFile())throw new Error("missing runtime license");
+ await rm(output,{recursive:true,force:true});await mkdir(output,{recursive:true});
+ const files={};
+ async function copy(sourceDirectory,destinationDirectory){
+  for(const entry of await readdir(sourceDirectory,{withFileTypes:true})){
+   const input=resolve(sourceDirectory,entry.name),destination=resolve(destinationDirectory,entry.name);
+   if(entry.isSymbolicLink())throw new Error("runtime artifact must not be a symlink");
+   if(entry.isDirectory()){await mkdir(destination,{recursive:true});await copy(input,destination);continue;}
+   const allowed=name==="vrm-web"?["index.js","widget.css"].includes(entry.name):/\.(css|js|wasm)$|\.d\.ts$/u.test(entry.name);
+   if(entry.isFile()&&allowed){await copyFile(input,destination);files[relative(output,destination).replaceAll("\\","/")]=createHash("sha256").update(await readFile(destination)).digest("hex");}
   }
+ }
+ await copy(source,output);
+ for(const notice of notices){await copyFile(resolve(packageRoot,notice),resolve(output,notice));files[notice]=createHash("sha256").update(await readFile(resolve(output,notice))).digest("hex");}
+ const provenance={schemaVersion:2,package:name,version:pkg.version,repository,revision,dirty,files,dependencies:pkg.dependencies??{}};
+ if(name==="inochi2d-web"){
+  const pin=JSON.parse(await readFile(resolve(sourceRoot,"tools/official-sdk/pin.json"),"utf8"));
+  const selections=JSON.parse(await readFile(resolve(sourceRoot,"tools/official-sdk/dub.selections.json"),"utf8"));
+  const wasmSha256=files["generated/inochi2d.wasm"];
+  if(wasmSha256!==pin.optimizedWasmSha256)throw new Error("runtime WASM does not match pinned SDK");
+  provenance.officialSdk={repository:"https://github.com/Inochi2D/inochi2d",revision:pin.sdkCommit,wasmSha256,packages:selections.versions};
+ }
+ await writeFile(resolve(output,"runtime-provenance.json"),JSON.stringify(provenance,null,2)+"\n");
+ await assertRuntime(name,output,true);console.log(`Staged ${name} from ${revision}`);
 }
-
-async function copyRuntimeTree(sourceDirectory, outputDirectory) {
-  const entries = await readdir(sourceDirectory, { withFileTypes: true });
-  for (const entry of entries) {
-    const sourcePath = resolve(sourceDirectory, entry.name);
-    const outputPath = resolve(outputDirectory, entry.name);
-    if (entry.isSymbolicLink()) {
-      throw new Error(`runtime artifacts must not be symbolic links: ${sourcePath}`);
-    }
-    if (entry.isDirectory()) {
-      await mkdir(outputPath, { recursive: true });
-      await copyRuntimeTree(sourcePath, outputPath);
-      continue;
-    }
-    if (entry.isFile() && /\.(?:css|js|wasm)$/u.test(entry.name)) {
-      await copyFile(sourcePath, outputPath);
-    }
-  }
-}
-
-async function copyRuntimeNotices(packageRoot, output) {
-  for (const name of ["THIRD_PARTY_NOTICES.md", "THIRD_PARTY_LICENSES.txt"]) {
-    const sourcePath = resolve(packageRoot, name);
-    const info = await stat(sourcePath).catch(() => undefined);
-    if (!info?.isFile() || info.size === 0) {
-      throw new Error(`runtime third-party notice is unavailable: ${sourcePath}`);
-    }
-    await copyFile(sourcePath, resolve(output, name));
-  }
-}
-
-async function writeRuntimeProvenance(runtimeDist, output) {
-  const packageRoot = dirname(runtimeDist);
-  const packageJson = JSON.parse(await readFile(resolve(packageRoot, "package.json"), "utf8"));
-  const repositoryRoot = await git(runtimeDist, ["rev-parse", "--show-toplevel"]);
-  const revision = await git(repositoryRoot, ["rev-parse", "HEAD"]);
-  const status = await git(repositoryRoot, ["status", "--porcelain", "--untracked-files=no"]);
-  const remote = await git(repositoryRoot, ["remote", "get-url", "origin"]).catch(() => "");
-  const sdkPin = JSON.parse(
-    await readFile(resolve(repositoryRoot, "tools/official-sdk/pin.json"), "utf8"),
-  );
-  const dubSelections = JSON.parse(
-    await readFile(resolve(repositoryRoot, "tools/official-sdk/dub.selections.json"), "utf8"),
-  );
-  const wasm = await readFile(resolve(output, "generated/inochi2d.wasm"));
-  const wasmSha256 = createHash("sha256").update(wasm).digest("hex");
-  if (wasmSha256 !== sdkPin.optimizedWasmSha256) {
-    throw new Error("staged runtime WASM does not match the pinned official SDK build");
-  }
-  const provenance = {
-    schemaVersion: 1,
-    package: packageJson.name,
-    version: packageJson.version,
-    repository: remote || null,
-    revision,
-    dirty: status.length > 0,
-    officialSdk: {
-      repository: "https://github.com/Inochi2D/inochi2d",
-      revision: sdkPin.sdkCommit,
-      wasmSha256,
-      packages: dubSelections.versions,
-    },
-  };
-  await writeFile(
-    resolve(output, "runtime-provenance.json"),
-    `${JSON.stringify(provenance, null, 2)}\n`,
-    "utf8",
-  );
-}
-
-async function git(directory, arguments_) {
-  // `safe.directory=*` applies only to this process. It permits provenance
-  // capture from a WSL UNC checkout without changing the user's Git config.
-  const { stdout } = await execFile(
-    "git",
-    ["-c", "safe.directory=*", "-C", directory, ...arguments_],
-    { encoding: "utf8", windowsHide: true },
-  );
-  return stdout.trim();
-}
+async function git(directory,args){const {stdout}=await execFile("git",["-c","safe.directory=*","-C",directory,...args],{encoding:"utf8",windowsHide:true});return stdout.trim()}

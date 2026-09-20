@@ -4,6 +4,7 @@ import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { RUNTIMES, assertRuntime } from "./model-runtime.mjs";
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const inputs = process.argv.slice(2).filter((argument) => argument !== "--");
 if (inputs.length === 0) {
@@ -40,6 +41,17 @@ const runtimeProvenance = JSON.parse(await readFile(
   "utf8",
 ));
 components.push(...runtimeComponents(runtimeProvenance));
+for (const name of RUNTIMES) {
+  const directory = resolve(root, "apps/desktop/public/runtime", name);
+  await assertRuntime(name, directory);
+  if (name === "inochi2d-web") continue;
+  const metadata = JSON.parse(await readFile(resolve(directory, "runtime-provenance.json"), "utf8"));
+  components.push({ type: "library", name, version: metadata.version, licenses: licenseEntry("BSD-2-Clause"), properties: [{name: "git:revision", value: metadata.revision}] });
+  for (const [dependency, version] of Object.entries(metadata.dependencies)) {
+    if (RUNTIMES.includes(dependency)) continue;
+    components.push({ type: "library", name: dependency, version, purl: `pkg:npm/${npmPurlName(dependency)}@${encodeURIComponent(version)}`, licenses: [{license: {name: "See bundled VRM dependency license texts"}}] });
+  }
+}
 components.sort((left, right) => `${left.name}@${left.version}`.localeCompare(`${right.name}@${right.version}`));
 const workspacePackage = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
 const sbom = {
@@ -61,10 +73,10 @@ const sbom = {
 await writeFile(resolve(output, "sbom.cdx.json"), `${JSON.stringify(sbom, null, 2)}\n`, "utf8");
 
 const licenses = await collectLicenseTexts(nodeLicenses, cargoMetadata.packages);
-const runtimeLicenses = await readFile(
-  resolve(root, "apps/desktop/public/runtime/inochi2d-web/THIRD_PARTY_LICENSES.txt"),
-  "utf8",
-);
+const runtimeLicenses = (await Promise.all(RUNTIMES.map(async name => {
+  const directory = resolve(root, "apps/desktop/public/runtime", name);
+  return `${name} embedded runtime\n${await readFile(resolve(directory, "LICENSE"), "utf8")}\n${name === "model-widget-core" ? "" : await readFile(resolve(directory, "THIRD_PARTY_LICENSES.txt"), "utf8")}`;
+}))).join("\n");
 await writeFile(
   resolve(output, "THIRD_PARTY_LICENSES.txt"),
   `${licenses}\n${"=".repeat(78)}\ninochi2d-web embedded runtime\n${"=".repeat(78)}\n${runtimeLicenses.trim()}\n`,

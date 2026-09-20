@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const failures = [];
+import { RUNTIMES, assertRuntime } from "./model-runtime.mjs";
 const versionFiles = [
   ["workspace", "package.json", "version"],
   ["npm bundle", "packages/dsh-plugin/package.json", "version"],
@@ -32,6 +33,11 @@ if (!pin || !/^[0-9a-f]{40}$/u.test(pin)) {
   failures.push("release/inochi2d-web.rev must contain one public 40-character Git revision");
 }
 
+for (const name of RUNTIMES) {
+  try { await assertRuntime(name, resolve(root, "apps/desktop/public/runtime", name)); } catch (error) { failures.push(String(error)); }
+  const metadata = await jsonFile(`apps/desktop/public/runtime/${name}/runtime-provenance.json`);
+  if (!metadata || metadata.dirty !== false || metadata.revision !== pin) failures.push(`${name} must match the clean runtime pin`);
+}
 const provenance = await jsonFile("apps/desktop/public/runtime/inochi2d-web/runtime-provenance.json");
 if (!provenance) {
   failures.push("the staged inochi2d-web runtime has no provenance");
@@ -53,7 +59,8 @@ if (!provenance) {
 
 const cargoRevision = cargo?.match(/inochi2d-pipeline\s*=\s*\{[^\n]*rev\s*=\s*"([0-9a-f]{40})"/u)?.[1];
 if (!cargoRevision) failures.push("inochi2d-pipeline must use a fixed Git revision");
-else if (pin && cargoRevision !== pin) failures.push("inochi2d-pipeline revision differs from the runtime release pin");
+const pipelinePin = (await textFile("release/inochi2d-pipeline.rev"))?.trim();
+if (!/^[0-9a-f]{40}$/u.test(pipelinePin ?? "") || pipelinePin !== cargoRevision) failures.push("inochi2d-pipeline revision differs from its release pin");
 
 await requiredFile("assets/microlight/model.inp", 1);
 const demoDefaults = await jsonFile("assets/microlight/defaults.json");
@@ -84,7 +91,7 @@ if (!installerName) {
 } else {
   const installer = await stat(resolve(nsisDirectory, installerName));
   const inputs = [
-    "apps/desktop/public/runtime/inochi2d-web/runtime-provenance.json",
+    ...RUNTIMES.map(name => `apps/desktop/public/runtime/${name}/runtime-provenance.json`),
     "apps/desktop/src-tauri/resources/microlight/model.inp",
     "apps/desktop/src-tauri/resources/microlight/defaults.json",
     "apps/desktop/src-tauri/resources/microlight/ASSET_LICENSE.md",

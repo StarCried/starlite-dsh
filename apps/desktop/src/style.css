@@ -36,6 +36,13 @@ body {
   height: 100% !important;
 }
 
+#model .inochi2d-widget {
+  position: absolute;
+  inset: 0;
+  max-width: none;
+  max-height: none;
+}
+
 #bubble {
   position: absolute;
   z-index: 10;

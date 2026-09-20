@@ -12,6 +12,9 @@ release-output/
 # Local puppets and generated desktop data are never repository assets.
 *.inp
 *.inx
+*.vrm
+*.vrma
+*.blend
 apps/desktop/public/model/
 apps/desktop/public/runtime/
 apps/desktop/src-tauri/gen/

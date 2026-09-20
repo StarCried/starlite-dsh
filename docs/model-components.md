@@ -52,3 +52,21 @@ selected, even when an action named Idle exists. New untouched VRM preferences
 start at 30 FPS / DPR 1.5; existing preferences are preserved. A failed inspection
 or save leaves the installed component intact. Runtime mounts use the shared
 cancellation slot; old requests and late controllers cannot replace a new model.
+
+## Local validation (2026-09-20)
+
+The desktop frontend passes 44 tests and `pnpm check`. Native format, Clippy,
+10 ordinary tests, both private companion import checks and a debug build pass.
+The packed DSH bundle was installed in the separate `vrm-local-validation`
+profile; the installed DSH 0.1.5-rc.1 exposes the existing protocol contracts.
+Invoking the packed plugin with an incompatible event subscription returns a
+no-op disposer and contains the failure. No real session prompt was submitted.
+
+The reusable runtime's full workspace validation and browser regression pass.
+VRM Hexo checks cover deferred loading, mobile zero model/runtime requests,
+20 PJAX completions without duplicate instances, and visible static fallback.
+Private character testing covers eight animations, 20 mounts/destroys and
+15 minutes in both embedded Chromium and standalone WebView2. Independent
+Windows Chrome/Edge and a live DSH-to-desktop user session still need manual
+acceptance; WebView2 measurements are from the separate preview process tree.
+No model was installed into the user's existing desktop settings.

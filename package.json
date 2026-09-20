@@ -1,5 +1,5 @@
 {
-  "name": "dsh-inochi2d-pet-workspace",
+  "name": "dsh-companion-workspace",
   "version": "0.1.0-alpha.0",
   "private": true,
   "type": "module",
@@ -24,7 +24,7 @@
     "desktop:dev": "pnpm --dir apps/desktop tauri dev",
     "desktop:build": "pnpm --dir apps/desktop tauri build",
     "pack:plugin": "pnpm --dir packages/dsh-plugin run pack:check",
-    "sync:runtime": "node tools/sync-inochi2d-runtime.mjs",
+    "sync:runtime": "node tools/sync-model-runtime.mjs",
     "stage:demo-model": "node tools/stage-demo-model.mjs",
     "check:dsh-contract": "node tools/check-dsh-contract.mjs",
     "check:release": "node tools/check-release.mjs",

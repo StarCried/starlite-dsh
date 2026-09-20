@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "prebuild": "pnpm --dir ../../packages/protocol build",
-    "build": "node ../../tools/assert-inochi2d-runtime.mjs && tsc -p tsconfig.json --noEmit && vite build",
+    "build": "node ../../tools/assert-model-runtime.mjs && tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --root ../.. apps/desktop/tests",
     "tauri": "tauri"

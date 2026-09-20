@@ -61,7 +61,7 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 pnpm desktop:build
 ```
 
-`pnpm check:core` 不需要生成桌面运行时，适合普通提交的快速 CI。完整 Windows 构建要求 `release/inochi2d-web.rev` 存在，并由 CI 在 Linux 构建官方 WASM 后传给 Windows job。
+`pnpm check:core` 不需要生成桌面运行时，适合普通提交的快速 CI。完整 Windows 构建要求 `release/model-companion-web.rev` 存在，并由 CI 在 Linux 构建官方 WASM 后传给 Windows job。
 
 ## DSH latest 契约与本地 bundle
 

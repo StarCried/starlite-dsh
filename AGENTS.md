@@ -1,11 +1,11 @@
-# DSH Inochi2D Pet project instructions
+# DSH Companion project instructions
 
 ## Product boundary
 
 - The product is a Windows 11 x64 companion for one DeepSeek Harness process
   running in WSL2. It is not a general desktop-pet framework.
 - Keep the Cordis bundle, cross-process protocol, and Tauri desktop app in this
-  repository. Reusable Inochi2D rendering and model preparation stay in
+  repository. Reusable Inochi2D/VRM rendering and model preparation stay in Model Companion Web at
   `StarCried/inochi2d-web`.
 - Do not add native-Windows DSH, Linux/macOS desktop targets, voice, chat,
   memory, telemetry, auto-update, or per-pixel hit testing without an approved

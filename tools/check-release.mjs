@@ -28,9 +28,9 @@ if (uniqueVersions.size !== 1) {
   failures.push(`release versions differ: ${versions.map(([name, value]) => `${name}=${value}`).join(", ")}`);
 }
 
-const pin = (await textFile("release/inochi2d-web.rev"))?.trim();
+const pin = (await textFile("release/model-companion-web.rev"))?.trim();
 if (!pin || !/^[0-9a-f]{40}$/u.test(pin)) {
-  failures.push("release/inochi2d-web.rev must contain one public 40-character Git revision");
+  failures.push("release/model-companion-web.rev must contain one public 40-character Git revision");
 }
 
 for (const name of RUNTIMES) {
@@ -43,7 +43,7 @@ if (!provenance) {
   failures.push("the staged inochi2d-web runtime has no provenance");
 } else {
   if (provenance.dirty !== false) failures.push("the staged inochi2d-web runtime is dirty");
-  if (pin && provenance.revision !== pin) failures.push("runtime provenance does not match release/inochi2d-web.rev");
+  if (pin && provenance.revision !== pin) failures.push("runtime provenance does not match release/model-companion-web.rev");
   if (typeof provenance.repository !== "string" || !/github\.com[/:]StarCried\/inochi2d-web(?:\.git)?$/iu.test(provenance.repository)) {
     failures.push("runtime provenance does not name the public StarCried/inochi2d-web repository");
   }

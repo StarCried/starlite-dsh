@@ -9,7 +9,7 @@
 
 ## 必须满足
 
-1. `inochi2d-web` 的动态动画 API 与 pipeline 变更已经进入公开、干净的固定 revision；把 40 位 revision 写入 `release/inochi2d-web.rev`，并同步生成带同一 revision 的运行时 provenance。
+1. `inochi2d-web` 的动态动画 API 与 pipeline 变更已经进入公开、干净的固定 revision；把 40 位 revision 写入 `release/model-companion-web.rev`，并同步生成带同一 revision 的运行时 provenance。
 2. `assets/microlight/model.inp` 与 `assets/microlight/ASSET_LICENSE.md` 存在；授权文本包含 SPDX 标识与明确的再分发许可。
 3. 完整 Node、Rust、浏览器、Windows build、DSH latest 契约、隐私负载和真实 WSL2 验收全部通过。
 4. npm tarball 和未签名 NSIS 安装包已经生成；安装、升级、卸载和 SmartScreen 路径经过人工检查。
@@ -21,7 +21,7 @@
 pnpm check:release
 pnpm release:metadata -- \
   packages/dsh-plugin/.pack/dsh-inochi2d-pet-0.1.0-alpha.0.tgz \
-  "apps/desktop/src-tauri/target/release/bundle/nsis/DSH Inochi2D Pet_0.1.0-alpha.0_x64-setup.exe"
+  "apps/desktop/src-tauri/target/release/bundle/nsis/DSH Companion_0.1.0-alpha.0_x64-setup.exe"
 ```
 
 第二条命令在 `release-output` 生成 `SHA256SUMS`、CycloneDX SBOM 和完整第三方许可证汇编。Release 必须一起上传这些文件。

@@ -63,7 +63,7 @@ const sbom = {
     timestamp: new Date().toISOString(),
     component: {
       type: "application",
-      name: "DSH Inochi2D Pet",
+      name: "DSH Companion",
       version: workspacePackage.version,
       licenses: [{ license: { id: "BSD-2-Clause" } }],
     },

@@ -1,4 +1,8 @@
-# DSH Inochi2D Pet
+# DSH Companion
+
+通过可替换的 Inochi2D／VRM 组件显示 DSH 工作状态。应用只调度动作名称，模型资源与渲染器由 Model Companion Web 提供。
+
+项目显示名已更新；现有 `dsh-inochi2d-pet` npm 桥接包名、安装标识、deep link 和设置目录保留，以便已有 DSH 配置继续连接同一应用。远程仓库本轮未改名。
 
 面向 Windows 11 + WSL2 DeepSeek Harness 的开源 Inochi2D 桌宠。DSH 的聚合状态驱动模型作者制作的动画；可选气泡只显示经过清洗、且 DSH 已经暴露给对话前端的文本。
 
@@ -23,7 +27,7 @@ Aka、微光或其他 `.inp`；首次运行会打开设置，由用户选择自�
 
 ## 安装预构建 alpha（尚未发布）
 
-先在 Windows 安装未签名的 `DSH Inochi2D Pet` NSIS 安装包。Windows SmartScreen 可能显示“未知发布者”，请先从 Release 校验 SHA-256；本 alpha 不要求购买代码签名证书。
+先在 Windows 安装未签名的 `DSH Companion` NSIS 安装包。Windows SmartScreen 可能显示“未知发布者”，请先从 Release 校验 SHA-256；本 alpha 不要求购买代码签名证书。
 
 在 WSL2 中执行：
 

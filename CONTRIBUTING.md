@@ -1,6 +1,6 @@
 # Contributing
 
-感谢你改进 DSH Inochi2D Pet。项目目前面向 Windows 11 x64 + WSL2 DSH latest；请先在 issue 中讨论超出该范围的平台、通用连接器或大型架构变更。
+感谢你改进 DSH Companion。项目目前面向 Windows 11 x64 + WSL2 DSH latest；请先在 issue 中讨论超出该范围的平台、通用连接器或大型架构变更。
 
 ## 补丁边界
 

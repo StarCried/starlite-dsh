@@ -100,5 +100,5 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("DSH Inochi2D Pet failed to start");
+        .expect("DSH Companion failed to start");
 }

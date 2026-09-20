@@ -264,7 +264,14 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
     for view in views {
         let start = offset(&view["byteOffset"])?;
         let length = offset(&view["byteLength"])?;
-        if view["buffer"] != 0 || start.checked_add(length).is_none_or(|n| n > bin.len()) {
+        if view["buffer"] != 0
+            || start.checked_add(length).is_none_or(|n| {
+                n > buffers
+                    .first()
+                    .and_then(|b| b["byteLength"].as_u64())
+                    .unwrap_or(0) as usize
+            })
+        {
             return Err("invalid buffer view".into());
         }
     }
@@ -305,7 +312,7 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
             return Err("decoded geometry exceeds 256 MiB".into());
         }
         if !a["bufferView"].is_null() {
-            span(
+            let start = span(
                 views,
                 &a["bufferView"],
                 &a["byteOffset"],
@@ -314,6 +321,11 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
                 width,
                 true,
             )?;
+            if a["componentType"] == 5126 {
+                let view = &views[index(&a["bufferView"], views.len())?];
+                let stride = view["byteStride"].as_u64().unwrap_or(element as u64) as usize;
+                finite_floats(bin, start, count, components, stride)?;
+            }
         }
         if a["sparse"].is_object() {
             let s = &a["sparse"];
@@ -337,7 +349,7 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
                 iw,
                 false,
             )?;
-            span(
+            let values_start = span(
                 views,
                 &s["values"]["bufferView"],
                 &s["values"]["byteOffset"],
@@ -346,6 +358,9 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
                 width,
                 false,
             )?;
+            if a["componentType"] == 5126 {
+                finite_floats(bin, values_start, n, components, element)?;
+            }
             let mut last = None;
             for k in 0..n {
                 let pos = start + k * iw;
@@ -405,6 +420,23 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
     }
     Ok(Glb { json, bin })
 }
+fn finite_floats(
+    bin: &[u8],
+    start: usize,
+    count: usize,
+    components: usize,
+    stride: usize,
+) -> Result<(), String> {
+    for i in 0..count {
+        for c in 0..components {
+            if !f32::from_bits(u32_at(bin, start + i * stride + c * 4)?).is_finite() {
+                return Err("non-finite accessor value".into());
+            }
+        }
+    }
+    Ok(())
+}
+
 fn component_size(value: &Value) -> Result<usize, String> {
     match value.as_u64() {
         Some(5120 | 5121) => Ok(1),
@@ -806,6 +838,20 @@ mod tests {
         let mut value = model();
         value["accessors"] = json!([{"type":"VEC3","componentType":5126,"count":999999999}]);
         assert!(parse_glb(&glb(value, vec![]), false).is_err());
+    }
+    #[test]
+    fn rejects_non_finite_geometry() {
+        let mut value = model();
+        value["buffers"] = json!([{"byteLength":4}]);
+        value["bufferViews"] = json!([{"buffer":0,"byteLength":4}]);
+        value["accessors"] =
+            json!([{"bufferView":0,"componentType":5126,"count":1,"type":"SCALAR"}]);
+        assert!(
+            parse_glb(&glb(value, f32::NAN.to_le_bytes().to_vec()), false)
+                .err()
+                .unwrap()
+                .contains("non-finite")
+        );
     }
     #[test]
     fn corrupt_motion_does_not_create_installed_files() {

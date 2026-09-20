@@ -42,3 +42,13 @@ Inochi2D and VRM upstream. Only the selected renderer is imported.
 preparation library has its own `release/inochi2d-pipeline.rev` pin. New runtime
 commits remain local until separately approved for publication; CI checkout
 requires that publication before this branch can run remotely.
+
+## Desktop selection
+
+Choose `.inp` or `.vrm` in settings. VRM accepts a separate selection of VRMA
+files (exact file stems become action names) and an optional data-only character
+profile. Standard VRM has no Weiguang-specific behavior. Idle must be explicitly
+selected, even when an action named Idle exists. New untouched VRM preferences
+start at 30 FPS / DPR 1.5; existing preferences are preserved. A failed inspection
+or save leaves the installed component intact. Runtime mounts use the shared
+cancellation slot; old requests and late controllers cannot replace a new model.

@@ -29,7 +29,9 @@ body {
   inset: 0;
 }
 
-#model > .inochi2d-widget {
+#model > .model-surface,
+#model .inochi2d-widget,
+#model .model-vrm-widget {
   width: 100% !important;
   height: 100% !important;
 }

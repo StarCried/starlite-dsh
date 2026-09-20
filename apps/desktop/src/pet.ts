@@ -12,7 +12,7 @@ import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import type { PetSnapshot, PetState, WidgetController } from "./vendor-types.js";
 import type { DesktopSettings } from "./types.js";
 import { StatusConnection } from "./connection.js";
-import { mountModel } from "./renderer.js";
+import { createModelSlot, mountModel } from "./renderer.js";
 import { StateAnimator } from "./state-animator.js";
 
 const OFFLINE_EXIT_MS = 60_000;
@@ -31,6 +31,8 @@ export async function startPet(): Promise<void> {
   const bubble = requiredElement<HTMLOutputElement>("bubble");
   const empty = requiredElement("empty-model");
   let settings = await invoke<DesktopSettings>("get_settings");
+  const slot = await createModelSlot();
+  let mountGeneration = 0;
   let controller: WidgetController | undefined;
   let animator: StateAnimator | undefined;
   let latestSnapshot: PetSnapshot | undefined;
@@ -60,26 +62,27 @@ export async function startPet(): Promise<void> {
   };
 
   const remount = async () => {
+    const generation = ++mountGeneration;
+    const next = settings;
     animator = undefined;
-    controller?.destroy();
-    controller = undefined;
-    host.replaceChildren();
-    empty.hidden = Boolean(settings.model);
-    if (!settings.model) return;
-    controller = await mountModel(host, settings);
-    if (controller) {
-      animator = new StateAnimator(controller, settings.model.mappings);
+    slot.destroy(); controller = undefined;
+    host.replaceChildren(); empty.hidden = Boolean(next.model);
+    if (!next.model) return;
+    try {
+      const mounted = await slot.mount(signal => mountModel(host, next, signal));
+      if (!mounted || generation !== mountGeneration) return;
+      controller = mounted;
+      animator = new StateAnimator(mounted, next.model.mappings);
       if (latestSnapshot) animator.apply(latestSnapshot);
       syncRendering();
+    } catch {
+      if (generation !== mountGeneration) return;
+      empty.hidden = false;
+      empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-
-  try {
-    await remount();
-  } catch {
-    empty.hidden = false;
-    empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
-  }
+  globalThis.addEventListener("pagehide", () => { ++mountGeneration; slot.destroy(); }, {once:true});
+  await remount();
 
   const connection = new StatusConnection({
     onSnapshot(snapshot) {

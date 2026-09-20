@@ -9,8 +9,8 @@
   <body>
     <main id="pet-view" aria-label="DSH Inochi2D Pet">
       <output id="bubble" aria-live="polite" hidden></output>
-      <div id="model" aria-label="Inochi2D model"></div>
-      <button id="empty-model" type="button" hidden>点击此处打开设置并导入 Inochi2D 模型。</button>
+      <div id="model" aria-label="模型"></div>
+      <button id="empty-model" type="button" hidden>点击此处打开设置并导入模型。</button>
     </main>
 
     <main id="settings-view" hidden>
@@ -21,8 +21,16 @@
       <section>
         <h2>模型</h2>
         <div class="row">
-          <button id="choose-model" type="button">选择 .inp</button>
+          <button id="choose-model" type="button">选择 .inp / .vrm</button>
           <span id="model-path">尚未选择</span>
+        </div>
+        <div id="vrm-resources" hidden>
+          <p>VRM 动作独立导入；动作名称取自文件名。</p>
+          <button id="choose-animations" type="button">选择 VRMA 动作</button>
+          <span id="animation-files">尚未选择动作</span>
+          <p><button id="choose-profile" type="button">选择角色配置（可选）</button>
+          <button id="clear-profile" type="button">使用标准 VRM</button>
+          <span id="profile-file">标准 VRM</span></p>
         </div>
         <p id="inspection-status" role="status"></p>
       </section>

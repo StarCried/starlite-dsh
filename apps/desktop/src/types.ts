@@ -1,4 +1,4 @@
-import type { AnimationClip, PetState } from "./vendor-types.js";
+import type { AnimationClip, ModelBackend, PetState } from "./vendor-types.js";
 
 export type AnimationState = PetState | "click";
 
@@ -13,10 +13,15 @@ export interface AnimationMappings {
   click: string | null;
 }
 
+export interface AnimationSource { name: string; path: string }
+
 export interface InstalledModel {
+  backend: ModelBackend;
+  inochi2d?: { animations: AnimationClip[] };
+  vrm?: { animations: AnimationSource[]; profilePath?: string };
   modelPath: string;
   sourceSha256: string;
-  animations: AnimationClip[];
+  animations: Array<{name: string; durationMs: number}>;
   mappings: AnimationMappings;
 }
 
@@ -28,21 +33,25 @@ export interface DesktopPreferences {
 }
 
 export interface DesktopSettings {
-  schemaVersion: 1;
+  schemaVersion: 2;
   preferences: DesktopPreferences;
   model?: InstalledModel;
 }
 
 export interface ModelInspection {
+  backend: ModelBackend;
   sourceSha256: string;
   sourceBytes: number;
   modelName?: string;
-  animations: AnimationClip[];
+  animations: Array<{name: string; durationMs: number}>;
   compatibilitySupported: boolean;
   issues: Array<{ code: string; severity: "error" | "warning"; message: string }>;
 }
 
 export interface ModelInstallRequest {
+  backend: ModelBackend;
+  animationSources: AnimationSource[];
+  profilePath?: string;
   sourcePath: string;
   mappings: AnimationMappings;
   preferences: DesktopPreferences;

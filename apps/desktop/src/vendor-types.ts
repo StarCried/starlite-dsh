@@ -32,17 +32,16 @@ export interface WidgetController {
   destroy(): void;
 }
 
-export interface Inochi2DModule {
-  mountInochi2DWidget(
-    element: HTMLElement,
-    config: {
-      model: string;
-      fallback: string;
-      display: { width: number; height: number };
-      render: { fps: number; maxDevicePixelRatio: number; initialScale: number; autoFit: boolean };
-      mobile: { show: boolean };
-      animations: readonly AnimationClip[];
-      interactions: { pointer: boolean; click: false; drag: false };
-    },
-  ): Promise<WidgetController>;
+// Structural contract for externally staged modules. No renderer internals cross it.
+export type ModelBackend = "inochi2d" | "vrm";
+export interface ModelModule {
+  mountModelWidget(host: HTMLElement, config: Record<string, unknown>, options?: {signal?: AbortSignal}): Promise<WidgetController>;
+}
+export interface ModelSlot {
+  mount(factory: (signal: AbortSignal) => Promise<WidgetController>): Promise<WidgetController | undefined>;
+  destroy(): void;
+}
+export interface ModelCore {
+  ModelMountSlot: new () => ModelSlot;
+  mountModelWidget(host: HTMLElement, config: Record<string, unknown>, modules: Record<ModelBackend, () => Promise<ModelModule>>, options?: {signal?: AbortSignal}): Promise<WidgetController>;
 }

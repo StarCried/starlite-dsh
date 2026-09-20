@@ -49,7 +49,7 @@ for (const name of RUNTIMES) {
   components.push({ type: "library", name, version: metadata.version, licenses: licenseEntry("BSD-2-Clause"), properties: [{name: "git:revision", value: metadata.revision}] });
   for (const [dependency, version] of Object.entries(metadata.dependencies)) {
     if (RUNTIMES.includes(dependency)) continue;
-    components.push({ type: "library", name: dependency, version, purl: `pkg:npm/${npmPurlName(dependency)}@${encodeURIComponent(version)}`, licenses: [{license: {name: "See bundled VRM dependency license texts"}}] });
+    components.push({ type: "library", name: dependency, version, purl: `pkg:npm/${npmPurlName(dependency)}@${encodeURIComponent(version)}`, licenses: licenseEntry(metadata.dependencyLicenses?.[dependency]) });
   }
 }
 components.sort((left, right) => `${left.name}@${left.version}`.localeCompare(`${right.name}@${right.version}`));

@@ -36,7 +36,22 @@ for(const [name,source]of sources){
  }
  await copy(source,output);
  for(const notice of notices){await copyFile(resolve(packageRoot,notice),resolve(output,notice));files[notice]=createHash("sha256").update(await readFile(resolve(output,notice))).digest("hex");}
- const provenance={schemaVersion:2,package:name,version:pkg.version,repository,revision,dirty,files,dependencies:pkg.dependencies??{}};
+ const dependencies={}, dependencyLicenses={};
+ async function collectDependencies(manifest,base){
+  for(const dependency of Object.keys(manifest.dependencies??{})){
+   if(RUNTIMES.includes(dependency)||dependencies[dependency])continue;
+   let current=base, data;
+   for(;;){
+    const path=resolve(current,"node_modules",dependency,"package.json");
+    try{data=JSON.parse(await readFile(path,"utf8"));break}catch(error){if(error.code!=="ENOENT")throw error}
+    const parent=dirname(current);if(parent===current)throw new Error(`missing production dependency ${dependency}`);current=parent;
+   }
+   dependencies[dependency]=data.version;dependencyLicenses[dependency]=data.license??"NOASSERTION";
+   await collectDependencies(data,resolve(current,"node_modules",dependency));
+  }
+ }
+ await collectDependencies(pkg,packageRoot);
+ const provenance={schemaVersion:2,package:name,version:pkg.version,repository,revision,dirty,files,dependencies,dependencyLicenses};
  if(name==="inochi2d-web"){
   const pin=JSON.parse(await readFile(resolve(sourceRoot,"tools/official-sdk/pin.json"),"utf8"));
   const selections=JSON.parse(await readFile(resolve(sourceRoot,"tools/official-sdk/dub.selections.json"),"utf8"));

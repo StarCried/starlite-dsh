@@ -1,6 +1,7 @@
 mod model;
 mod settings;
 mod tray;
+mod vrm;
 
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 #[cfg(all(debug_assertions, windows))]
@@ -13,8 +14,12 @@ fn get_settings(app: AppHandle) -> settings::DesktopSettings {
 }
 
 #[tauri::command]
-fn inspect_model(path: String) -> Result<model::ModelInspection, String> {
-    model::inspect(path)
+fn inspect_model(
+    path: String,
+    animation_sources: Option<Vec<settings::AnimationSource>>,
+    profile_path: Option<String>,
+) -> Result<model::ModelInspection, String> {
+    model::inspect(path, animation_sources.unwrap_or_default(), profile_path)
 }
 
 #[tauri::command]

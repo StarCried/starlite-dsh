@@ -8,7 +8,36 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
-pub const SETTINGS_SCHEMA_VERSION: u32 = 1;
+pub const SETTINGS_SCHEMA_VERSION: u32 = 2;
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ModelBackend {
+    #[default]
+    Inochi2d,
+    Vrm,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnimationSource {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InochiModelData {
+    pub animations: Vec<Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VrmModelData {
+    pub animations: Vec<AnimationSource>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_path: Option<String>,
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,10 +75,15 @@ impl Default for DesktopPreferences {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstalledModel {
+    pub backend: ModelBackend,
     pub model_path: String,
     pub source_sha256: String,
     pub animations: Vec<Value>,
     pub mappings: AnimationMappings,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inochi2d: Option<InochiModelData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vrm: Option<VrmModelData>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -74,7 +108,12 @@ impl Default for DesktopSettings {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelInstallRequest {
+    #[serde(default)]
+    pub backend: ModelBackend,
     pub source_path: String,
+    #[serde(default)]
+    pub animation_sources: Vec<AnimationSource>,
+    pub profile_path: Option<String>,
     pub mappings: AnimationMappings,
     pub preferences: DesktopPreferences,
 }
@@ -128,25 +167,110 @@ pub fn load(app: &AppHandle) -> DesktopSettings {
     if bytes.len() > 4 * 1024 * 1024 {
         return DesktopSettings::default();
     }
-    let Ok(settings) = serde_json::from_slice::<DesktopSettings>(&bytes) else {
+    let Ok(settings) = decode_settings(&bytes) else {
         return DesktopSettings::default();
     };
-    if settings.schema_version != SETTINGS_SCHEMA_VERSION
-        || validate_preferences(&settings.preferences).is_err()
-        || settings
-            .model
-            .as_ref()
-            .is_some_and(|model| validate_mappings(&model.mappings, &model.animations).is_err())
-    {
-        return DesktopSettings::default();
-    }
     settings
+}
+
+pub fn inochi_catalog(animations: &[Value]) -> Result<Vec<Value>, String> {
+    animations
+        .iter()
+        .map(|clip| {
+            let name = clip
+                .get("name")
+                .and_then(Value::as_str)
+                .filter(|name| !name.is_empty())
+                .ok_or("invalid animation name")?;
+            let duration = clip
+                .get("timestepMs")
+                .and_then(Value::as_f64)
+                .ok_or("invalid animation timestep")?
+                * clip
+                    .get("length")
+                    .and_then(Value::as_f64)
+                    .ok_or("invalid animation length")?;
+            if !duration.is_finite() || duration < 0.0 {
+                return Err("invalid animation duration".into());
+            }
+            Ok(serde_json::json!({"name":name,"durationMs":duration}))
+        })
+        .collect()
+}
+
+fn validate_model(model: &InstalledModel) -> Result<(), String> {
+    validate_mappings(&model.mappings, &model.animations)?;
+    let names = animation_names(&model.animations)?;
+    if names.len() != model.animations.len()
+        || model.animations.iter().any(|item| {
+            item["durationMs"]
+                .as_f64()
+                .is_none_or(|n| !n.is_finite() || n < 0.0)
+        })
+    {
+        return Err("invalid animation catalog".into());
+    }
+    match (model.backend, &model.inochi2d, &model.vrm) {
+        (ModelBackend::Inochi2d, Some(data), None) => {
+            if inochi_catalog(&data.animations)? != model.animations {
+                return Err("Inochi2D catalog mismatch".into());
+            }
+        }
+        (ModelBackend::Vrm, None, Some(data)) => {
+            let resource_names: HashSet<_> = data
+                .animations
+                .iter()
+                .map(|item| item.name.as_str())
+                .collect();
+            if data.animations.len() != names.len()
+                || resource_names != names
+                || data
+                    .animations
+                    .iter()
+                    .any(|item| item.path.is_empty() || !names.contains(item.name.as_str()))
+            {
+                return Err("VRM catalog mismatch".into());
+            }
+        }
+        _ => return Err("model backend data mismatch".into()),
+    }
+    Ok(())
+}
+
+pub fn decode_settings(bytes: &[u8]) -> Result<DesktopSettings, String> {
+    let mut value: Value = serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+    if value.get("schemaVersion").and_then(Value::as_u64) == Some(1) {
+        if let Some(model) = value.get_mut("model").filter(|model| !model.is_null()) {
+            let clips = model
+                .get("animations")
+                .and_then(Value::as_array)
+                .ok_or("missing legacy animations")?
+                .clone();
+            model["animations"] = Value::Array(inochi_catalog(&clips)?);
+            model["backend"] = Value::String("inochi2d".into());
+            model["inochi2d"] = serde_json::json!({"animations":clips});
+        }
+        value["schemaVersion"] = SETTINGS_SCHEMA_VERSION.into();
+    }
+    let settings: DesktopSettings =
+        serde_json::from_value(value).map_err(|error| error.to_string())?;
+    if settings.schema_version != SETTINGS_SCHEMA_VERSION {
+        return Err("unsupported settings version".into());
+    }
+    validate_preferences(&settings.preferences)?;
+    if let Some(model) = &settings.model {
+        validate_model(model)?;
+    }
+    Ok(settings)
 }
 
 pub fn store(app: &AppHandle, settings: &DesktopSettings) -> Result<(), String> {
     validate_preferences(&settings.preferences)?;
+    if settings.schema_version != SETTINGS_SCHEMA_VERSION {
+        return Err("unsupported settings version".into());
+    }
     if let Some(model) = &settings.model {
-        validate_mappings(&model.mappings, &model.animations)?;
+        validate_model(model)?;
     }
     let path = settings_path(app)?;
     if let Some(parent) = path.parent() {
@@ -218,6 +342,31 @@ mod tests {
         assert!(validate_mappings(&mappings("Idle"), &animations).is_ok());
         assert!(validate_mappings(&mappings("idle"), &animations).is_err());
         assert!(validate_mappings(&mappings(""), &animations).is_err());
+    }
+
+    #[test]
+    fn version_one_migrates_model_mapping_and_preferences() {
+        let old = serde_json::json!({"schemaVersion":1,"preferences":{"fps":60,"maxDevicePixelRatio":1.25,"scale":0.8,"privacyMode":true},"model":{"modelPath":"local/model.inp","sourceSha256":"source","animations":[{"name":"Idle","timestepMs":100,"length":10,"lanes":[]}],"mappings":{"idle":"Idle","thinking":null,"working":null,"completed":null,"error":null,"blocked":null,"approval":null,"click":null}}});
+        let migrated = decode_settings(&serde_json::to_vec(&old).unwrap()).unwrap();
+        assert_eq!(migrated.schema_version, 2);
+        assert_eq!(migrated.preferences.fps, 60);
+        assert!(migrated.preferences.privacy_mode);
+        let model = migrated.model.unwrap();
+        assert_eq!(model.backend, ModelBackend::Inochi2d);
+        assert_eq!(model.model_path, "local/model.inp");
+        assert_eq!(model.mappings.idle, "Idle");
+        assert_eq!(model.animations[0]["durationMs"].as_f64(), Some(1000.0));
+        assert_eq!(
+            model.inochi2d.unwrap().animations,
+            old["model"]["animations"].as_array().unwrap().clone()
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_settings_versions() {
+        let mut value = serde_json::to_value(DesktopSettings::default()).unwrap();
+        value["schemaVersion"] = 99.into();
+        assert!(decode_settings(&serde_json::to_vec(&value).unwrap()).is_err());
     }
 
     #[test]

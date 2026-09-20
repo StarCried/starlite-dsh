@@ -20,7 +20,7 @@ export async function apply(context: PluginContext): Promise<() => Promise<void>
     };
   } catch {
     context.logger?.warn?.(
-      "DSH Inochi2D Pet is disabled because this DSH build is incompatible or the bridge could not start.",
+      "DSH Companion is disabled because this DSH build is incompatible or the bridge could not start.",
     );
     return async () => undefined;
   }

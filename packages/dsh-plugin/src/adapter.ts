@@ -98,10 +98,10 @@ export async function startDshAdapter(
     instanceId: randomUUID(),
   }).catch(() => {
     context.logger?.warn?.(
-      "DSH Inochi2D Pet could not start the Windows companion; DSH will continue without it.",
+      "DSH Companion could not start the Windows companion; DSH will continue without it.",
     );
   });
-  context.logger?.info?.("DSH Inochi2D Pet status bridge is ready.");
+  context.logger?.info?.("DSH Companion status bridge is ready.");
 
   let closed = false;
   return async () => {

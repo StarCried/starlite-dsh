@@ -1,6 +1,6 @@
 # dsh-inochi2d-pet
 
-DeepSeek Harness bundle for the Windows **DSH Inochi2D Pet** companion.
+DeepSeek Harness bundle for the Windows **DSH Companion** companion.
 
 This package runs inside DSH under WSL2. It exposes only a short-lived,
 token-protected status stream on IPv4 loopback and starts the separately

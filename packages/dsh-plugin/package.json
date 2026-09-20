@@ -1,7 +1,7 @@
 {
   "name": "dsh-inochi2d-pet",
   "version": "0.1.0-alpha.0",
-  "description": "DeepSeek Harness status bridge for DSH Inochi2D Pet",
+  "description": "DeepSeek Harness status bridge for DSH Companion",
   "type": "module",
   "license": "BSD-2-Clause",
   "author": "StarCried",

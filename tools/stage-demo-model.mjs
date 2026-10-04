@@ -28,8 +28,14 @@ console.log(`Staged the approved MicroLight release model in ${destination}`);
 
 function validMappings(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const optional = ["thinking", "working", "completed", "error", "blocked", "approval", "click"];
+  const optional = ["working", "completed", "error", "blocked", "approval"];
   return typeof value.idle === "string"
     && value.idle.length > 0
-    && optional.every((key) => typeof value[key] === "string" || value[key] === null);
+    && optional.every((key) => typeof value[key] === "string" || value[key] === null)
+    && (typeof value.click === "string" || value.click === null || validPool(value.click))
+    && (value.ambient === undefined || validPool(value.ambient));
+}
+
+function validPool(pool) {
+  return Array.isArray(pool) && pool.length <= 20 && new Set(pool).size === pool.length && pool.every(name => typeof name === "string" && name.length > 0);
 }

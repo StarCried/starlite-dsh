@@ -1,7 +1,7 @@
 import type { PetSnapshot, PetState, WidgetController } from "./vendor-types.js";
 import type { AnimationMappings } from "./types.js";
 
-const LOOP_STATES = new Set<PetState>(["idle", "thinking", "working", "blocked", "approval"]);
+const LOOP_STATES = new Set<PetState>(["idle", "working", "blocked", "approval"]);
 
 /** Owns the single foreground animation channel and guards stale completions. */
 export class StateAnimator {
@@ -9,6 +9,8 @@ export class StateAnimator {
   #mappings: AnimationMappings;
   #state: PetState | undefined;
   #generation = 0;
+  #ambientTimer: ReturnType<typeof setTimeout> | undefined;
+  #paused = false;
 
   constructor(controller: WidgetController, mappings: AnimationMappings) {
     this.#controller = controller;
@@ -16,20 +18,23 @@ export class StateAnimator {
   }
 
   setMappings(mappings: AnimationMappings): void {
+    this.#clearAmbient();
     this.#mappings = mappings;
     this.#state = undefined;
   }
 
   apply(snapshot: PetSnapshot): void {
-    if (snapshot.state === this.#state) return;
-    this.#state = snapshot.state;
+    const state = snapshot.state === "thinking" ? "working" : snapshot.state;
+    if (state === this.#state) return;
+    this.#clearAmbient();
+    this.#state = state;
     const generation = ++this.#generation;
-    const animation = this.#mappings[snapshot.state];
+    const animation = this.#mappings[state];
     if (!animation) {
       this.#controller.stopAnimation();
       return;
     }
-    const mode = LOOP_STATES.has(snapshot.state) ? "loop" : "once";
+    const mode = LOOP_STATES.has(state) ? "loop" : "once";
     void this.#controller.playAnimation(animation, { mode, restart: true })
       .then(() => {
         if (generation !== this.#generation) return;
@@ -40,24 +45,52 @@ export class StateAnimator {
         // Rendering failures are contained in the desktop layer; state updates
         // and DSH remain unaffected.
       });
+    if (state === "idle") this.#scheduleAmbient();
   }
 
   async click(): Promise<void> {
-    if (this.#state !== "idle" || !this.#mappings.click) return;
+    if (this.#state !== "idle" || this.#paused || !this.#mappings.click.length) return;
+    await this.#gesture(this.#mappings.click);
+  }
+
+  async #gesture(pool: readonly string[]): Promise<void> {
+    this.#clearAmbient();
     const generation = ++this.#generation;
     const result = await this.#controller
-      .playAnimation(this.#mappings.click, { mode: "once", restart: true })
+      .playAnimation(pool[Math.floor(Math.random() * pool.length)]!, { mode: "once", restart: true })
       .catch(() => undefined);
-    if (!result) return;
+    if (!result || result === "stopped") return;
     if (generation !== this.#generation || this.#state !== "idle") return;
     // A loop promise intentionally stays pending until interruption. Start it
     // without awaiting so the Click handler itself can settle immediately.
     void this.#controller
       .playAnimation(this.#mappings.idle, { mode: "loop", restart: true })
       .catch(() => undefined);
+    this.#scheduleAmbient();
+  }
+
+  setPaused(paused: boolean): void {
+    if (this.#paused === paused) return;
+    this.#paused = paused;
+    this.#clearAmbient();
+    if (!paused && this.#state === "idle") this.#scheduleAmbient();
+  }
+
+  #scheduleAmbient(): void {
+    if (this.#paused || !this.#mappings.ambient.length || this.#ambientTimer) return;
+    this.#ambientTimer = setTimeout(() => {
+      this.#ambientTimer = undefined;
+      if (this.#state === "idle" && !this.#paused) void this.#gesture(this.#mappings.ambient);
+    }, 60_000 + Math.random() * 60_000);
+  }
+
+  #clearAmbient(): void {
+    if (this.#ambientTimer) clearTimeout(this.#ambientTimer);
+    this.#ambientTimer = undefined;
   }
 
   disconnected(): void {
+    this.#clearAmbient();
     this.#generation += 1;
     this.#state = undefined;
     this.#controller.stopAnimation();

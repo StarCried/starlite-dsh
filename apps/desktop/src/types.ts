@@ -1,16 +1,16 @@
-import type { AnimationClip, ModelBackend, PetState } from "./vendor-types.js";
+import type { AnimationClip, ModelBackend } from "./vendor-types.js";
 
-export type AnimationState = PetState | "click";
+export type AnimationState = keyof AnimationMappings;
 
 export interface AnimationMappings {
   idle: string;
-  thinking: string | null;
   working: string | null;
   completed: string | null;
   error: string | null;
   blocked: string | null;
   approval: string | null;
-  click: string | null;
+  click: string[];
+  ambient: string[];
 }
 
 export interface AnimationSource { name: string; path: string }
@@ -33,7 +33,7 @@ export interface DesktopPreferences {
 }
 
 export interface DesktopSettings {
-  schemaVersion: 2;
+  schemaVersion: 3;
   preferences: DesktopPreferences;
   model?: InstalledModel;
 }

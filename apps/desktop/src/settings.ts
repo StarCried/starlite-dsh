@@ -12,13 +12,13 @@ import type {
 
 const STATES: ReadonlyArray<{ key: AnimationState; label: string; required: boolean }> = [
   { key: "idle", label: "Idle（必填）", required: true },
-  { key: "thinking", label: "Thinking", required: false },
-  { key: "working", label: "Working", required: false },
+  { key: "working", label: "工作中（含思考）", required: false },
   { key: "completed", label: "Completed", required: false },
   { key: "error", label: "Error", required: false },
   { key: "blocked", label: "Blocked", required: false },
   { key: "approval", label: "Approval", required: false },
-  { key: "click", label: "Click", required: false },
+  { key: "click", label: "点击回应（可多选，随机播放）", required: false },
+  { key: "ambient", label: "偶发小动作（可多选，随机播放）", required: false },
 ];
 
 export async function startSettings(): Promise<void> {
@@ -144,11 +144,14 @@ function renderMappings(
     label.textContent = state.label;
     const select = document.createElement("select");
     select.dataset.state = state.key;
-    select.append(new Option(state.required ? "请选择 Idle 动作" : "禁用", ""));
+    const pool = state.key === "click" || state.key === "ambient";
+    select.multiple = pool;
+    if (pool) select.size = Math.min(6, Math.max(2, animations.length));
+    if (!pool) select.append(new Option(state.required ? "请选择 Idle 动作" : "禁用", ""));
     select.required = state.required;
     for (const animation of animations) select.append(new Option(animation.name, animation.name));
     const selected = current?.[state.key];
-    if (selected && animations.some(({ name }) => name === selected)) select.value = selected;
+    for (const option of select.options) option.selected = Array.isArray(selected) ? selected.includes(option.value) : option.value === selected;
     label.append(select);
     row.append(label);
     host.append(row);
@@ -160,20 +163,20 @@ function suggestMappings(inspection: ModelInspection): AnimationMappings {
   const exact = (key: string) => names.find((name) => name.toLowerCase() === key) ?? null;
   return {
     idle: "",
-    thinking: exact("thinking"),
     working: exact("working"),
     completed: exact("completed"),
     error: exact("error"),
     blocked: exact("blocked"),
     approval: exact("approval"),
-    click: exact("click"),
+    click: exact("click") ? [exact("click")!] : [],
+    ambient: [],
   };
 }
 
 function readMappings(host: HTMLElement): AnimationMappings {
   const values = Object.fromEntries(
     [...host.querySelectorAll<HTMLSelectElement>("select[data-state]")]
-      .map((select) => [select.dataset.state, select.value || null]),
+      .map((select) => [select.dataset.state, select.multiple ? [...select.selectedOptions].map(option => option.value) : select.value || null]),
   ) as unknown as AnimationMappings;
   if (!values.idle) throw new Error("Idle 动画必须选择且必须存在于模型中。");
   return values;

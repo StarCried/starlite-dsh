@@ -30,6 +30,6 @@ describe("bubble rendering", () => {
   it("replaces streamed text in privacy mode", () => {
     const output = element();
     renderBubble(output, snapshot("thinking", "sensitive model-visible text"), true);
-    expect(output.textContent).toBe("思考中…");
+    expect(output.textContent).toBe("正在工作…");
   });
 });

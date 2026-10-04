@@ -17,7 +17,7 @@ import { StateAnimator } from "./state-animator.js";
 
 const OFFLINE_EXIT_MS = 60_000;
 const FIXED_BUBBLES: Partial<Record<PetState, string>> = {
-  thinking: "思考中…",
+  thinking: "正在工作…",
   working: "正在工作…",
   completed: "任务已完成",
   error: "发生错误，请查看 DSH",
@@ -45,7 +45,9 @@ export async function startPet(): Promise<void> {
   });
 
   const syncRendering = () => {
-    if (pausedByTray || document.visibilityState !== "visible") controller?.pause();
+    const paused = pausedByTray || document.visibilityState !== "visible";
+    animator?.setPaused(paused);
+    if (paused) controller?.pause();
     else controller?.resume();
   };
 
@@ -64,7 +66,7 @@ export async function startPet(): Promise<void> {
   const remount = async () => {
     const generation = ++mountGeneration;
     const next = settings;
-    animator = undefined;
+    animator?.disconnected(); animator = undefined;
     slot.destroy(); controller = undefined;
     host.replaceChildren(); empty.hidden = Boolean(next.model);
     if (!next.model) return;
@@ -81,7 +83,7 @@ export async function startPet(): Promise<void> {
       empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-  globalThis.addEventListener("pagehide", () => { ++mountGeneration; slot.destroy(); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { ++mountGeneration; animator?.disconnected(); slot.destroy(); }, {once:true});
   await remount();
 
   const connection = new StatusConnection({

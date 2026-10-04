@@ -1,42 +1,74 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PetSnapshot, WidgetController } from "../src/vendor-types.js";
 import type { AnimationMappings } from "../src/types.js";
 import { StateAnimator } from "../src/state-animator.js";
 
 const mappings: AnimationMappings = {
   idle: "Idle",
-  thinking: "Thinking",
-  working: null,
+  working: "Working",
   completed: "Completed",
   error: null,
   blocked: null,
   approval: "Approval",
-  click: "Click",
+  click: ["Click"],
+  ambient: [],
 };
 
 function snapshot(state: PetSnapshot["state"], sequence: number): PetSnapshot {
   return { protocolVersion: 1, sequence, emittedAt: sequence, state };
 }
 
-function harness() {
+function harness(config: AnimationMappings = mappings) {
   const pending: Array<(value: "completed") => void> = [];
-  const playAnimation = vi.fn(() => new Promise<"completed">((resolve) => pending.push(resolve)));
+  const playAnimation = vi.fn<WidgetController["playAnimation"]>(() => new Promise<"completed">((resolve) => pending.push(resolve)));
   const stopAnimation = vi.fn();
   const controller = {
     playAnimation,
     stopAnimation,
   } as unknown as WidgetController;
-  return { animator: new StateAnimator(controller, mappings), playAnimation, stopAnimation, pending };
+  return { animator: new StateAnimator(controller, config), playAnimation, stopAnimation, pending };
 }
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("StateAnimator", () => {
+  it("merges thinking and working without restarting their shared clip", () => {
+    const { animator, playAnimation } = harness();
+    animator.apply(snapshot("thinking", 0));
+    animator.apply(snapshot("working", 1));
+    animator.apply(snapshot("thinking", 2));
+    expect(playAnimation).toHaveBeenCalledOnce();
+    expect(playAnimation).toHaveBeenLastCalledWith("Working", { mode: "loop", restart: true });
+  });
+
+  it("samples a click pool anew on every trigger", async () => {
+    const { animator, playAnimation, pending } = harness({...mappings,click:["Click","Wave"]});
+    vi.spyOn(Math,"random").mockReturnValueOnce(0).mockReturnValueOnce(.99);
+    animator.apply(snapshot("idle",0));
+    const first=animator.click();pending[1]?.("completed");await first;
+    const second=animator.click();pending[3]?.("completed");await second;
+    expect(playAnimation.mock.calls.map(call => call[0])).toEqual(["Idle","Click","Idle","Wave","Idle"]);
+    animator.disconnected();
+  });
+
+  it("defers ambient while paused and discards stale completion after working", async () => {
+    vi.useFakeTimers();vi.spyOn(Math,"random").mockReturnValue(0);
+    const { animator, playAnimation, pending } = harness({...mappings,ambient:["Yawn"]});
+    animator.apply(snapshot("idle",0));animator.setPaused(true);
+    await vi.advanceTimersByTimeAsync(120_000);expect(playAnimation).toHaveBeenCalledOnce();
+    animator.setPaused(false);await vi.advanceTimersByTimeAsync(60_000);
+    expect(playAnimation).toHaveBeenLastCalledWith("Yawn",{mode:"once",restart:true});
+    animator.apply(snapshot("working",1));pending[1]?.("completed");await Promise.resolve();
+    expect(playAnimation).toHaveBeenLastCalledWith("Working",{mode:"loop",restart:true});
+    animator.disconnected();expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("uses loops only for sustained states and never falls back for disabled mappings", () => {
     const { animator, playAnimation, stopAnimation } = harness();
     animator.apply(snapshot("idle", 0));
     expect(playAnimation).toHaveBeenLastCalledWith("Idle", { mode: "loop", restart: true });
     animator.apply(snapshot("completed", 1));
     expect(playAnimation).toHaveBeenLastCalledWith("Completed", { mode: "once", restart: true });
-    animator.apply(snapshot("working", 2));
+    animator.apply(snapshot("blocked", 2));
     expect(stopAnimation).toHaveBeenCalledOnce();
     expect(playAnimation).toHaveBeenCalledTimes(2);
   });

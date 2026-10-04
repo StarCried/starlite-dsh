@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
-pub const SETTINGS_SCHEMA_VERSION: u32 = 2;
+pub const SETTINGS_SCHEMA_VERSION: u32 = 3;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -43,13 +43,26 @@ pub struct VrmModelData {
 #[serde(rename_all = "camelCase")]
 pub struct AnimationMappings {
     pub idle: String,
-    pub thinking: Option<String>,
     pub working: Option<String>,
     pub completed: Option<String>,
     pub error: Option<String>,
     pub blocked: Option<String>,
     pub approval: Option<String>,
-    pub click: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_animation_pool")]
+    pub click: Vec<String>,
+    #[serde(default)]
+    pub ambient: Vec<String>,
+}
+
+fn deserialize_animation_pool<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Vec<String>, D::Error> {
+    let value = Value::deserialize(deserializer)?;
+    match value {
+        Value::Null => Ok(Vec::new()),
+        Value::String(name) => Ok(vec![name]),
+        value => serde_json::from_value(value).map_err(serde::de::Error::custom),
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -140,18 +153,29 @@ pub fn validate_mappings(mappings: &AnimationMappings, animations: &[Value]) -> 
     }
     for (state, value) in [
         ("Idle", Some(&mappings.idle)),
-        ("Thinking", mappings.thinking.as_ref()),
         ("Working", mappings.working.as_ref()),
         ("Completed", mappings.completed.as_ref()),
         ("Error", mappings.error.as_ref()),
         ("Blocked", mappings.blocked.as_ref()),
         ("Approval", mappings.approval.as_ref()),
-        ("Click", mappings.click.as_ref()),
     ] {
         if let Some(name) = value {
             if name.is_empty() || !names.contains(name.as_str()) {
                 return Err(format!("{state} animation does not exist in the model"));
             }
+        }
+    }
+    for (state, pool) in [("Click", &mappings.click), ("Ambient", &mappings.ambient)] {
+        let unique: HashSet<_> = pool.iter().collect();
+        if pool.len() > 20
+            || unique.len() != pool.len()
+            || pool
+                .iter()
+                .any(|name| name.is_empty() || !names.contains(name.as_str()))
+        {
+            return Err(format!(
+                "{state} pool must contain distinct available animations (at most 20)"
+            ));
         }
     }
     Ok(())
@@ -239,6 +263,7 @@ fn validate_model(model: &InstalledModel) -> Result<(), String> {
 
 pub fn decode_settings(bytes: &[u8]) -> Result<DesktopSettings, String> {
     let mut value: Value = serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+    let version = value.get("schemaVersion").and_then(Value::as_u64);
     if value.get("schemaVersion").and_then(Value::as_u64) == Some(1) {
         if let Some(model) = value.get_mut("model").filter(|model| !model.is_null()) {
             let clips = model
@@ -249,6 +274,19 @@ pub fn decode_settings(bytes: &[u8]) -> Result<DesktopSettings, String> {
             model["animations"] = Value::Array(inochi_catalog(&clips)?);
             model["backend"] = Value::String("inochi2d".into());
             model["inochi2d"] = serde_json::json!({"animations":clips});
+        }
+    }
+    if matches!(version, Some(1 | 2)) {
+        if let Some(mappings) = value
+            .get_mut("model")
+            .and_then(|model| model.get_mut("mappings"))
+        {
+            if mappings.get("working").is_none_or(Value::is_null) {
+                mappings["working"] = mappings.get("thinking").cloned().unwrap_or(Value::Null);
+            }
+            if let Some(object) = mappings.as_object_mut() {
+                object.remove("thinking");
+            }
         }
         value["schemaVersion"] = SETTINGS_SCHEMA_VERSION.into();
     }
@@ -326,13 +364,13 @@ mod tests {
     fn mappings(idle: &str) -> AnimationMappings {
         AnimationMappings {
             idle: idle.into(),
-            thinking: None,
             working: None,
             completed: None,
             error: None,
             blocked: None,
             approval: None,
-            click: None,
+            click: vec![],
+            ambient: vec![],
         }
     }
 
@@ -348,7 +386,7 @@ mod tests {
     fn version_one_migrates_model_mapping_and_preferences() {
         let old = serde_json::json!({"schemaVersion":1,"preferences":{"fps":60,"maxDevicePixelRatio":1.25,"scale":0.8,"privacyMode":true},"model":{"modelPath":"local/model.inp","sourceSha256":"source","animations":[{"name":"Idle","timestepMs":100,"length":10,"lanes":[]}],"mappings":{"idle":"Idle","thinking":null,"working":null,"completed":null,"error":null,"blocked":null,"approval":null,"click":null}}});
         let migrated = decode_settings(&serde_json::to_vec(&old).unwrap()).unwrap();
-        assert_eq!(migrated.schema_version, 2);
+        assert_eq!(migrated.schema_version, 3);
         assert_eq!(migrated.preferences.fps, 60);
         assert!(migrated.preferences.privacy_mode);
         let model = migrated.model.unwrap();
@@ -360,6 +398,45 @@ mod tests {
             model.inochi2d.unwrap().animations,
             old["model"]["animations"].as_array().unwrap().clone()
         );
+    }
+
+    #[test]
+    fn version_two_merges_thinking_and_preserves_click() {
+        let mut value = serde_json::to_value(DesktopSettings::default()).unwrap();
+        value["schemaVersion"] = 2.into();
+        value["model"] = serde_json::json!({"backend":"vrm","modelPath":"pet.vrm","sourceSha256":"source","animations":[{"name":"Idle","durationMs":1000},{"name":"Think","durationMs":1000}],"vrm":{"animations":[{"name":"Idle","path":"idle.vrma"},{"name":"Think","path":"think.vrma"}]},"mappings":{"idle":"Idle","thinking":"Think","working":null,"completed":null,"error":null,"blocked":null,"approval":null,"click":"Idle"}});
+        let migrated = decode_settings(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert_eq!(migrated.schema_version, 3);
+        let mappings = migrated.model.unwrap().mappings;
+        assert_eq!(mappings.working.as_deref(), Some("Think"));
+        assert_eq!(mappings.click, vec!["Idle"]);
+        assert!(mappings.ambient.is_empty());
+        value["model"]["mappings"]["working"] = "Idle".into();
+        assert_eq!(
+            decode_settings(&serde_json::to_vec(&value).unwrap())
+                .unwrap()
+                .model
+                .unwrap()
+                .mappings
+                .working
+                .as_deref(),
+            Some("Idle")
+        );
+    }
+
+    #[test]
+    fn pools_validate_every_name_and_reject_duplicates() {
+        let animations = vec![
+            serde_json::json!({"name":"Idle"}),
+            serde_json::json!({"name":"Wave"}),
+        ];
+        let mut mapping = mappings("Idle");
+        mapping.click = vec!["Idle".into(), "Wave".into()];
+        assert!(validate_mappings(&mapping, &animations).is_ok());
+        mapping.ambient = vec!["Missing".into()];
+        assert!(validate_mappings(&mapping, &animations).is_err());
+        mapping.ambient = vec!["Wave".into(), "Wave".into()];
+        assert!(validate_mappings(&mapping, &animations).is_err());
     }
 
     #[test]

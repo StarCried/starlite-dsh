@@ -53,6 +53,16 @@ start at 30 FPS / DPR 1.5; existing preferences are preserved. A failed inspecti
 or save leaves the installed component intact. Runtime mounts use the shared
 cancellation slot; old requests and late controllers cannot replace a new model.
 
+Only the explicitly selected Idle animation loops. Working (including Thinking),
+Blocked, Approval, Completed and Error play once and return to that Idle. An Idle
+snapshot cannot truncate an unfinished gesture. While a state gesture plays,
+later state changes retain only the latest request; it plays after completion.
+Click and occasional idle gestures have lower priority: work states interrupt
+them, and clicks cannot interrupt work, entry or another response. Logical busy
+states continue blocking clicks even after their gesture has returned to Idle.
+Disabled mappings explicitly stop playback and remain neutral. Disconnect and
+mapping changes cancel pending completions and clear ambient timers.
+
 ## Local validation (2026-09-20)
 
 The desktop frontend passes 44 tests and `pnpm check`. Native format, Clippy,

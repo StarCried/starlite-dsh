@@ -37,7 +37,7 @@ describe("StateAnimator", () => {
     animator.apply(snapshot("working", 1));
     animator.apply(snapshot("thinking", 2));
     expect(playAnimation).toHaveBeenCalledOnce();
-    expect(playAnimation).toHaveBeenLastCalledWith("Working", { mode: "loop", restart: true });
+    expect(playAnimation).toHaveBeenLastCalledWith("Working", { mode: "once", restart: true });
   });
 
   it("samples a click pool anew on every trigger", async () => {
@@ -58,14 +58,14 @@ describe("StateAnimator", () => {
     animator.setPaused(false);await vi.advanceTimersByTimeAsync(60_000);
     expect(playAnimation).toHaveBeenLastCalledWith("Yawn",{mode:"once",restart:true});
     animator.apply(snapshot("working",1));pending[1]?.("completed");await Promise.resolve();
-    expect(playAnimation).toHaveBeenLastCalledWith("Working",{mode:"loop",restart:true});
+    expect(playAnimation).toHaveBeenLastCalledWith("Working",{mode:"once",restart:true});
     animator.disconnected();expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("uses loops only for sustained states and never falls back for disabled mappings", () => {
+  it("loops only Idle and stays neutral for disabled mappings", () => {
     const { animator, playAnimation, stopAnimation } = harness();
     animator.apply(snapshot("idle", 0));
-    expect(playAnimation).toHaveBeenLastCalledWith("Idle", { mode: "loop", restart: true });
+    expect(playAnimation).toHaveBeenLastCalledWith("Idle", { mode: "loop", restart: false });
     animator.apply(snapshot("completed", 1));
     expect(playAnimation).toHaveBeenLastCalledWith("Completed", { mode: "once", restart: true });
     animator.apply(snapshot("blocked", 2));
@@ -89,7 +89,7 @@ describe("StateAnimator", () => {
     pending[1]?.("completed");
     await click;
     expect(playAnimation).toHaveBeenCalledTimes(3);
-    expect(playAnimation).toHaveBeenLastCalledWith("Approval", { mode: "loop", restart: true });
+    expect(playAnimation).toHaveBeenLastCalledWith("Approval", { mode: "once", restart: true });
   });
 
   it("restores Idle after a completed Click and ignores Click while busy", async () => {
@@ -98,11 +98,54 @@ describe("StateAnimator", () => {
     const click = animator.click();
     pending[1]?.("completed");
     await click;
-    expect(playAnimation).toHaveBeenLastCalledWith("Idle", { mode: "loop", restart: true });
+    expect(playAnimation).toHaveBeenLastCalledWith("Idle", { mode: "loop", restart: false });
 
     animator.apply(snapshot("thinking", 1));
     const calls = playAnimation.mock.calls.length;
     await animator.click();
     expect(playAnimation).toHaveBeenCalledTimes(calls);
+  });
+
+  it("finishes a short work gesture after the logical state has already returned to Idle", async () => {
+    const {animator,playAnimation,pending}=harness();
+    animator.apply(snapshot("working",0));animator.apply(snapshot("idle",1));
+    expect(playAnimation).toHaveBeenCalledOnce();await animator.click();
+    expect(playAnimation).toHaveBeenCalledOnce();
+    pending[0]?.("completed");await Promise.resolve();await Promise.resolve();
+    expect(playAnimation).toHaveBeenLastCalledWith("Idle",{mode:"loop",restart:false});
+  });
+
+  it("plays each work state once, returns to Idle and still blocks clicks while logically busy",async()=>{
+    const {animator,playAnimation,pending}=harness();
+    animator.apply(snapshot("working",0));pending[0]?.("completed");
+    await Promise.resolve();await Promise.resolve();
+    expect(playAnimation).toHaveBeenLastCalledWith("Idle",{mode:"loop",restart:false});
+    await animator.click();animator.apply(snapshot("working",1));
+    expect(playAnimation).toHaveBeenCalledTimes(2);
+  });
+
+  it("finishes the current state before playing the latest queued state",async()=>{
+    const {animator,playAnimation,pending}=harness();
+    animator.apply(snapshot("working",0));animator.apply(snapshot("completed",1));animator.apply(snapshot("approval",2));
+    expect(playAnimation).toHaveBeenCalledOnce();pending[0]?.("completed");
+    await Promise.resolve();await Promise.resolve();
+    expect(playAnimation).toHaveBeenLastCalledWith("Approval",{mode:"once",restart:true});
+    pending[1]?.("completed");await Promise.resolve();await Promise.resolve();
+    expect(playAnimation).toHaveBeenLastCalledWith("Idle",{mode:"loop",restart:false});
+  });
+
+  it("ignores repeated clicks while the current response finishes",async()=>{
+    const {animator,playAnimation,pending}=harness();
+    animator.apply(snapshot("idle",0));const first=animator.click();await animator.click();
+    expect(playAnimation).toHaveBeenCalledTimes(2);pending[1]?.("completed");await first;
+    expect(playAnimation).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not resume Idle after disconnection or a disabled mapping cancels a state",async()=>{
+    const {animator,playAnimation,pending,stopAnimation}=harness();
+    animator.apply(snapshot("working",0));animator.apply(snapshot("blocked",1));pending[0]?.("completed");
+    await Promise.resolve();await Promise.resolve();expect(playAnimation).toHaveBeenCalledOnce();
+    animator.apply(snapshot("approval",2));animator.disconnected();pending[1]?.("completed");
+    await Promise.resolve();await Promise.resolve();expect(playAnimation).toHaveBeenCalledTimes(2);expect(stopAnimation).toHaveBeenCalledTimes(2);
   });
 });

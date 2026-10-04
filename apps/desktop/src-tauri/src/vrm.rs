@@ -886,38 +886,32 @@ mod tests {
         let root = std::env::var("DSH_PET_VRM_ASSETS").expect("set DSH_PET_VRM_ASSETS");
         for variant in ["desktop", "blog"] {
             let folder = Path::new(&root).join(variant);
-            let names = [
-                "Idle",
-                "Thinking",
-                "Working",
-                "Blocked",
-                "Approval",
-                "Completed",
-                "Error",
-                "Click",
-            ];
-            let sources = names
+            let manifest: Value =
+                serde_json::from_slice(&fs::read(folder.join("manifest.json")).unwrap()).unwrap();
+            let clips = manifest["animations"].as_array().unwrap();
+            let sources = clips
                 .iter()
-                .map(|name| AnimationSource {
-                    name: (*name).into(),
+                .map(|clip| AnimationSource {
+                    name: clip["name"].as_str().unwrap().into(),
                     path: folder
-                        .join("motions")
-                        .join(format!("{name}.vrma"))
+                        .join(clip["file"].as_str().unwrap())
                         .to_string_lossy()
                         .into_owned(),
                 })
                 .collect::<Vec<_>>();
+            assert!(!sources.is_empty());
+            assert!(sources.iter().all(|source| source.name != "Thinking"));
             let prepared = inspect(
                 &folder.join("Weiguang.vrm"),
                 &sources,
                 Some(&folder.join("profile.json")),
             )
             .unwrap();
-            assert_eq!(prepared.catalog().len(), 8);
+            assert_eq!(prepared.catalog().len(), clips.len());
             let temp = tempfile::tempdir().unwrap();
             let (model, data) = prepared.write(&temp.path().join("installed")).unwrap();
             assert!(Path::new(&model).is_file());
-            assert_eq!(data.animations.len(), 8);
+            assert_eq!(data.animations.len(), clips.len());
             assert!(Path::new(data.profile_path.as_ref().unwrap()).is_file());
         }
     }

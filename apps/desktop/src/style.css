@@ -126,6 +126,13 @@ h2 { font-size: 17px; }
   gap: 12px;
 }
 
+.mapping-row,
+.mapping-row label { width: 100%; }
+.mapping-row select { width: 100%; min-width: 0; }
+.mapping-row select[multiple] { min-height: 160px; padding: 8px; }
+.mapping-row select[multiple] option { padding: 4px 6px; }
+#animation-pool-help { color: #b9b4ca; line-height: 1.5; }
+
 .preferences .check { display: block; }
 
 button,

@@ -11,12 +11,12 @@ import type {
 } from "./types.js";
 
 const STATES: ReadonlyArray<{ key: AnimationState; label: string; required: boolean }> = [
-  { key: "idle", label: "Idle（必填）", required: true },
+  { key: "idle", label: "待机（必填）", required: true },
   { key: "working", label: "工作中（含思考）", required: false },
-  { key: "completed", label: "Completed", required: false },
-  { key: "error", label: "Error", required: false },
-  { key: "blocked", label: "Blocked", required: false },
-  { key: "approval", label: "Approval", required: false },
+  { key: "completed", label: "完成", required: false },
+  { key: "error", label: "出错", required: false },
+  { key: "blocked", label: "遇到阻碍", required: false },
+  { key: "approval", label: "等待确认", required: false },
   { key: "click", label: "点击回应（可多选，随机播放）", required: false },
   { key: "ambient", label: "偶发小动作（可多选，随机播放）", required: false },
 ];
@@ -70,7 +70,7 @@ export async function startSettings(): Promise<void> {
         error.textContent = result.issues.map(({message}) => message).join("；");
         return;
       }
-      status.textContent = result.animations.length ? `检查通过：${result.animations.length} 个动画。请选择 Idle。` : "模型可预览；请添加动作并选择 Idle 后保存。";
+      status.textContent = result.animations.length ? `检查通过：${result.animations.length} 个动画。请选择待机动作。` : "模型可预览；请添加动作并选择待机后保存。";
       renderMappings(mappings, result.animations, suggestMappings(result));
       save.textContent = "导入并保存";
     } catch (reason) {
@@ -146,8 +146,11 @@ function renderMappings(
     select.dataset.state = state.key;
     const pool = state.key === "click" || state.key === "ambient";
     select.multiple = pool;
-    if (pool) select.size = Math.min(6, Math.max(2, animations.length));
-    if (!pool) select.append(new Option(state.required ? "请选择 Idle 动作" : "禁用", ""));
+    if (pool) {
+      select.size = Math.min(6, Math.max(2, animations.length));
+      select.setAttribute("aria-describedby", "animation-pool-help");
+    }
+    if (!pool) select.append(new Option(state.required ? "请选择待机动作" : "禁用", ""));
     select.required = state.required;
     for (const animation of animations) select.append(new Option(animation.name, animation.name));
     const selected = current?.[state.key];
@@ -178,7 +181,7 @@ function readMappings(host: HTMLElement): AnimationMappings {
     [...host.querySelectorAll<HTMLSelectElement>("select[data-state]")]
       .map((select) => [select.dataset.state, select.multiple ? [...select.selectedOptions].map(option => option.value) : select.value || null]),
   ) as unknown as AnimationMappings;
-  if (!values.idle) throw new Error("Idle 动画必须选择且必须存在于模型中。");
+  if (!values.idle) throw new Error("待机动画必须选择且必须存在于模型中。");
   return values;
 }
 

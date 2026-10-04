@@ -16,9 +16,10 @@ const choose=(path:string)=>{open.mockResolvedValueOnce(path);document.getElemen
 beforeEach(()=>{vi.clearAllMocks();vi.stubGlobal("Option",function(text:string,value:string){const option=document.createElement("option");option.textContent=text;option.value=value;return option});document.body.innerHTML=readFileSync("apps/desktop/index.html","utf8").replace(/<script[\s\S]*?<\/script>/gu, "");invoke.mockResolvedValue(initial)});
 it("keeps backend payloads separate and maps every local VRM asset",()=>{
  const settings:DesktopSettings={...initial,model:{backend:"vrm",modelPath:"m.vrm",sourceSha256:"hash",mappings,animations:catalog,vrm:{animations:[{name:"Idle",path:"a.vrma"}],profilePath:"p.json"}}};
- expect(modelConfig(settings)).toMatchObject({backend:"vrm",model:"asset:m.vrm",animations:[{name:"Idle",url:"asset:a.vrma"}],profile:"asset:p.json"});
+ expect(modelConfig(settings)).toMatchObject({backend:"vrm",model:"asset:m.vrm",animations:[{name:"Idle",url:"asset:a.vrma"}],profile:"asset:p.json",ambient:{animations:["Idle"]},camera:{pitchDegrees:5,targetHeight:.54},gaze:{maxYawDegrees:25,maxPitchDegrees:15}});
  const tracks=[{name:"Idle",timestepMs:10,length:10,leadIn:0,leadOut:0,weight:1,lanes:[]}];
  expect(modelConfig({...settings,model:{...settings.model!,backend:"inochi2d",inochi2d:{animations:tracks}}}).animations).toEqual(tracks);
+ expect(modelConfig({...settings,model:{...settings.model!,mappings:{...mappings,idle:"Rest"}}}).ambient).toEqual({animations:["Rest"]});
 });
 it("requires explicit Idle and imports actions and profile with VRM defaults",async()=>{
  await startSettings();

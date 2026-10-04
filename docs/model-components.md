@@ -10,10 +10,11 @@ optional `profilePath`. The response includes `backend` and a common animation
 catalog containing only `name` and `durationMs`. Inochi2D track data and VRM
 resource paths remain in their respective backend payloads.
 
-The settings format is version 2. Reading version 1 migrates its model to the
+The settings format is version 3. Reading version 1 migrates its model to the
 Inochi2D backend, preserves its exact mappings and preferences, and retains the
 authored tracks under `model.inochi2d.animations`. The next successful save writes
-version 2. Unsupported settings versions fail validation.
+version 3. Version 2 migrates the former Thinking mapping into Working and turns
+click/ambient choices into arrays. Unsupported settings versions fail validation.
 
 VRM import validates bounded GLB containers, buffer/accessor ranges, sparse
 indices, node hierarchies, required humanoid bones, animation timelines and
@@ -62,6 +63,9 @@ them, and clicks cannot interrupt work, entry or another response. Logical busy
 states continue blocking clicks even after their gesture has returned to Idle.
 Disabled mappings explicitly stop playback and remain neutral. Disconnect and
 mapping changes cancel pending completions and clear ambient timers.
+The VRM component receives the selected Idle as its explicit return clip, so
+completion blends directly into Idle without rendering a neutral frame first.
+Its portrait framing and bounded pointer gaze match the local review page.
 
 ## Local validation (2026-09-20)
 

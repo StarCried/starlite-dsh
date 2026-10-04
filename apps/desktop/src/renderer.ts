@@ -15,10 +15,15 @@ export function modelConfig(settings: DesktopSettings): Record<string, unknown> 
   return {
     backend: model.backend, model: convertFileSrc(model.modelPath), fallback: TRANSPARENT_PIXEL,
     display: { width: 480, height: 720 },
-    render: { fps: settings.preferences.fps, maxDevicePixelRatio: settings.preferences.maxDevicePixelRatio, initialScale: settings.preferences.scale, autoFit: true },
+    render: { fps: settings.preferences.fps, maxDevicePixelRatio: settings.preferences.maxDevicePixelRatio, initialScale: settings.preferences.scale, autoFit: true, ...(model.backend === "vrm" ? {fitPadding:.92} : {}) },
     mobile: { show: true }, interactions: { pointer: true, click: false, drag: false },
     animations: model.backend === "inochi2d" ? model.inochi2d!.animations : model.vrm!.animations.map(({name,path}) => ({name,url:convertFileSrc(path)})),
     ...(model.backend === "vrm" && model.vrm?.profilePath ? {profile:convertFileSrc(model.vrm.profilePath)} : {}),
+    ...(model.backend === "vrm" ? {
+      ambient: {animations:[model.mappings.idle]},
+      camera: {yawDegrees:0,pitchDegrees:5,fovDegrees:20,targetHeight:.54},
+      gaze: {maxYawDegrees:25,maxPitchDegrees:15,smoothingMs:100},
+    } : {}),
   };
 }
 export async function mountModel(host: HTMLElement, settings: DesktopSettings, signal: AbortSignal): Promise<WidgetController> {

@@ -31,17 +31,20 @@ describe("model-only pointer interaction", () => {
     bridge.update(mask); await Promise.resolve();
     expect(failed).toHaveBeenCalledOnce(); expect(bridge.hitTest(35,25)).toBe(false);
   });
-  it("does not click or drag from transparent pixels and releases capture before native drag", () => {
+  it("does not click or drag from transparent pixels and retains the final rapid drag movement", async () => {
     const listeners = new Map<string,(event:PointerEvent)=>void>();
-    const capture=vi.fn(),release=vi.fn(),click=vi.fn(),drag=vi.fn(async()=>{expect(release).toHaveBeenCalledOnce()});
+    const capture=vi.fn(),release=vi.fn(),click=vi.fn();
+    const drag={begin:vi.fn(async()=>{}),move:vi.fn(async()=>{}),end:vi.fn(async()=>{})};
     const element={addEventListener:(name:string,listener:(event:PointerEvent)=>void)=>listeners.set(name,listener),setPointerCapture:capture,hasPointerCapture:()=>true,releasePointerCapture:release} as unknown as HTMLElement;
     const hit=(x:number)=>x>30;
     installPointerBehavior(element,drag,click,hit);
-    const event=(x:number)=>({button:0,pointerId:1,clientX:x,clientY:25}) as PointerEvent;
+    const event=(x:number)=>({button:0,pointerId:1,clientX:x,clientY:25,screenX:x,screenY:25}) as PointerEvent;
     listeners.get("pointerdown")!(event(15)); listeners.get("pointermove")!(event(80)); listeners.get("pointerup")!(event(80));
-    expect(capture).not.toHaveBeenCalled();expect(click).not.toHaveBeenCalled();expect(drag).not.toHaveBeenCalled();
-    listeners.get("pointerdown")!(event(35));listeners.get("pointerup")!(event(35));expect(click).toHaveBeenCalledOnce();
+    expect(capture).not.toHaveBeenCalled();expect(click).not.toHaveBeenCalled();expect(drag.begin).not.toHaveBeenCalled();
+    listeners.get("pointerdown")!(event(35));listeners.get("pointerup")!(event(35));
+    await vi.waitFor(()=>expect(drag.end).toHaveBeenCalledOnce());expect(click).toHaveBeenCalledOnce();
     listeners.get("pointerdown")!(event(35));listeners.get("pointermove")!(event(45));listeners.get("pointerup")!(event(45));
-    expect(drag).toHaveBeenCalledOnce();expect(click).toHaveBeenCalledOnce();
+    await vi.waitFor(()=>expect(drag.end).toHaveBeenCalledTimes(2));
+    expect(drag.move).toHaveBeenCalledTimes(2);expect(click).toHaveBeenCalledOnce();expect(release).toHaveBeenCalledTimes(2);
   });
 });

@@ -152,7 +152,11 @@ export async function startPet(): Promise<void> {
   });
   document.addEventListener("visibilitychange", syncRendering);
 
-  installPointerBehavior(host, window.startDragging.bind(window), () => animator?.click(), (x, y) => interaction.hitTest(x, y));
+  installPointerBehavior(host, {
+    begin: (x, y) => invoke("begin_model_drag", {x,y}),
+    move: () => invoke("move_model_drag"),
+    end: () => invoke("end_model_drag"),
+  }, () => animator?.click(), (x, y) => interaction.hitTest(x, y));
   await keepWindowVisible(window);
 }
 
@@ -173,37 +177,41 @@ export function renderBubble(
 
 export function installPointerBehavior(
   element: HTMLElement,
-  startDragging: () => Promise<void>,
+  drag: {begin: (x: number, y: number) => Promise<unknown>; move: () => Promise<unknown>; end: () => Promise<unknown>},
   click: () => void | Promise<void>,
   hitTest: (x: number, y: number) => boolean,
 ): void {
-  let pointerId: number | undefined;
-  let startX = 0;
-  let startY = 0;
-  let dragged = false;
+  let gesture: {id: number; x: number; y: number; moved: boolean; queued: boolean; chain: Promise<unknown>} | undefined;
+  let finishing = false;
+  const finish = (event: PointerEvent, cancelled: boolean) => {
+    const current = gesture;
+    if (!current || event.pointerId !== current.id) return;
+    gesture = undefined;
+    finishing = true;
+    current.moved ||= Math.hypot(event.screenX-current.x,event.screenY-current.y)>=5;
+    if (element.hasPointerCapture(current.id)) element.releasePointerCapture(current.id);
+    void current.chain.then(async () => {
+      if (current.moved && !cancelled) await drag.move();
+      if (!current.moved && !cancelled) void click();
+    }).finally(() => drag.end()).finally(() => {finishing=false}).catch(() => {});
+  };
   element.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || !hitTest(event.clientX, event.clientY)) return;
-    pointerId = event.pointerId;
-    startX = event.clientX;
-    startY = event.clientY;
-    dragged = false;
+    if (gesture || finishing || event.button !== 0 || !hitTest(event.clientX, event.clientY)) return;
+    gesture = {id:event.pointerId,x:event.screenX,y:event.screenY,moved:false,queued:false,chain:drag.begin(event.clientX,event.clientY)};
+    // Attach rejection handling immediately while retaining the rejected chain.
+    void gesture.chain.catch(() => {});
     element.setPointerCapture(event.pointerId);
   });
   element.addEventListener("pointermove", (event) => {
-    if (event.pointerId !== pointerId || dragged) return;
-    if (Math.hypot(event.clientX - startX, event.clientY - startY) < 5) return;
-    dragged = true;
-    if (element.hasPointerCapture(event.pointerId)) element.releasePointerCapture(event.pointerId);
-    void startDragging();
+    const current=gesture;
+    if (!current || event.pointerId !== current.id || current.queued) return;
+    if (!current.moved && Math.hypot(event.screenX-current.x,event.screenY-current.y)<5) return;
+    current.moved=true;current.queued=true;
+    current.chain=current.chain.then(()=>drag.move()).finally(()=>{current.queued=false});
+    void current.chain.catch(() => {});
   });
-  element.addEventListener("pointerup", (event) => {
-    if (event.pointerId !== pointerId) return;
-    pointerId = undefined;
-    if (!dragged) void click();
-  });
-  element.addEventListener("pointercancel", () => {
-    pointerId = undefined;
-  });
+  element.addEventListener("pointerup", event=>finish(event,false));
+  element.addEventListener("pointercancel", event=>finish(event,true));
 }
 
 async function keepWindowVisible(window: Window): Promise<void> {

@@ -17,6 +17,11 @@ export interface AnimationClip {
 }
 
 export type AnimationPlaybackResult = "completed" | "interrupted" | "stopped";
+export interface ModelHitMask {
+  width: number; height: number; left: number; top: number;
+  displayWidth: number; displayHeight: number;
+  viewportWidth: number; viewportHeight: number; bits: Uint8Array;
+}
 
 export interface WidgetController {
   readonly status: "disabled" | "loading" | "running" | "paused" | "fallback" | "destroyed";
@@ -29,6 +34,8 @@ export interface WidgetController {
   ): Promise<AnimationPlaybackResult>;
   stopAnimation(): void;
   resetCamera(): void;
+  observeInteractionMask(listener?: (mask: ModelHitMask | undefined) => void): void;
+  setPointerPosition(clientX: number, clientY: number): void;
   destroy(): void;
 }
 

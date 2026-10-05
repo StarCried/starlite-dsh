@@ -14,6 +14,7 @@ import type { DesktopSettings } from "./types.js";
 import { StatusConnection } from "./connection.js";
 import { createModelSlot, mountModel } from "./renderer.js";
 import { StateAnimator } from "./state-animator.js";
+import { InteractionMaskBridge } from "./interaction-mask.js";
 
 const OFFLINE_EXIT_MS = 60_000;
 const FIXED_BUBBLES: Partial<Record<PetState, string>> = {
@@ -39,6 +40,13 @@ export async function startPet(): Promise<void> {
   let offlineTimer: ReturnType<typeof setTimeout> | undefined;
   let pausedByTray = false;
   let connected = false;
+  const interaction = new InteractionMaskBridge(
+    mask => invoke("set_model_hit_mask", {mask}),
+    () => { void window.hide(); void invoke("open_settings"); },
+  );
+  await listen<{x: number; y: number}>("pet-cursor", ({payload}) => {
+    controller?.setPointerPosition(payload.x, payload.y);
+  });
 
   empty.addEventListener("click", () => {
     void invoke("open_settings");
@@ -74,6 +82,7 @@ export async function startPet(): Promise<void> {
       const mounted = await slot.mount(signal => mountModel(host, next, signal));
       if (!mounted || generation !== mountGeneration) return;
       controller = mounted;
+      mounted.observeInteractionMask(mask => interaction.update(mask));
       animator = new StateAnimator(mounted, next.model.mappings);
       if (latestSnapshot) animator.apply(latestSnapshot);
       syncRendering();
@@ -83,7 +92,7 @@ export async function startPet(): Promise<void> {
       empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-  globalThis.addEventListener("pagehide", () => { ++mountGeneration; animator?.disconnected(); slot.destroy(); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { ++mountGeneration; animator?.disconnected(); slot.destroy(); interaction.update(undefined); }, {once:true});
   await remount();
 
   const connection = new StatusConnection({
@@ -143,7 +152,7 @@ export async function startPet(): Promise<void> {
   });
   document.addEventListener("visibilitychange", syncRendering);
 
-  installPointerBehavior(host, window.startDragging.bind(window), () => animator?.click());
+  installPointerBehavior(host, window.startDragging.bind(window), () => animator?.click(), (x, y) => interaction.hitTest(x, y));
   await keepWindowVisible(window);
 }
 
@@ -166,13 +175,14 @@ export function installPointerBehavior(
   element: HTMLElement,
   startDragging: () => Promise<void>,
   click: () => void | Promise<void>,
+  hitTest: (x: number, y: number) => boolean,
 ): void {
   let pointerId: number | undefined;
   let startX = 0;
   let startY = 0;
   let dragged = false;
   element.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || !hitTest(event.clientX, event.clientY)) return;
     pointerId = event.pointerId;
     startX = event.clientX;
     startY = event.clientY;
@@ -183,6 +193,7 @@ export function installPointerBehavior(
     if (event.pointerId !== pointerId || dragged) return;
     if (Math.hypot(event.clientX - startX, event.clientY - startY) < 5) return;
     dragged = true;
+    if (element.hasPointerCapture(event.pointerId)) element.releasePointerCapture(event.pointerId);
     void startDragging();
   });
   element.addEventListener("pointerup", (event) => {

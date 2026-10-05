@@ -79,6 +79,9 @@ the background cannot steal a drag from the application underneath. The tray's
 mouse passthrough toggle overrides silhouette interaction. Cursor coordinates
 stay in memory and are used only for the renderer's bounded gaze tracking.
 The hidden window stops cursor/mask processing until it becomes visible again.
+Drag movement uses a captured physical cursor/window origin and coalesced
+position updates, including the final movement before mouse release. It does
+not rely on an asynchronous system move-loop starting while the button is held.
 
 ## Local validation (2026-09-20)
 

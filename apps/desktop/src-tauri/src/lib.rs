@@ -84,6 +84,9 @@ pub fn run() {
             open_settings,
             exit_app,
             hit_test::set_model_hit_mask,
+            hit_test::begin_model_drag,
+            hit_test::move_model_drag,
+            hit_test::end_model_drag,
         ])
         .setup(|app| {
             #[cfg(all(debug_assertions, windows))]

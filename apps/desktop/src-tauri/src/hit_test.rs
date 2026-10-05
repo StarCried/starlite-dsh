@@ -66,7 +66,105 @@ impl HitMask {
 }
 
 #[derive(Default)]
-pub struct HitTestState(Mutex<Option<HitMask>>);
+pub struct HitTestState {
+    mask: Mutex<Option<HitMask>>,
+    drag: Mutex<Option<DragOrigin>>,
+}
+
+struct DragOrigin {
+    x: f64,
+    y: f64,
+    position: tauri::PhysicalPosition<i32>,
+    threshold: f64,
+}
+impl DragOrigin {
+    fn destination(&self, x: f64, y: f64) -> Option<tauri::PhysicalPosition<i32>> {
+        let dx = x - self.x;
+        let dy = y - self.y;
+        if !dx.is_finite() || !dy.is_finite() || dx.hypot(dy) < self.threshold {
+            return None;
+        }
+        Some(tauri::PhysicalPosition::new(
+            self.position.x.saturating_add(dx.round() as i32),
+            self.position.y.saturating_add(dy.round() as i32),
+        ))
+    }
+}
+
+#[tauri::command]
+pub fn begin_model_drag(
+    window: tauri::WebviewWindow,
+    state: tauri::State<HitTestState>,
+    app: AppHandle,
+    x: f64,
+    y: f64,
+) -> Result<(), String> {
+    if window.label() != "main" || app.state::<crate::tray::UiState>().click_through() {
+        return Err("model interaction unavailable".into());
+    }
+    let origin = window
+        .inner_position()
+        .map_err(|_| "window position unavailable")?;
+    let position = window
+        .outer_position()
+        .map_err(|_| "window position unavailable")?;
+    let size = window.inner_size().map_err(|_| "window size unavailable")?;
+    let mask = state
+        .mask
+        .lock()
+        .map_err(|_| "interaction state unavailable")?;
+    let mask = mask.as_ref().ok_or("model interaction unavailable")?;
+    let px = x * f64::from(size.width) / mask.viewport_width;
+    let py = y * f64::from(size.height) / mask.viewport_height;
+    if !mask.contains(px, py, size.width, size.height) {
+        return Err("pointer is outside the model".into());
+    }
+    *state.drag.lock().map_err(|_| "drag state unavailable")? = Some(DragOrigin {
+        x: f64::from(origin.x) + px,
+        y: f64::from(origin.y) + py,
+        position,
+        threshold: 5.0 * f64::from(size.width) / mask.viewport_width,
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn move_model_drag(
+    window: tauri::WebviewWindow,
+    state: tauri::State<HitTestState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    if window.label() != "main" || app.state::<crate::tray::UiState>().click_through() {
+        return Err("model interaction unavailable".into());
+    }
+    let cursor = window
+        .cursor_position()
+        .map_err(|_| "cursor position unavailable")?;
+    if let Some(position) = state
+        .drag
+        .lock()
+        .map_err(|_| "drag state unavailable")?
+        .as_ref()
+        .and_then(|drag| drag.destination(cursor.x, cursor.y))
+    {
+        window
+            .set_position(position)
+            .map_err(|_| "window movement unavailable")?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn end_model_drag(
+    window: tauri::WebviewWindow,
+    state: tauri::State<HitTestState>,
+) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("model interaction unavailable".into());
+    }
+    *state.drag.lock().map_err(|_| "drag state unavailable")? = None;
+    Ok(())
+}
 
 #[tauri::command]
 pub fn set_model_hit_mask(
@@ -78,11 +176,14 @@ pub fn set_model_hit_mask(
         return Err("interaction masks belong to the pet window".into());
     }
     let mut current = state
-        .0
+        .mask
         .lock()
         .map_err(|_| "interaction state unavailable")?;
     // Invalid updates remove stale coverage rather than keeping an old model active.
     *current = None;
+    if mask.is_none() {
+        *state.drag.lock().map_err(|_| "drag state unavailable")? = None;
+    }
     if let Some(mask) = mask {
         mask.validate()?;
         *current = Some(mask);
@@ -162,15 +263,15 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
                     let x = cursor.x - f64::from(origin.x);
                     let y = cursor.y - f64::from(origin.y);
                     let state = app.state::<HitTestState>();
-                    if let Ok(mask) = state.0.lock() {
+                    if let Ok(mask) = state.mask.lock() {
                         let hit = mask
                             .as_ref()
                             .is_some_and(|m| m.contains(x, y, size.width, size.height));
-                        let ignore = latch.ignore(
-                            hit,
-                            primary_button_down(),
-                            app.state::<crate::tray::UiState>().click_through(),
-                        );
+                        let force = app.state::<crate::tray::UiState>().click_through();
+                        let down = primary_button_down();
+                        let active_drag = state.drag.lock().is_ok_and(|drag| drag.is_some());
+                        let ignore =
+                            latch.ignore(hit, down, force) && !(active_drag && down && !force);
                         if ignore != ignored && window.set_ignore_cursor_events(ignore).is_ok() {
                             ignored = ignore;
                         }
@@ -200,6 +301,25 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn drag_uses_the_original_physical_cursor_and_window_position() {
+        let d = DragOrigin {
+            x: 500.0,
+            y: 300.0,
+            position: tauri::PhysicalPosition::new(-200, 100),
+            threshold: 7.5,
+        };
+        assert!(d.destination(503.0, 301.0).is_none());
+        assert_eq!(
+            d.destination(650.0, 400.0).unwrap(),
+            tauri::PhysicalPosition::new(-50, 200)
+        );
+        assert_eq!(
+            d.destination(650.0, 400.0).unwrap(),
+            tauri::PhysicalPosition::new(-50, 200)
+        );
+        assert!(d.destination(f64::NAN, 400.0).is_none());
+    }
     fn mask() -> HitMask {
         HitMask {
             width: 4,

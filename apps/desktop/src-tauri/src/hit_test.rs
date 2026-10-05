@@ -185,7 +185,10 @@ pub fn set_model_hit_mask(
         *state.drag.lock().map_err(|_| "drag state unavailable")? = None;
     }
     if let Some(mask) = mask {
-        mask.validate()?;
+        if let Err(error) = mask.validate() {
+            *state.drag.lock().map_err(|_| "drag state unavailable")? = None;
+            return Err(error);
+        }
         *current = Some(mask);
     }
     Ok(())

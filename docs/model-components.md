@@ -46,6 +46,10 @@ requires that publication before this branch can run remotely.
 
 ## Desktop selection
 
+The default pet window is 320 × 480 CSS pixels, two thirds of its previous
+480 × 720 dimensions. The renderer fills the window with the same portrait
+framing; the settings window keeps its existing size.
+
 Choose `.inp` or `.vrm` in settings. VRM accepts a separate selection of VRMA
 files (exact file stems become action names) and an optional data-only character
 profile. Standard VRM has no Weiguang-specific behavior. Idle must be explicitly

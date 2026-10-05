@@ -140,13 +140,13 @@ pub fn move_model_drag(
     let cursor = window
         .cursor_position()
         .map_err(|_| "cursor position unavailable")?;
-    if let Some(position) = state
+    let position = state
         .drag
         .lock()
         .map_err(|_| "drag state unavailable")?
         .as_ref()
-        .and_then(|drag| drag.destination(cursor.x, cursor.y))
-    {
+        .and_then(|drag| drag.destination(cursor.x, cursor.y));
+    if let Some(position) = position {
         window
             .set_position(position)
             .map_err(|_| "window movement unavailable")?;
@@ -266,10 +266,21 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
                     let x = cursor.x - f64::from(origin.x);
                     let y = cursor.y - f64::from(origin.y);
                     let state = app.state::<HitTestState>();
-                    if let Ok(mask) = state.mask.lock() {
+                    let coverage = state.mask.lock().ok().map(|mask| {
                         let hit = mask
                             .as_ref()
                             .is_some_and(|m| m.contains(x, y, size.width, size.height));
+                        let gaze = mask
+                            .as_ref()
+                            .filter(|_| size.width > 0 && size.height > 0)
+                            .map(|mask| CursorPoint {
+                                x: x * mask.viewport_width / f64::from(size.width),
+                                y: y * mask.viewport_height / f64::from(size.height),
+                            });
+                        (hit, gaze)
+                    });
+                    // Never dispatch window/IPC work while holding the mask mutex.
+                    if let Some((hit, gaze)) = coverage {
                         let force = app.state::<crate::tray::UiState>().click_through();
                         let down = primary_button_down();
                         let active_drag = state.drag.lock().is_ok_and(|drag| drag.is_some());
@@ -279,16 +290,8 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
                             ignored = ignore;
                         }
                         if last_gaze.elapsed().as_millis() >= 32 {
-                            if let Some(mask) = mask.as_ref() {
-                                if size.width > 0 && size.height > 0 {
-                                    let _ = window.emit(
-                                        "pet-cursor",
-                                        CursorPoint {
-                                            x: x * mask.viewport_width / f64::from(size.width),
-                                            y: y * mask.viewport_height / f64::from(size.height),
-                                        },
-                                    );
-                                }
+                            if let Some(point) = gaze {
+                                let _ = window.emit("pet-cursor", point);
                             }
                             last_gaze = std::time::Instant::now();
                         }

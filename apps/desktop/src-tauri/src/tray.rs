@@ -37,6 +37,9 @@ impl UiState {
             *value
         })
     }
+    pub fn click_through(&self) -> bool {
+        self.click_through.lock().map_or(true, |value| *value)
+    }
 }
 
 pub fn setup(app: &mut App) -> tauri::Result<()> {
@@ -82,10 +85,7 @@ fn handle_menu(app: &AppHandle, id: &str) {
             let _ = app.emit("tray-action", if paused { "pause" } else { "resume" });
         }
         "click-through" => {
-            let enabled = app.state::<UiState>().toggle_click_through();
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_ignore_cursor_events(enabled);
-            }
+            app.state::<UiState>().toggle_click_through();
         }
         "privacy" => toggle_privacy(app),
         "reset" => {

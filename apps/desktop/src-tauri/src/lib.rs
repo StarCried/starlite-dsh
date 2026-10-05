@@ -1,3 +1,4 @@
+mod hit_test;
 mod model;
 mod settings;
 mod tray;
@@ -73,6 +74,7 @@ pub fn run() {
                 .build(),
         )
         .manage(tray::UiState::default())
+        .manage(hit_test::HitTestState::default())
         .invoke_handler(tauri::generate_handler![
             get_settings,
             inspect_model,
@@ -81,6 +83,7 @@ pub fn run() {
             set_connection_state,
             open_settings,
             exit_app,
+            hit_test::set_model_hit_mask,
         ])
         .setup(|app| {
             #[cfg(all(debug_assertions, windows))]
@@ -88,6 +91,7 @@ pub fn run() {
             model::install_bundled_if_empty(app.handle())
                 .map_err(|error| format!("bundled model installation failed: {error}"))?;
             tray::setup(app)?;
+            hit_test::setup(app.handle())?;
             if settings::load(app.handle()).model.is_none() {
                 tray::show_settings(app.handle());
             }

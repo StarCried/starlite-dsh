@@ -67,6 +67,19 @@ The VRM component receives the selected Idle as its explicit return clip, so
 completion blends directly into Idle without rendering a neutral frame first.
 Its portrait framing and bounded pointer gaze match the local review page.
 
+## Mouse interaction
+
+The desktop accepts clicks and drag starts only on the rendered model silhouette.
+The native window polls the global cursor and switches transparent background
+areas to mouse passthrough, including transparent gaps inside the model and the
+non-interactive bubble. Masks contain bounded alpha coverage bits, not screenshots.
+CSS-to-physical coordinate conversion handles DPI and window size changes.
+Holding the primary button on a model keeps capture until release; a press on
+the background cannot steal a drag from the application underneath. The tray's
+mouse passthrough toggle overrides silhouette interaction. Cursor coordinates
+stay in memory and are used only for the renderer's bounded gaze tracking.
+The hidden window stops cursor/mask processing until it becomes visible again.
+
 ## Local validation (2026-09-20)
 
 The desktop frontend passes 44 tests and `pnpm check`. Native format, Clippy,

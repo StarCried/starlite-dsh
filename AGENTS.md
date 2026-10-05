@@ -8,8 +8,10 @@
   repository. Reusable Inochi2D/VRM rendering and model preparation stay in Model Companion Web at
   `StarCried/inochi2d-web`.
 - Do not add native-Windows DSH, Linux/macOS desktop targets, voice, chat,
-  memory, telemetry, auto-update, or per-pixel hit testing without an approved
+  memory, telemetry, or auto-update without an approved
   scope change.
+- Model-only alpha hit testing and transparent background passthrough are approved.
+  Keep cursor coordinates in memory; do not log or transmit desktop input.
 
 ## Security and privacy
 

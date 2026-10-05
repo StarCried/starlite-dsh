@@ -83,10 +83,11 @@ Drag movement uses a captured physical cursor/window origin and coalesced
 position updates, including the final movement before mouse release. It does
 not rely on an asynchronous system move-loop starting while the button is held.
 
-## Local validation (2026-09-20)
+## Local validation (2026-10-05)
 
-The desktop frontend passes 44 tests and `pnpm check`. Native format, Clippy,
-10 ordinary tests, both private companion import checks and a debug build pass.
+The desktop frontend passes 56 tests and `pnpm check`. Native format, Clippy,
+17 ordinary tests and the isolated release build pass. The ignored private
+companion import check was run separately: 12 desktop and 8 blog motions pass.
 The packed DSH bundle was installed in the separate `vrm-local-validation`
 profile; the installed DSH 0.1.5-rc.1 exposes the existing protocol contracts.
 Invoking the packed plugin with an incompatible event subscription returns a
@@ -95,8 +96,14 @@ no-op disposer and contains the failure. No real session prompt was submitted.
 The reusable runtime's full workspace validation and browser regression pass.
 VRM Hexo checks cover deferred loading, mobile zero model/runtime requests,
 20 PJAX completions without duplicate instances, and visible static fallback.
-Private character testing covers eight animations, 20 mounts/destroys and
-15 minutes in both embedded Chromium and standalone WebView2. Independent
-Windows Chrome/Edge and a live DSH-to-desktop user session still need manual
-acceptance; WebView2 measurements are from the separate preview process tree.
+Private character testing covers all 20 selected clips, 20 mounts/destroys and
+15 minutes in both embedded Chromium and standalone WebView2. Silhouette
+coverage, bounded gaze outside the window, pause/resume and destruction checks
+pass at 30 and 60 FPS. The desktop's five interaction unit tests cover alpha
+holes, DPI mapping, drag capture, background presses and physical drag origins.
+Actual native mouse passthrough and dragging remain subject to manual acceptance:
+the automation target precheck rejects a passthrough window before moving its
+cursor. Edge control remains unavailable; the user explicitly waived that test.
+The current native test source emits Idle only and makes no model API requests.
+WebView2 measurements are from the isolated test process tree.
 No model was installed into the user's existing desktop settings.

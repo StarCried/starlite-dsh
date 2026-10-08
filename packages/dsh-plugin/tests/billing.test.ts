@@ -94,7 +94,9 @@ describe("official DeepSeek billing", () => {
   });
   it("does not invent balance or allow unbounded response data", async () => {
     const f = fixture();
-    for (const body of [JSON.stringify({is_available:true,balance_infos:[{currency:"CNY",total_balance:"-1"}]}),"x".repeat(20000)]) {
+    f.request.mockResolvedValueOnce(new Response(JSON.stringify({is_available:false,balance_infos:[{currency:"CNY",total_balance:"-0.25"}]}),{headers:{"Content-Type":"application/json"}}));
+    expect((await f.source.read()).balance.balances[0]?.remaining).toBe(-.25);
+    for (const body of [JSON.stringify({is_available:true,balance_infos:[{currency:"CNY",total_balance:"NaN"}]}),"x".repeat(20000)]) {
       f.request.mockResolvedValueOnce(new Response(body,{headers:{"Content-Type":"application/json"}})); f.source.invalidate(true);
       expect((await f.source.read()).balance.status).toBe("unavailable");
     }

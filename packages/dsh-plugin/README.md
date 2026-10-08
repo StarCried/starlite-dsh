@@ -19,6 +19,12 @@ model-level endpoint/authentication overrides are refused. Requests only query
 `GET https://api.deepseek.com/user/balance`, on demand (balance cache: 60 seconds).
 No paid model request is made by this feature or its tests.
 
+Configure the official `deepseek` route in DSH's Models page first; an empty
+provider profile is reported as unconfigured and never triggers a network
+request. Existing stored API keys or credential references are resolved by DSH,
+not entered in the companion. A negative balance reported by the provider is
+preserved rather than converted to zero.
+
 Today's estimate reads the profile's existing session records through read-only
 persistence handles, including records from before a restart. It excludes
 fork-inherited events, replaces repeated settlements of the same attempt, and

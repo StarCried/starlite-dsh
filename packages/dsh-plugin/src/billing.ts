@@ -142,7 +142,7 @@ export class DeepSeekBilling implements BillingSource {
         if (typeof raw?.is_available !== "boolean" || !Array.isArray(raw.balance_infos) || raw.balance_infos.length < 1 || raw.balance_infos.length > 2) throw new Error("invalid balance");
         const balances = raw.balance_infos.map(item => {
           const entry = record(item);
-          if (!entry || !["CNY", "USD"].includes(String(entry.currency)) || typeof entry.total_balance !== "string" || !/^\d{1,9}(\.\d{1,8})?$/u.test(entry.total_balance)) throw new Error("invalid balance");
+          if (!entry || !["CNY", "USD"].includes(String(entry.currency)) || typeof entry.total_balance !== "string" || !/^-?\d{1,9}(\.\d{1,8})?$/u.test(entry.total_balance)) throw new Error("invalid balance");
           return {currency: entry.currency as "CNY" | "USD", remaining: Number(entry.total_balance)};
         });
         if (new Set(balances.map(item => item.currency)).size !== balances.length) throw new Error("duplicate currency");

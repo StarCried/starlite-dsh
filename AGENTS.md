@@ -20,6 +20,11 @@
 - The wire may contain only the aggregate state and sanitized model-visible
   reasoning/text. Never send user prompts, tool arguments or results, error
   stacks, file paths, credentials, or session identifiers.
+- User-authorized companion interactions additionally allow the session title,
+  fixed activity codes, ephemeral random references, structured user questions
+  and their explicit answers. Keep real session identities and Web credentials
+  in WSL. Answers must target one still-pending request; do not add general
+  agent control or intercept tool permission approvals.
 - Render bubble content as plain text. Do not persist or log bubble text or the
   bearer token.
 - Treat model archives, deep links, manifests, and status frames as untrusted.

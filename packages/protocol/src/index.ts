@@ -1,5 +1,8 @@
 export { parseBillingSnapshot } from "./billing.js";
 export type { BillingCurrency, BillingSnapshot } from "./billing.js";
+export { ACTIVITIES, MAX_INTERACTION_BYTES, isOpaqueRef, parsePetSession, parsePetInteraction, parsePetAnswer } from "./interaction.js";
+export type { PetActivity, PetSession, PetQuestion, PetInteraction, PetAnswer } from "./interaction.js";
+import { ACTIVITIES, isOpaqueRef, parsePetSession, type PetActivity, type PetSession } from "./interaction.js";
 
 export const PET_PROTOCOL_VERSION = 1 as const;
 export const DEFAULT_BUBBLE_GRAPHEMES = 120;
@@ -38,6 +41,9 @@ export interface PetSnapshot {
   emittedAt: number;
   state: PetState;
   bubble?: PetBubble;
+  session?: PetSession;
+  activity?: PetActivity;
+  inputRequest?: string;
 }
 
 export interface PetStateSource {
@@ -150,12 +156,18 @@ export function parsePetSnapshot(value: unknown): PetSnapshot {
     throw new Error("pet snapshot state is invalid");
   }
   const bubble = value.bubble === undefined ? undefined : parseBubble(value.bubble);
+  const session = value.session === undefined ? undefined : parsePetSession(value.session);
+  if(value.activity!==undefined && !(ACTIVITIES as readonly unknown[]).includes(value.activity))throw Error("invalid activity");
+  if(value.inputRequest!==undefined && (!session||!isOpaqueRef(value.inputRequest)))throw Error("invalid input reference");
   return {
     protocolVersion: PET_PROTOCOL_VERSION,
     sequence: value.sequence,
     emittedAt: value.emittedAt,
     state: value.state,
     ...(bubble ? { bubble } : {}),
+    ...(session ? {session}:{}),
+    ...(value.activity===undefined?{}:{activity:value.activity as PetActivity}),
+    ...(value.inputRequest===undefined?{}:{inputRequest:value.inputRequest as string}),
   };
 }
 

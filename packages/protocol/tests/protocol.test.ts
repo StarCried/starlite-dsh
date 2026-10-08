@@ -15,14 +15,17 @@ describe("sanitizeBubbleText", () => {
     ).toBe("hello world");
   });
 
-  it("truncates from the tail by Unicode grapheme", () => {
-    expect(sanitizeBubbleText("A👩‍💻BC", 3)).toBe("👩‍💻BC");
+  it("keeps the prefix and reserves one Unicode grapheme for an ellipsis", () => {
+    expect(sanitizeBubbleText("A👩‍💻BC", 3)).toBe("A👩‍💻…");
+    expect(sanitizeBubbleText("A👩‍💻B", 3)).toBe("A👩‍💻B");
+    expect(sanitizeBubbleText("AB", 1)).toBe("…");
+    expect(sanitizeBubbleText("A👩‍💻…", 3)).toBe("A👩‍💻…");
   });
 
   it("bounds work for unexpectedly large visible output", () => {
     const result = sanitizeBubbleText(`${"x".repeat(1_000_000)}TAIL`);
     expect([...result]).toHaveLength(120);
-    expect(result.endsWith("TAIL")).toBe(true);
+    expect(result).toBe(`${"x".repeat(119)}…`);
   });
 
   it("rejects invalid inputs and unreasonable limits", () => {

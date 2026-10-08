@@ -109,7 +109,7 @@ export function sanitizeBubbleText(
   // normalization/segmentation, while keeping far more context than the 500
   // grapheme public maximum.
   const bounded = input.length > MAX_SANITIZE_CODE_UNITS
-    ? input.slice(-MAX_SANITIZE_CODE_UNITS)
+    ? input.slice(0, MAX_SANITIZE_CODE_UNITS)
     : input;
   const normalized = bounded
     .normalize("NFC")
@@ -124,7 +124,10 @@ export function sanitizeBubbleText(
     return "";
   }
   const graphemes = segmentGraphemes(normalized);
-  return graphemes.slice(Math.max(0, graphemes.length - maximumGraphemes)).join("");
+  const truncated = graphemes.length > maximumGraphemes || input.length > MAX_SANITIZE_CODE_UNITS;
+  return truncated
+    ? `${graphemes.slice(0, maximumGraphemes - 1).join("")}…`
+    : normalized;
 }
 
 export function parsePetSnapshot(value: unknown): PetSnapshot {

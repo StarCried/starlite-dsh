@@ -19,7 +19,7 @@ DSH 插件和 Windows 桌宠只通过 `127.0.0.1` 上的只读 SSE 通信。每�
 
 禁止的数据包括用户消息、系统提示、工具参数、工具结果、批准原因、错误对象/错误栈、文件路径、session/agent 标识和凭据。适配器逐字段构造负载，不会先复制完整 DSH 事件再做删除。
 
-气泡文本去除 ANSI、C0/C1 控制字符，折叠异常空白，只保留最后 120 个 Unicode 字素；Windows 端用 `textContent` 显示，不解释 HTML、Markdown 或链接，也不持久化内容。固定文案隐私模式会在 Windows 端替换动态文字。
+气泡文本去除 ANSI、C0/C1 控制字符，折叠异常空白，最多保留开头 120 个 Unicode 字素（超长时末位使用省略号）；Windows 端用 `textContent` 显示，不解释 HTML、Markdown 或链接，也不持久化内容。固定文案隐私模式会在 Windows 端替换动态文字。
 
 ## 故障行为
 

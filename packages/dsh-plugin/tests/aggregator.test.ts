@@ -186,7 +186,7 @@ describe("DshStateAggregator", () => {
     await source.stop();
   });
 
-  it("continues updating the bounded tail of a long live answer", async () => {
+  it("preserves the bounded prefix as a long live answer continues, and clears it for a retry", async () => {
     const snapshots: PetSnapshot[] = [];
     const source = new DshStateAggregator();
     await source.start(snapshot => snapshots.push(snapshot));
@@ -195,7 +195,14 @@ describe("DshStateAggregator", () => {
     await vi.advanceTimersByTimeAsync(200);
     source.handleAssistantStream("s", {type:"chunk",chunk:{type:"text-delta",text:" 新内容"}});
     await vi.advanceTimersByTimeAsync(200);
-    expect(snapshots.at(-1)?.bubble?.text).toBe("旧".repeat(116)+" 新内容");
+    expect(snapshots.at(-1)?.bubble?.text).toBe("旧".repeat(119)+"…");
+    for(let i=0;i<100;i++)source.handleAssistantStream("s", {type:"chunk",chunk:{type:"text-delta",text:" 后续内容".repeat(50)}});
+    await vi.advanceTimersByTimeAsync(200);
+    expect(snapshots.at(-1)?.bubble?.text).toBe("旧".repeat(119)+"…");
+    source.handleAssistantStream("s", {type:"start"});
+    source.handleAssistantStream("s", {type:"chunk",chunk:{type:"text-delta",text:"重试后的新回答"}});
+    await vi.advanceTimersByTimeAsync(200);
+    expect(snapshots.at(-1)?.bubble?.text).toBe("重试后的新回答");
     await source.stop();
   });
 });

@@ -113,3 +113,9 @@ cursor. Edge control remains unavailable; the user explicitly waived that test.
 The current native test source emits Idle only and makes no model API requests.
 WebView2 measurements are from the isolated test process tree.
 No model was installed into the user's existing desktop settings.
+
+VRM movement-sensitive physics uses the optional public `setHostPosition(x, y)`
+capability. The desktop forwards window positions in CSS pixels; the renderer
+feeds bounded world movement to imported spring bones and removes that movement
+before drawing. Coordinates stay local and are cleared on pause/destruction.
+Inochi2D retains its existing authored physics behavior.

@@ -47,6 +47,10 @@ export async function startPet(): Promise<void> {
   await listen<{x: number; y: number}>("pet-cursor", ({payload}) => {
     controller?.setPointerPosition(payload.x, payload.y);
   });
+  const stopMovement = await window.onMoved(({ payload }: {payload: PhysicalPosition}) => {
+    const scale = devicePixelRatio || 1;
+    controller?.setHostPosition?.(payload.x / scale, payload.y / scale);
+  });
 
   empty.addEventListener("click", () => {
     void invoke("open_settings");
@@ -82,6 +86,11 @@ export async function startPet(): Promise<void> {
       const mounted = await slot.mount(signal => mountModel(host, next, signal));
       if (!mounted || generation !== mountGeneration) return;
       controller = mounted;
+      void window.outerPosition().then(position => {
+        if (controller !== mounted) return;
+        const scale = devicePixelRatio || 1;
+        mounted.setHostPosition?.(position.x / scale, position.y / scale);
+      }).catch(() => {});
       mounted.observeInteractionMask(mask => interaction.update(mask));
       animator = new StateAnimator(mounted, next.model.mappings);
       if (latestSnapshot) animator.apply(latestSnapshot);
@@ -92,7 +101,7 @@ export async function startPet(): Promise<void> {
       empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-  globalThis.addEventListener("pagehide", () => { ++mountGeneration; animator?.disconnected(); slot.destroy(); interaction.update(undefined); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { ++mountGeneration; stopMovement(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); }, {once:true});
   await remount();
 
   const connection = new StatusConnection({

@@ -6,6 +6,8 @@ import {
   type BillingSnapshot,
   type PetConnectionDescriptor,
   type PetSnapshot,
+  MAX_INTERACTION_BYTES,parsePetInteraction,parsePetAnswer,isOpaqueRef,
+  type PetInteraction,type PetAnswer,
 } from "@dsh-inochi2d-pet/protocol";
 
 const HEARTBEAT_TIMEOUT_MS = 45_000;
@@ -35,7 +37,8 @@ export class StatusConnection {
   readonly #timers: ConnectionTimers;
   #descriptor: PetConnectionDescriptor | undefined;
   #abort: AbortController | undefined;
-  readonly #billingRequests = new Set<AbortController>();
+  readonly #requests = new Set<AbortController>();
+  #connected = false;
   #run = 0;
   #lastSequence = -1;
 
@@ -63,20 +66,39 @@ export class StatusConnection {
     this.#abort?.abort();
     this.#abort = undefined;
     this.#descriptor = undefined;
-    for (const abort of this.#billingRequests) abort.abort();
-    this.#billingRequests.clear();
+    this.#connected = false;
+    this.#cancelRequests();
   }
 
   async readBilling(): Promise<BillingSnapshot> {
+    return parseBillingSnapshot(await this.#request("/v1/billing",MAX_WIRE_BYTES));
+  }
+  async readInteraction(id:string):Promise<PetInteraction>{
+    if(!isOpaqueRef(id))throw Error("invalid question reference");
+    const result=parsePetInteraction(await this.#request(`/v1/interaction?request=${id}`,MAX_INTERACTION_BYTES));
+    if(result.requestId!==id)throw Error("question changed");return result;
+  }
+  async answerInteraction(answer:PetAnswer):Promise<void>{await this.#request("/v1/interaction/answer",MAX_INTERACTION_BYTES,parsePetAnswer(answer));}
+  async setInputAvailable(enabled:boolean):Promise<void>{await this.#request("/v1/interaction/availability",MAX_INTERACTION_BYTES,{enabled});}
+  async openSession(sessionRef:string):Promise<void>{
+    if(!isOpaqueRef(sessionRef))throw Error("invalid session reference");
+    await this.#request("/v1/session/open",MAX_INTERACTION_BYTES,{sessionRef});
+  }
+  #cancelRequests():void{for(const abort of this.#requests)abort.abort();this.#requests.clear();}
+  async #request(path:string,limit:number,body?:unknown):Promise<unknown>{
     const descriptor = this.#descriptor;
-    if (!descriptor) throw new Error("billing disconnected");
-    const abort = new AbortController(); this.#billingRequests.add(abort);
+    if (!descriptor || !this.#connected) throw new Error("companion disconnected");
+    const abort = new AbortController(); this.#requests.add(abort);
     const timer = this.#timers.setTimeout(() => abort.abort(), 10_000);
     const request = this.#fetch;
     try {
-      const response = await request(`http://127.0.0.1:${descriptor.port}/v1/billing`, {
-        cache: "no-store", headers: {Authorization: `Bearer ${descriptor.token}`}, signal: abort.signal,
+      const jsonBody=body===undefined?undefined:JSON.stringify(body);
+      if(jsonBody && new TextEncoder().encode(jsonBody).length>limit)throw Error("action too large");
+      const response = await request(`http://127.0.0.1:${descriptor.port}${path}`, {
+        cache: "no-store", headers: {Authorization: `Bearer ${descriptor.token}`,...(jsonBody?{"Content-Type":"application/json"}:{})}, signal: abort.signal,
+        ...(jsonBody?{method:"POST",body:jsonBody}:{}),
       });
+      if(jsonBody){await response.body?.cancel();if(!response.ok||descriptor!==this.#descriptor||abort.signal.aborted)throw Error("action unavailable");return undefined;}
       if (!response.ok || !response.body || !response.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
         await response.body?.cancel(); throw new Error("billing unavailable");
       }
@@ -84,14 +106,14 @@ export class StatusConnection {
       try {
         while (true) {
           const {done,value} = await reader.read(); if (done) break;
-          bytes += value.byteLength; if (bytes > MAX_WIRE_BYTES) throw new Error("billing too large");
+          bytes += value.byteLength; if (bytes > limit) throw new Error("response too large");
           json += decoder.decode(value,{stream:true});
         }
         json += decoder.decode();
       } finally {await reader.cancel().catch(() => undefined);}
       if (descriptor !== this.#descriptor || abort.signal.aborted) throw new Error("billing disconnected");
-      return parseBillingSnapshot(JSON.parse(json));
-    } finally {this.#timers.clearTimeout(timer); this.#billingRequests.delete(abort);}
+      return JSON.parse(json) as unknown;
+    } finally {this.#timers.clearTimeout(timer); this.#requests.delete(abort);}
   }
 
   async #connectionLoop(descriptor: PetConnectionDescriptor, run: number): Promise<void> {
@@ -105,6 +127,7 @@ export class StatusConnection {
           attempt = 0;
           if (!wasConnected) {
             wasConnected = true;
+            this.#connected = true;
             this.#callbacks.onConnected();
           }
         });
@@ -115,6 +138,8 @@ export class StatusConnection {
       if (run !== this.#run || this.#descriptor !== descriptor) return;
       if (wasConnected) {
         wasConnected = false;
+        this.#connected = false;
+        this.#cancelRequests();
         this.#callbacks.onDisconnected();
       }
       const delay = Math.min(MAX_RECONNECT_DELAY_MS, 250 * 2 ** Math.min(attempt, 5));

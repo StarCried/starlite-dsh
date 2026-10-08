@@ -190,6 +190,7 @@ function populatePreferences(preferences: DesktopPreferences): void {
   requiredElement<HTMLInputElement>("dpr").value = String(preferences.maxDevicePixelRatio);
   requiredElement<HTMLInputElement>("scale").value = String(preferences.scale);
   requiredElement<HTMLInputElement>("privacy").checked = preferences.privacyMode;
+  requiredElement<HTMLSelectElement>("bubble-mode").value = preferences.bubbleMode ?? "compact";
 }
 
 function readPreferences(): DesktopPreferences {
@@ -208,6 +209,7 @@ function readPreferences(): DesktopPreferences {
     maxDevicePixelRatio,
     scale,
     privacyMode: requiredElement<HTMLInputElement>("privacy").checked,
+    bubbleMode: requiredElement<HTMLSelectElement>("bubble-mode").value === "detailed" ? "detailed" : "compact",
   };
 }
 

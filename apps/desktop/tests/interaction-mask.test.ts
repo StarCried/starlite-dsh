@@ -6,6 +6,21 @@ import type { ModelHitMask } from "../src/vendor-types.js";
 const mask: ModelHitMask = {width:4,height:2,left:10,top:20,displayWidth:80,displayHeight:40,viewportWidth:100,viewportHeight:100,bits:new Uint8Array([0b00100110])};
 
 describe("model-only pointer interaction", () => {
+  it("separates double clicks from single interaction and cancels clicks after dragging",async()=>{
+    vi.useFakeTimers();
+    const listeners=new Map<string,(event:PointerEvent)=>void>(),single=vi.fn(),double=vi.fn();
+    const element={addEventListener:(name:string,fn:(event:PointerEvent)=>void)=>listeners.set(name,fn),setPointerCapture:()=>{},hasPointerCapture:()=>true,releasePointerCapture:()=>{}} as unknown as HTMLElement;
+    const cancel=installPointerBehavior(element,{begin:async()=>{},move:async()=>{},end:async()=>{}},single,()=>true,undefined,double);
+    const event=(x=35)=>({button:0,pointerId:1,clientX:x,clientY:25,screenX:x,screenY:25}) as PointerEvent;
+    const click=async()=>{listeners.get("pointerdown")!(event());listeners.get("pointerup")!(event());await vi.advanceTimersByTimeAsync(1)};
+    try{
+      await click();await vi.advanceTimersByTimeAsync(150);await click();await vi.advanceTimersByTimeAsync(400);
+      expect(double).toHaveBeenCalledOnce();expect(single).not.toHaveBeenCalled();
+      await click();await vi.advanceTimersByTimeAsync(350);expect(single).toHaveBeenCalledOnce();
+      await click();listeners.get("pointerdown")!(event());listeners.get("pointermove")!(event(55));listeners.get("pointerup")!(event(55));await vi.advanceTimersByTimeAsync(400);expect(single).toHaveBeenCalledOnce();
+      await click();cancel();await vi.advanceTimersByTimeAsync(400);expect(single).toHaveBeenCalledOnce();
+    }finally{cancel();vi.useRealTimers()}
+  });
   it("accepts actual coverage and excludes transparent texture holes and nearby background", () => {
     const bridge = new InteractionMaskBridge(async () => {}, vi.fn());
     bridge.update(mask);

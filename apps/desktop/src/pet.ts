@@ -9,23 +9,17 @@ import {
   type Window,
 } from "@tauri-apps/api/window";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
-import type { PetSnapshot, PetState, WidgetController } from "./vendor-types.js";
+import type { PetSnapshot, WidgetController } from "./vendor-types.js";
 import type { DesktopSettings } from "./types.js";
 import { StatusConnection } from "./connection.js";
 import { createModelSlot, mountModel } from "./renderer.js";
 import { StateAnimator } from "./state-animator.js";
 import { InteractionMaskBridge } from "./interaction-mask.js";
 import { BillingBubble } from "./billing-bubble.js";
+import {WorkBubble,renderPlainBubble} from "./work-bubble.js";
+export {renderBubble} from "./work-bubble.js";
 
 const OFFLINE_EXIT_MS = 60_000;
-const FIXED_BUBBLES: Partial<Record<PetState, string>> = {
-  thinking: "正在工作…",
-  working: "正在工作…",
-  completed: "任务已完成",
-  error: "发生错误，请查看 DSH",
-  blocked: "任务被阻塞，请查看 DSH",
-  approval: "等待批准，请查看 DSH",
-};
 
 export async function startPet(): Promise<void> {
   const window = getCurrentWindow();
@@ -42,15 +36,44 @@ export async function startPet(): Promise<void> {
   let pausedByTray = false;
   let connected = false;
   let connection: StatusConnection | undefined;
+  let cancelClick=()=>{};
+  type Region={left:number;top:number;width:number;height:number;viewportWidth:number;viewportHeight:number}|null;
+  let regionPending:Region|undefined,regionSending=false;
+  const sendRegion=async()=>{
+    if(regionSending)return;regionSending=true;
+    try{while(regionPending!==undefined){const region=regionPending;regionPending=undefined;await invoke("set_bubble_interaction_region",{region});}}
+    catch{regionPending=undefined;void window.hide();void invoke("open_settings");}
+    finally{regionSending=false;}
+  };
+  const updateRegion=()=>{
+    const rect=bubble.getBoundingClientRect();
+    const left=Math.max(0,rect.left),top=Math.max(0,rect.top),right=Math.min(innerWidth,rect.right),bottom=Math.min(innerHeight,rect.bottom);
+    const region=!bubble.hidden&&bubble.dataset.interactive==="true"&&document.visibilityState==="visible"&&right>left&&bottom>top
+      ?{left,top,width:right-left,height:bottom-top,viewportWidth:innerWidth,viewportHeight:innerHeight}:null;
+    regionPending=region;void sendRegion();
+  };
+  let availabilityQueue=Promise.resolve();
+  const syncInputAvailable=()=>{
+    availabilityQueue=availabilityQueue.catch(()=>{}).then(async()=>{
+      if(connected)await connection?.setInputAvailable(!settings.preferences.privacyMode&&document.visibilityState==="visible");
+    }).catch(()=>{});
+  };
+  const workBubble=new WorkBubble(bubble,{
+    read:id=>connection!.readInteraction(id),answer:value=>connection!.answerInteraction(value),
+    open:ref=>connection!.openSession(ref),
+    delegate:async()=>{await connection!.setInputAvailable(false);syncInputAvailable();},
+    changed:updateRegion,
+  });
+  const bubbleObserver=new ResizeObserver(updateRegion);bubbleObserver.observe(bubble);
   const fees = new BillingBubble({
     read: async () => {
       if (!connection) throw new Error("billing disconnected");
       return connection.readBilling();
     },
-    allowed: () => connected && !settings.preferences.privacyMode,
-    render: text => renderPlainBubble(bubble, text, "billing"),
+    allowed: () => connected && !settings.preferences.privacyMode && !latestSnapshot?.inputRequest,
+    render: text => {renderPlainBubble(bubble, text, "billing",latestSnapshot?.session?.title);updateRegion();},
     restore: () => {
-      if (latestSnapshot) renderBubble(bubble, latestSnapshot, settings.preferences.privacyMode);
+      if (latestSnapshot) workBubble.update(latestSnapshot, settings.preferences);
       else bubble.hidden = true;
     },
   });
@@ -75,11 +98,13 @@ export async function startPet(): Promise<void> {
     animator?.setPaused(paused);
     if (paused) controller?.pause();
     else controller?.resume();
+    syncInputAvailable();updateRegion();
   };
 
   const beginOfflineCountdown = () => {
     connected = false;
     fees.cancel();
+    cancelClick();workBubble.clear();
     animator?.disconnected();
     void invoke("set_connection_state", { connected: false });
     bubble.hidden = true;
@@ -116,15 +141,16 @@ export async function startPet(): Promise<void> {
       empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-  globalThis.addEventListener("pagehide", () => { ++mountGeneration; stopMovement(); fees.cancel(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { ++mountGeneration; stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); }, {once:true});
   await remount();
 
   connection = new StatusConnection({
     onSnapshot(snapshot) {
+      if(snapshot.session?.ref!==latestSnapshot?.session?.ref || snapshot.inputRequest!==latestSnapshot?.inputRequest){fees.cancel();cancelClick();}
       latestSnapshot = snapshot;
       animator?.apply(snapshot);
       fees.stateChanged(snapshot.state);
-      if (!fees.visible) renderBubble(bubble, snapshot, settings.preferences.privacyMode);
+      if (!fees.visible) workBubble.update(snapshot, settings.preferences);
     },
     onConnected() {
       connected = true;
@@ -133,6 +159,7 @@ export async function startPet(): Promise<void> {
       void invoke("set_connection_state", { connected: true });
       if (settings.model) void window.show();
       else void invoke("open_settings");
+      syncInputAvailable();
     },
     onDisconnected() {
       beginOfflineCountdown();
@@ -159,9 +186,12 @@ export async function startPet(): Promise<void> {
   await onOpenUrl(connectUrls);
 
   await listen<DesktopSettings>("settings-changed", ({ payload }) => {
+    const previous=settings;
     settings = payload;
     fees.cancel();
-    if (latestSnapshot) renderBubble(bubble, latestSnapshot, settings.preferences.privacyMode);
+    if (latestSnapshot) workBubble.update(latestSnapshot, settings.preferences);
+    syncInputAvailable();
+    if(JSON.stringify([previous.model,previous.preferences.fps,previous.preferences.maxDevicePixelRatio,previous.preferences.scale])===JSON.stringify([settings.model,settings.preferences.fps,settings.preferences.maxDevicePixelRatio,settings.preferences.scale]))return;
     void remount()
       .then(() => {
         if (connected && settings.model) void window.show();
@@ -179,39 +209,18 @@ export async function startPet(): Promise<void> {
   });
   document.addEventListener("visibilitychange", syncRendering);
 
-  installPointerBehavior(host, {
+  cancelClick=installPointerBehavior(host, {
     begin: (x, y) => invoke("begin_model_drag", {x,y}),
     move: () => invoke("move_model_drag"),
     end: () => invoke("end_model_drag"),
-  }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), () => { void invoke("open_settings"); });
+  }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), () => { void invoke("open_settings"); },()=>{
+    const ref=latestSnapshot?.session?.ref;
+    if(!ref||!connected)return;
+    void connection?.openSession(ref).catch(()=>{
+      if(latestSnapshot?.session?.ref===ref&&!latestSnapshot?.inputRequest){renderPlainBubble(bubble,"暂时无法打开 DSH 会话","notice",settings.preferences.privacyMode?"DSH":latestSnapshot?.session?.title);updateRegion();}
+    });
+  });
   await keepWindowVisible(window);
-}
-
-export function renderBubble(
-  element: HTMLOutputElement,
-  snapshot: PetSnapshot,
-  privacyMode: boolean,
-): void {
-  const text = privacyMode ? FIXED_BUBBLES[snapshot.state] : snapshot.bubble?.text;
-  if (!text || snapshot.state === "idle") {
-    element.hidden = true;
-    element.textContent = "";
-    delete element.dataset.bubbleKind;
-    return;
-  }
-  renderPlainBubble(element, text, privacyMode ? "notice" : snapshot.bubble?.kind ?? "notice");
-}
-
-function renderPlainBubble(element: HTMLOutputElement, text: string, kind: string): void {
-  let content = element.querySelector<HTMLSpanElement>(".bubble-content");
-  if (!content) {
-    content = document.createElement("span");
-    content.className = "bubble-content";
-    element.replaceChildren(content);
-  }
-  content.textContent = text;
-  element.dataset.bubbleKind = kind;
-  element.hidden = false;
 }
 
 export function installPointerBehavior(
@@ -220,11 +229,21 @@ export function installPointerBehavior(
   click: () => void | Promise<void>,
   hitTest: (x: number, y: number) => boolean,
   openSettings?: () => void,
-): void {
+  doubleClick?: () => void | Promise<void>,
+): () => void {
   let gesture: {id: number; x: number; y: number; moved: boolean; queued: boolean; chain: Promise<unknown>} | undefined;
   let finishing = false;
+  let clickTimer:ReturnType<typeof setTimeout>|undefined;
+  let firstClick:{x:number;y:number}|undefined;
+  const cancel=()=>{if(clickTimer)clearTimeout(clickTimer);clickTimer=undefined;firstClick=undefined;};
+  const completeClick=(event:PointerEvent)=>{
+    if(!doubleClick){void click();return;}
+    if(clickTimer&&firstClick&&Math.hypot(event.screenX-firstClick.x,event.screenY-firstClick.y)<6){cancel();void doubleClick();return;}
+    cancel();firstClick={x:event.screenX,y:event.screenY};clickTimer=setTimeout(()=>{cancel();void click();},350);
+  };
   element.addEventListener("contextmenu", event => {
     if (!openSettings || !hitTest(event.clientX, event.clientY)) return;
+    cancel();
     event.preventDefault(); openSettings();
   });
   const finish = (event: PointerEvent, cancelled: boolean) => {
@@ -236,7 +255,8 @@ export function installPointerBehavior(
     if (element.hasPointerCapture(current.id)) element.releasePointerCapture(current.id);
     void current.chain.then(async () => {
       if (current.moved && !cancelled) await drag.move();
-      if (!current.moved && !cancelled) void click();
+      if(current.moved||cancelled)cancel();
+      if (!current.moved && !cancelled) completeClick(event);
     }).finally(() => drag.end()).finally(() => {finishing=false}).catch(() => {});
   };
   element.addEventListener("pointerdown", (event) => {
@@ -251,11 +271,13 @@ export function installPointerBehavior(
     if (!current || event.pointerId !== current.id || current.queued) return;
     if (!current.moved && Math.hypot(event.screenX-current.x,event.screenY-current.y)<5) return;
     current.moved=true;current.queued=true;
+    cancel();
     current.chain=current.chain.then(()=>drag.move()).finally(()=>{current.queued=false});
     void current.chain.catch(() => {});
   });
   element.addEventListener("pointerup", event=>finish(event,false));
   element.addEventListener("pointercancel", event=>finish(event,true));
+  return cancel;
 }
 
 async function keepWindowVisible(window: Window): Promise<void> {

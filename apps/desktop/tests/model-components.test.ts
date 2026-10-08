@@ -7,7 +7,7 @@ import type {DesktopSettings} from "../src/types.js";
 const {invoke,open} = vi.hoisted(() => ({invoke:vi.fn(),open:vi.fn()}));
 vi.mock("@tauri-apps/api/core",()=>({invoke,convertFileSrc:(path:string)=>`asset:${path}`}));
 vi.mock("@tauri-apps/plugin-dialog",()=>({open}));
-const preferences = {fps:60 as const,maxDevicePixelRatio:1.5,scale:1,privacyMode:false};
+const preferences = {fps:60 as const,maxDevicePixelRatio:1.5,scale:1,privacyMode:false,bubbleMode:"compact" as const};
 const mappings = {idle:"Idle",working:null,blocked:null,approval:null,completed:null,error:null,click:[],ambient:[]};
 const catalog = [{name:"Idle",durationMs:1000}];
 const initial:DesktopSettings={schemaVersion:3,preferences};

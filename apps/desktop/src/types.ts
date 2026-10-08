@@ -30,6 +30,7 @@ export interface DesktopPreferences {
   maxDevicePixelRatio: number;
   scale: number;
   privacyMode: boolean;
+  bubbleMode: "compact" | "detailed";
 }
 
 export interface DesktopSettings {

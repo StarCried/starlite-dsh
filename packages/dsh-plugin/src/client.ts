@@ -17,11 +17,11 @@ export function followCompanionSession(sessions:Sessions,location:Pick<Location,
     if(done)return;
     const list=sessions.list.getSnapshot();
     if(list.phase!=="ready")return;
-    if(list.ids.includes(id)){sessions.open(id);consume();return;}
+    if(list.ids.includes(id)){stop();sessions.open(id);consume();return;}
     for(const [parentSessionId,catalog]of Object.entries(list.subagentsByParent??{})){
       const entry=catalog.entries.find(row=>row.kind==="child"&&row.id===id);
       if(entry&&(entry.mode==="one-shot"||entry.mode==="continuable")){
-        sessions.openSubagent({parentSessionId,childSessionId:id,mode:entry.mode});consume();return;
+        stop();sessions.openSubagent({parentSessionId,childSessionId:id,mode:entry.mode});consume();return;
       }
     }
     if(!discovering){discovering=true;void discover().catch(()=>undefined).finally(()=>{discovering=false})}

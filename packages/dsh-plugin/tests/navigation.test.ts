@@ -13,7 +13,7 @@ describe("exact companion navigation",()=>{
   });
   it("waits for the listed target, selects once and removes only its hint",async()=>{
     let list={ids:[] as string[],phase:"pending"};let changed:()=>void=()=>undefined;
-    const sessions:Sessions={list:{getSnapshot:()=>list,subscribe:fn=>{changed=fn;return vi.fn()}},open:vi.fn(),openSubagent:vi.fn(),refresh:async()=>undefined,refreshSubagents:async()=>undefined};
+    const sessions:Sessions={list:{getSnapshot:()=>list,subscribe:fn=>{changed=fn;return vi.fn()}},open:vi.fn(()=>changed()),openSubagent:vi.fn(),refresh:async()=>undefined,refreshSubagents:async()=>undefined};
     const history={state:{keep:true},replaceState:vi.fn()};
     const stop=followCompanionSession(sessions,{href:"http://127.0.0.1:4194/?launchToken=private#companionSession=target"},history);
     expect(sessions.open).not.toHaveBeenCalled();list={ids:["other","target"],phase:"ready"};changed();changed();

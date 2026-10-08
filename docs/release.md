@@ -15,6 +15,10 @@
 4. npm tarball 和未签名 NSIS 安装包已经生成；安装、升级、卸载和 SmartScreen 路径经过人工检查。
 5. 工作树干净，版本号在 workspace、npm bundle、Cargo 和 Tauri 配置中一致。
 
+演示资源的映射必须使用当前状态集合：明确指定 Idle，其余工作状态明确
+指定动作或禁用；Thinking 已合并到 Working，不能重新写入演示配置。
+Click / Ambient 支持最多 20 个不同动作的随机池。准备与发布门使用同一校验。
+
 执行：
 
 ```powershell

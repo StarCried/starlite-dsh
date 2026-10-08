@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validDemoMappings } from "./release-mappings.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const failures = [];
@@ -64,7 +65,7 @@ if (!/^[0-9a-f]{40}$/u.test(pipelinePin ?? "") || pipelinePin !== cargoRevision)
 
 await requiredFile("assets/microlight/model.inp", 1);
 const demoDefaults = await jsonFile("assets/microlight/defaults.json");
-if (!demoDefaults || !validMappings(demoDefaults.mappings)) {
+if (!demoDefaults || !validDemoMappings(demoDefaults.mappings)) {
   failures.push("MicroLight requires valid exact-name mappings in assets/microlight/defaults.json");
 }
 const assetLicense = await textFile("assets/microlight/ASSET_LICENSE.md");
@@ -156,11 +157,4 @@ async function jsonFile(relativePath) {
     failures.push(`invalid JSON: ${relativePath}`);
     return undefined;
   }
-}
-
-function validMappings(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const keys = ["idle", "thinking", "working", "completed", "error", "blocked", "approval", "click"];
-  if (typeof value.idle !== "string" || value.idle.length === 0) return false;
-  return keys.every((key) => typeof value[key] === "string" || value[key] === null);
 }

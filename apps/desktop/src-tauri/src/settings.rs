@@ -72,6 +72,16 @@ pub struct DesktopPreferences {
     pub max_device_pixel_ratio: f64,
     pub scale: f64,
     pub privacy_mode: bool,
+    #[serde(default)]
+    pub bubble_mode: BubbleMode,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BubbleMode {
+    #[default]
+    Compact,
+    Detailed,
 }
 
 impl Default for DesktopPreferences {
@@ -81,6 +91,7 @@ impl Default for DesktopPreferences {
             max_device_pixel_ratio: 1.5,
             scale: 1.0,
             privacy_mode: false,
+            bubble_mode: BubbleMode::Compact,
         }
     }
 }
@@ -389,6 +400,7 @@ mod tests {
         assert_eq!(migrated.schema_version, 3);
         assert_eq!(migrated.preferences.fps, 60);
         assert!(migrated.preferences.privacy_mode);
+        assert_eq!(migrated.preferences.bubble_mode, BubbleMode::Compact);
         let model = migrated.model.unwrap();
         assert_eq!(model.backend, ModelBackend::Inochi2d);
         assert_eq!(model.model_path, "local/model.inp");
@@ -454,5 +466,31 @@ mod tests {
             ..DesktopPreferences::default()
         };
         assert!(validate_preferences(&invalid).is_err());
+    }
+
+    #[test]
+    fn existing_preferences_default_to_compact_and_modes_are_closed() {
+        let mut value = serde_json::to_value(DesktopSettings::default()).unwrap();
+        value["preferences"]
+            .as_object_mut()
+            .unwrap()
+            .remove("bubbleMode");
+        assert_eq!(
+            decode_settings(&serde_json::to_vec(&value).unwrap())
+                .unwrap()
+                .preferences
+                .bubble_mode,
+            BubbleMode::Compact
+        );
+        value["preferences"]["bubbleMode"] = "detailed".into();
+        assert_eq!(
+            decode_settings(&serde_json::to_vec(&value).unwrap())
+                .unwrap()
+                .preferences
+                .bubble_mode,
+            BubbleMode::Detailed
+        );
+        value["preferences"]["bubbleMode"] = "unknown".into();
+        assert!(decode_settings(&serde_json::to_vec(&value).unwrap()).is_err());
     }
 }

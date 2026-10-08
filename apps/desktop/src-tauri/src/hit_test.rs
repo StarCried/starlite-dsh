@@ -68,7 +68,76 @@ impl HitMask {
 #[derive(Default)]
 pub struct HitTestState {
     mask: Mutex<Option<HitMask>>,
+    bubble: Mutex<Option<BubbleRegion>>,
     drag: Mutex<Option<DragOrigin>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BubbleRegion {
+    left: f64,
+    top: f64,
+    width: f64,
+    height: f64,
+    viewport_width: f64,
+    viewport_height: f64,
+}
+impl BubbleRegion {
+    fn validate(&self) -> Result<(), String> {
+        if ![
+            self.left,
+            self.top,
+            self.width,
+            self.height,
+            self.viewport_width,
+            self.viewport_height,
+        ]
+        .iter()
+        .all(|v| v.is_finite())
+            || self.left < 0.0
+            || self.top < 0.0
+            || self.width <= 0.0
+            || self.height <= 0.0
+            || self.viewport_width <= 0.0
+            || self.viewport_height <= 0.0
+            || self.viewport_width > 16384.0
+            || self.viewport_height > 16384.0
+            || self.left + self.width > self.viewport_width
+            || self.top + self.height > self.viewport_height
+        {
+            return Err("invalid bubble interaction region".into());
+        }
+        Ok(())
+    }
+    fn contains(&self, x: f64, y: f64, width: u32, height: u32) -> bool {
+        if width == 0 || height == 0 {
+            return false;
+        }
+        let x = x * self.viewport_width / f64::from(width);
+        let y = y * self.viewport_height / f64::from(height);
+        x >= self.left && x < self.left + self.width && y >= self.top && y < self.top + self.height
+    }
+}
+
+#[tauri::command]
+pub fn set_bubble_interaction_region(
+    window: tauri::WebviewWindow,
+    state: tauri::State<HitTestState>,
+    region: Option<BubbleRegion>,
+) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("bubble interaction belongs to the pet window".into());
+    }
+    let mut current = state
+        .bubble
+        .lock()
+        .map_err(|_| "interaction state unavailable")?;
+    *current = None;
+    if let Some(region) = region {
+        region.validate()?;
+        *current = Some(region);
+    }
+    Ok(())
 }
 
 struct DragOrigin {
@@ -281,6 +350,12 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
                     });
                     // Never dispatch window/IPC work while holding the mask mutex.
                     if let Some((hit, gaze)) = coverage {
+                        let hit = hit
+                            || state.bubble.lock().is_ok_and(|region| {
+                                region
+                                    .as_ref()
+                                    .is_some_and(|r| r.contains(x, y, size.width, size.height))
+                            });
                         let force = app.state::<crate::tray::UiState>().click_through();
                         let down = primary_button_down();
                         let active_drag = state.drag.lock().is_ok_and(|drag| drag.is_some());
@@ -307,6 +382,27 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn interactive_bubble_is_bounded_and_respects_dpi() {
+        let mut r = BubbleRegion {
+            left: 16.0,
+            top: 10.0,
+            width: 288.0,
+            height: 200.0,
+            viewport_width: 320.0,
+            viewport_height: 480.0,
+        };
+        r.validate().unwrap();
+        assert!(r.contains(100.0, 100.0, 640, 960));
+        assert!(!r.contains(30.0, 100.0, 640, 960));
+        assert!(!r.contains(100.0, 430.0, 640, 960));
+        assert!(!r.contains(f64::NAN, 100.0, 640, 960));
+        assert!(!r.contains(100.0, 100.0, 0, 960));
+        r.width = 500.0;
+        assert!(r.validate().is_err());
+        r.width = f64::INFINITY;
+        assert!(r.validate().is_err());
+    }
     #[test]
     fn drag_uses_the_original_physical_cursor_and_window_position() {
         let d = DragOrigin {

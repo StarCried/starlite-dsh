@@ -164,4 +164,38 @@ describe("DshStateAggregator", () => {
     source.handleSessionEvent("s", { type: "turn/start" });
     expect(snapshots.at(-1)?.state).toBe("thinking");
   });
+
+  it("keeps word boundaries between streamed chunks and final content blocks", async () => {
+    const snapshots: PetSnapshot[] = [];
+    const source = new DshStateAggregator();
+    await source.start(snapshot => snapshots.push(snapshot));
+    source.handleAgentStatus("s", "running");
+    for (const [type, parts, kind] of [
+      ["reasoning-delta", ["Checking ", "the", "\n\t", "model"], "reasoning"],
+      ["text-delta", ["The ", "model ", "is ready."], "response"],
+    ] as const) {
+      for (const text of parts) source.handleAssistantStream("s", {type:"chunk", chunk:{type,text}});
+      await vi.advanceTimersByTimeAsync(200);
+      expect(snapshots.at(-1)?.bubble).toEqual({kind,text:kind === "reasoning" ? "Checking the model" : "The model is ready."});
+    }
+    source.handleSessionEvent("s", {type:"assistant/message", data:{message:{content:[
+      {type:"text",text:"The model "}, {type:"text",text:"is ready."},
+    ]}}});
+    source.handleSessionEvent("s", {type:"turn/end", data:{reason:{kind:"completed"}}});
+    expect(snapshots.at(-1)?.bubble?.text).toBe("The model is ready.");
+    await source.stop();
+  });
+
+  it("continues updating the bounded tail of a long live answer", async () => {
+    const snapshots: PetSnapshot[] = [];
+    const source = new DshStateAggregator();
+    await source.start(snapshot => snapshots.push(snapshot));
+    source.handleAgentStatus("s", "running");
+    source.handleAssistantStream("s", {type:"chunk",chunk:{type:"text-delta",text:"旧".repeat(140)}});
+    await vi.advanceTimersByTimeAsync(200);
+    source.handleAssistantStream("s", {type:"chunk",chunk:{type:"text-delta",text:" 新内容"}});
+    await vi.advanceTimersByTimeAsync(200);
+    expect(snapshots.at(-1)?.bubble?.text).toBe("旧".repeat(116)+" 新内容");
+    await source.stop();
+  });
 });

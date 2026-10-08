@@ -31,6 +31,7 @@ export interface DshEventLike {
 interface TimedText {
   readonly text: string;
   readonly at: number;
+  readonly endsWithWhitespace: boolean;
 }
 
 interface TimedTool {
@@ -355,25 +356,26 @@ function handleAssistantChunk(session: SessionState, data: Record<string, unknow
 function handleAssistantMessage(session: SessionState, data: Record<string, unknown> | undefined, now: number): void {
   const message = asRecord(data?.message);
   if (!message || !Array.isArray(message.content)) return;
-  let response = "";
-  let reasoning = "";
+  let response: TimedText | undefined;
+  let reasoning: TimedText | undefined;
   for (const rawBlock of message.content) {
     const block = asRecord(rawBlock);
     const type = stringField(block, "type");
     const text = stringField(block, "text");
     if (!text) continue;
-    if (type === "text") response = sanitizeBubbleText(`${response}${text}`);
-    if (type === "reasoning") reasoning = sanitizeBubbleText(`${reasoning}${text}`);
+    if (type === "text") response = appendVisible(response, text, now);
+    if (type === "reasoning") reasoning = appendVisible(reasoning, text, now);
   }
-  const cleanResponse = sanitizeBubbleText(response);
-  const cleanReasoning = sanitizeBubbleText(reasoning);
-  if (cleanResponse) session.response = { text: cleanResponse, at: now };
-  if (cleanReasoning) session.reasoning = { text: cleanReasoning, at: now };
+  if (response) session.response = response;
+  if (reasoning) session.reasoning = reasoning;
 }
 
 function appendVisible(previous: TimedText | undefined, addition: string, now: number): TimedText | undefined {
-  const text = sanitizeBubbleText(`${previous?.text ?? ""}${addition}`);
-  return text ? { text, at: now } : previous;
+  // Wire text is trimmed. Keep one separator bit in memory so a space-only
+  // chunk or a chunk ending in whitespace does not join the next word.
+  const separator = previous?.endsWithWhitespace ? " " : "";
+  const text = sanitizeBubbleText(`${previous?.text ?? ""}${separator}${addition}`);
+  return text ? { text, at: now, endsWithWhitespace: /\s$/u.test(addition) } : previous;
 }
 
 function handleToolStarted(

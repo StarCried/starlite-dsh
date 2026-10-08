@@ -10,16 +10,21 @@
 
 ## BYOM 源码试用
 
-先在 WSL2 构建固定的公开运行时：
+先在 WSL2 构建 `release/model-companion-web.rev` 指定的公开运行时。
+当前双后端分支的新增提交仍在本地，尚不能把下面的公开构建步骤当作已发布版本；
+待共享运行时公开并更新固定 revision 后再执行。不要改用旧 revision 的构建产物。
+把 `REPLACE_WITH_RELEASE_RUNTIME_REV` 替换为该文件中的 40 位 revision。
 
 ```bash
 git clone https://github.com/StarCried/inochi2d-web.git
 cd inochi2d-web
-git checkout ab24c2bc627ef5acde6685ee20096cef0128baaa
+git checkout REPLACE_WITH_RELEASE_RUNTIME_REV
 npm ci
 npm run fixtures
 npm run build:wasm
+npm run build --workspace model-widget-core
 npm run build --workspace inochi2d-web
+npm run build --workspace vrm-web
 ```
 
 再在 Windows PowerShell 构建桌宠。把 `<user>` 替换为自己的 WSL 用户名：
@@ -32,7 +37,7 @@ pnpm sync:runtime -- "//wsl.localhost/Ubuntu/home/<user>/inochi2d-web/packages/i
 pnpm desktop:build
 ```
 
-同步源必须显式给出，也可以通过 `INOCHI2D_WEB_DIST` 环境变量设置。同步会写入未跟踪的 `apps/desktop/public/runtime/inochi2d-web`，并记录 Git revision/dirty 状态；发布只接受来自干净、已固定 revision 的运行时。
+同步源必须显式给出，也可以通过 `INOCHI2D_WEB_DIST` 环境变量设置。同步会从同一工作区收集 core、Inochi2D 和 VRM 三个组件，写入未跟踪的 `apps/desktop/public/runtime/`，并记录 Git revision/dirty 状态；发布只接受来自干净、已固定 revision 的运行时。
 
 运行 `apps/desktop/src-tauri/target/release/bundle/nsis` 中生成的未签名安装程序。
 然后在 WSL2 中从 Windows 仓库的 `/mnt/<drive>/...` 路径打包并安装 bundle：
@@ -42,8 +47,7 @@ cd /mnt/<drive>/path/to/dsh-inochi2d-pet
 pnpm pack:plugin
 dsh plugin --profile web add \
   ./packages/dsh-plugin/.pack/dsh-inochi2d-pet-0.1.0-alpha.0.tgz
-dsh --profile web --dump-config
-dsh web
+dsh --profile web
 ```
 
 首次连接时桌宠没有内置模型，会打开设置。选择自己有权使用的 `.inp` 或 `.vrm`；
@@ -70,6 +74,7 @@ dsh --profile web
 费用气泡使用独立的认证只读接口，不修改状态 SSE。点击查询官方 DeepSeek
 余额，以及当前 DSH profile 的北京时间当日用量估算；工作中点击不会启动
 点击动作。估算范围、缺失记录、支持的模型和已核实价格见插件 README。
+先在 DSH 的模型设置中配置官方 `deepseek` 路由；凭据由 DSH 解析，不能填入桌宠。
 测试注入余额与持久化服务的固定数据，不调用模型或余额网络 API。
 
 VRM 的内嵌贴图通过本地 Blob 解码。桌宠 CSP 的 `img-src` 和 `connect-src`

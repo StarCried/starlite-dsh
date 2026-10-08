@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PetSnapshot } from "@dsh-inochi2d-pet/protocol";
-import { DshStateAggregator } from "../src/aggregator.js";
+import { DshStateAggregator,toolActivity } from "../src/aggregator.js";
 
 describe("DshStateAggregator", () => {
+  it("recognizes the installed official filesystem tool names",()=>{
+    expect(["edit","write","read","read_image","glob","grep","bash"].map(toolActivity)).toEqual(["editing","editing","reading","reading","searching","searching","command"]);
+  });
   it("retains exact titles/references at idle and classifies work without arguments",async()=>{
     const snapshots:PetSnapshot[]=[],source=new DshStateAggregator();await source.start(s=>snapshots.push(s));
     const key={id:"PRIVATE"},info=source.sessionInfo(key,"测试会话");source.handleAgentStatus(key,"running");

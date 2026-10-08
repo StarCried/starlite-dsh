@@ -547,9 +547,9 @@ function candidateKey(candidate: Candidate): string {
 
 export function toolActivity(name: string): PetActivity {
   if(/^(?:bash|pwsh|shell|run_command|execute_command)$/iu.test(name))return "command";
-  if(/(?:str_replace|edit_file|write_file|apply_patch|create_file)/iu.test(name))return "editing";
-  if(/(?:read_file|list_files|fs_read|fs_list)/iu.test(name))return "reading";
-  if(/(?:search|grep|find_files)/iu.test(name))return "searching";
+  if(/^(?:edit|write)$/iu.test(name)||/(?:str_replace|edit_file|write_file|apply_patch|create_file)/iu.test(name))return "editing";
+  if(/^(?:read|read_image|ls)$/iu.test(name)||/(?:read_file|list_files|fs_read|fs_list)/iu.test(name))return "reading";
+  if(/^glob$/iu.test(name)||/(?:search|grep|find_files)/iu.test(name))return "searching";
   return "tool";
 }
 

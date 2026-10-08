@@ -1,3 +1,6 @@
+export { parseBillingSnapshot } from "./billing.js";
+export type { BillingCurrency, BillingSnapshot } from "./billing.js";
+
 export const PET_PROTOCOL_VERSION = 1 as const;
 export const DEFAULT_BUBBLE_GRAPHEMES = 120;
 export const MAX_WIRE_BYTES = 4_096;

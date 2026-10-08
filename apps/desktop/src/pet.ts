@@ -169,9 +169,17 @@ export function renderBubble(
   if (!text || snapshot.state === "idle") {
     element.hidden = true;
     element.textContent = "";
+    delete element.dataset.bubbleKind;
     return;
   }
-  element.textContent = text;
+  let content = element.querySelector<HTMLSpanElement>(".bubble-content");
+  if (!content) {
+    content = document.createElement("span");
+    content.className = "bubble-content";
+    element.replaceChildren(content);
+  }
+  content.textContent = text;
+  element.dataset.bubbleKind = privacyMode ? "notice" : snapshot.bubble?.kind ?? "notice";
   element.hidden = false;
 }
 

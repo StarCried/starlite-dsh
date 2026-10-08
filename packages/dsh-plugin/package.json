@@ -13,7 +13,7 @@
   "homepage": "https://github.com/StarCried/dsh-inochi2d-pet#readme",
   "bugs": "https://github.com/StarCried/dsh-inochi2d-pet/issues",
   "main": "./dist/index.js",
-  "exports": "./dist/index.js",
+  "exports": {".":"./dist/index.js","./client":"./dist/client.js"},
   "files": [
     "dist",
     "cordis.patch.yml",
@@ -24,7 +24,7 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --sourcemap",
+    "build": "node build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --root ../.. packages/dsh-plugin/tests",
     "pack:check": "pnpm build && pnpm pack --pack-destination .pack && node ../../tools/check-plugin-package.mjs"
@@ -39,12 +39,16 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
-    }
+    },
+    "client":{"inject":["@deepseek-ai/dsh-api-session-controller"],"platform":"web"}
   },
   "keywords": [
     "deepseek-harness",
     "dsh-plugin",
     "inochi2d",
     "desktop-pet"
-  ]
+  ],
+  "dependencies": {
+    "open": "11.0.2"
+  }
 }

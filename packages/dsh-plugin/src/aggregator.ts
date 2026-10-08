@@ -6,7 +6,10 @@ import {
   type PetSnapshot,
   type PetState,
   type PetStateSource,
+  type PetSession,
+  type PetActivity,
 } from "@dsh-inochi2d-pet/protocol";
+import {randomUUID} from "node:crypto";
 
 const COMPLETED_LATCH_MS = 6_000;
 const ERROR_LATCH_MS = 8_000;
@@ -40,6 +43,10 @@ interface TimedTool {
 }
 
 interface SessionState {
+  ref: string;
+  title: string;
+  compacting: boolean;
+  inputs: Map<string, number>;
   activityAt: number;
   running: boolean;
   turnActive: boolean;
@@ -55,6 +62,9 @@ interface SessionState {
 }
 
 interface Candidate {
+  readonly session?: PetSession;
+  readonly activity?: PetActivity;
+  readonly inputRequest?: string;
   readonly state: PetState;
   readonly bubble?: PetBubble;
   readonly at: number;
@@ -79,6 +89,7 @@ export class DshStateAggregator implements PetStateSource {
   #lastEmittedAt = Number.NEGATIVE_INFINITY;
   #lastKey: string | undefined;
   #lastState: PetState | undefined;
+  #lastInput: string | undefined;
   #contentTimer: Timer | undefined;
   #deadlineTimer: Timer | undefined;
 
@@ -99,6 +110,7 @@ export class DshStateAggregator implements PetStateSource {
     this.#emit = undefined;
     this.#lastKey = undefined;
     this.#lastState = undefined;
+    this.#lastInput = undefined;
   }
 
   handleAgentStatus(key: unknown, status: AgentRunStatus): void {
@@ -106,6 +118,20 @@ export class DshStateAggregator implements PetStateSource {
     session.activityAt = this.#clock.now();
     session.running = status === "running";
     this.#changed();
+  }
+
+  sessionInfo(key: unknown, title?: string): PetSession {
+    const session=this.#session(key);
+    const clean=sanitizeBubbleText(title,80);
+    if(clean && clean!==session.title){session.title=clean;this.#changed();}
+    return {ref:session.ref,title:session.title};
+  }
+  sessionKey(ref: string): unknown {return [...this.#sessions].find(([,session])=>session.ref===ref)?.[0]}
+  handleInputRequested(key: unknown, requestId: string): void {
+    const session=this.#session(key);session.inputs.set(requestId,this.#clock.now());this.#changed();
+  }
+  handleInputResolved(key: unknown, requestId: string): void {
+    if(this.#sessions.get(key)?.inputs.delete(requestId))this.#changed();
   }
 
   handleAgentError(key: unknown): void {
@@ -165,6 +191,13 @@ export class DshStateAggregator implements PetStateSource {
     const session = this.#session(key);
 
     switch (event.type) {
+      case "session/title": {
+        const title=sanitizeBubbleText(data?.title,80);
+        if(title)session.title=title;
+        this.#changed();return;
+      }
+      case "compaction/start": session.compacting=true; break;
+      case "compaction/end": session.compacting=false; break;
       case "turn/start":
         resetForTurn(session);
         session.turnActive = true;
@@ -213,6 +246,7 @@ export class DshStateAggregator implements PetStateSource {
   }
 
   #handleTurnEnd(session: SessionState, reason: string | undefined, now: number): void {
+    session.compacting = false;
     session.turnActive = false;
     session.running = false;
     session.activeTools.clear();
@@ -238,6 +272,7 @@ export class DshStateAggregator implements PetStateSource {
     let session = this.#sessions.get(key);
     if (!session) {
       session = {
+        ref:randomUUID(), title:"DSH 会话", compacting:false, inputs:new Map(),
         activityAt: this.#clock.now(),
         running: false,
         turnActive: false,
@@ -268,7 +303,7 @@ export class DshStateAggregator implements PetStateSource {
     const key = candidateKey(candidate);
     if (!force && key === this.#lastKey) return;
 
-    const stateChanged = candidate.state !== this.#lastState;
+    const stateChanged = candidate.state !== this.#lastState || candidate.inputRequest !== this.#lastInput;
     const elapsed = now - this.#lastEmittedAt;
     if (!force && !stateChanged && elapsed < CONTENT_THROTTLE_MS) {
       if (!this.#contentTimer) {
@@ -290,11 +325,15 @@ export class DshStateAggregator implements PetStateSource {
       emittedAt: now,
       state: candidate.state,
       ...(candidate.bubble ? { bubble: candidate.bubble } : {}),
+      ...(candidate.session?{session:candidate.session}:{}),
+      ...(candidate.activity?{activity:candidate.activity}:{}),
+      ...(candidate.inputRequest?{inputRequest:candidate.inputRequest}:{}),
     };
     this.#sequence += 1;
     this.#lastEmittedAt = now;
     this.#lastKey = key;
     this.#lastState = candidate.state;
+    this.#lastInput = candidate.inputRequest;
     this.#emit(snapshot);
   }
 
@@ -330,6 +369,7 @@ export class DshStateAggregator implements PetStateSource {
 }
 
 function resetForTurn(session: SessionState): void {
+  session.compacting = false;
   session.blockedAt = undefined;
   session.completedAt = undefined;
   session.completedUntil = undefined;
@@ -416,6 +456,7 @@ function removeApproval(session: SessionState, id: string | undefined): void {
 }
 
 function selectCandidate(sessions: Iterable<SessionState>, now: number): Candidate {
+  const all = [...sessions];
   let error: Candidate | undefined;
   let approval: Candidate | undefined;
   let blocked: Candidate | undefined;
@@ -423,47 +464,54 @@ function selectCandidate(sessions: Iterable<SessionState>, now: number): Candida
   let thinking: Candidate | undefined;
   let completed: Candidate | undefined;
 
-  for (const session of sessions) {
+  for (const session of all) {
+    const wrap=(candidate:Candidate,activity:PetActivity):Candidate=>({...candidate,session:{ref:session.ref,title:session.title},activity});
     if (session.errorUntil && session.errorUntil > now) {
-      error = newest(error, notice("error", "发生错误，请查看 DSH", session.errorAt ?? now));
+      error = newest(error, wrap(notice("error", "发生错误，请查看 DSH", session.errorAt ?? now),"error"));
     }
+    const input=[...session.inputs].at(-1);
+    if(input)approval=newest(approval,{...wrap(notice("approval","等待输入…",input[1]),"waiting"),inputRequest:input[0]});
     const currentApproval = newestMapValue(session.approvals);
     if (currentApproval) {
-      approval = newest(approval, notice("approval", `等待批准：${currentApproval.name}`, currentApproval.at));
+      if(!input)approval = newest(approval, wrap(notice("approval", QUESTION_TOOLS.has(currentApproval.name)?"等待输入…":`等待批准：${currentApproval.name}`, currentApproval.at),"waiting"));
     }
     if (session.blockedAt !== undefined) {
-      blocked = newest(blocked, notice("blocked", "任务被阻塞，请查看 DSH", session.blockedAt));
+      blocked = newest(blocked, wrap(notice("blocked", "任务被阻塞，请查看 DSH", session.blockedAt),"blocked"));
     }
     const currentTool = newestMapValue(session.activeTools);
     if (currentTool) {
-      working = newest(working, {
+      working = newest(working, wrap({
         state: "working",
         bubble: bubble("tool", `正在使用 ${currentTool.name}…`),
         at: currentTool.at,
-      });
+      },toolActivity(currentTool.name)));
     }
+    if(session.compacting)working=newest(working,wrap(notice("working","正在压缩上下文…",session.activityAt),"compacting"));
     if (session.running || session.turnActive) {
       const visible = latestVisible(session);
-      thinking = newest(thinking, {
+      thinking = newest(thinking, wrap({
         state: "thinking",
         bubble: visible
           ? bubble(visible === session.response ? "response" : "reasoning", visible.text)
           : bubble("notice", "思考中…"),
         at: visible?.at ?? session.activityAt,
-      });
+      },visible===session.response && visible?"responding":"thinking"));
     }
     if (session.completedUntil && session.completedUntil > now) {
-      completed = newest(completed, {
+      completed = newest(completed, wrap({
         state: "completed",
         bubble: session.response
           ? bubble("response", session.response.text)
           : bubble("notice", "任务已完成"),
         at: session.completedAt ?? now,
-      });
+      },"completed"));
     }
   }
 
-  return error ?? approval ?? blocked ?? working ?? thinking ?? completed ?? { state: "idle", at: now };
+  const selected=error ?? approval ?? blocked ?? working ?? thinking ?? completed;
+  if(selected)return selected;
+  const last=all.sort((a,b)=>b.activityAt-a.activityAt)[0];
+  return {state:"idle",at:now,activity:"idle",...(last?{session:{ref:last.ref,title:last.title}}:{})};
 }
 
 function notice(state: PetState, text: string, at: number): Candidate {
@@ -494,7 +542,15 @@ function newestMapValue(values: Map<string, TimedTool>): TimedTool | undefined {
 }
 
 function candidateKey(candidate: Candidate): string {
-  return `${candidate.state}\u0000${candidate.bubble?.kind ?? ""}\u0000${candidate.bubble?.text ?? ""}`;
+  return JSON.stringify([candidate.state,candidate.bubble,candidate.session,candidate.activity,candidate.inputRequest]);
+}
+
+export function toolActivity(name: string): PetActivity {
+  if(/^(?:bash|pwsh|shell|run_command|execute_command)$/iu.test(name))return "command";
+  if(/(?:str_replace|edit_file|write_file|apply_patch|create_file)/iu.test(name))return "editing";
+  if(/(?:read_file|list_files|fs_read|fs_list)/iu.test(name))return "reading";
+  if(/(?:search|grep|find_files)/iu.test(name))return "searching";
+  return "tool";
 }
 
 function safeToolName(value: string | undefined): string | undefined {

@@ -1,4 +1,4 @@
-import { createServer, type Server, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
   MAX_WIRE_BYTES,
@@ -6,8 +6,10 @@ import {
   parseBillingSnapshot,
   type PetSnapshot,
   type PetStateSource,
+  MAX_INTERACTION_BYTES, isOpaqueRef, parsePetInteraction,
 } from "@dsh-inochi2d-pet/protocol";
 import type { BillingSource } from "./billing.js";
+import type {QuestionBridge} from "./questions.js";
 
 const HEARTBEAT_MS = 15_000;
 const MAX_CLIENTS = 2;
@@ -37,7 +39,7 @@ export interface StatusServer {
   close(): Promise<void>;
 }
 
-export async function startStatusServer(source: PetStateSource, options: {billing?: BillingSource} = {}): Promise<StatusServer> {
+export async function startStatusServer(source: PetStateSource, options: {billing?: BillingSource; questions?: QuestionBridge} = {}): Promise<StatusServer> {
   const token = randomBytes(32).toString("base64url");
   const clients = new Set<ServerResponse>();
   let latest: PetSnapshot | undefined;
@@ -54,7 +56,7 @@ export async function startStatusServer(source: PetStateSource, options: {billin
       response.end();
       return;
     }
-    if (request.method !== "GET" || !authorized(request.headers.authorization, token)) {
+    if (!['GET','POST'].includes(request.method??'') || !authorized(request.headers.authorization, token)) {
       reject(response, 401);
       return;
     }
@@ -64,7 +66,7 @@ export async function startStatusServer(source: PetStateSource, options: {billin
     }
 
     const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
-    if (path === "/v1/health") {
+    if (path === "/v1/health" && request.method === "GET") {
       response.writeHead(204, {
         "Cache-Control": "no-store",
         ...(origin ? corsHeaders(origin) : {}),
@@ -72,7 +74,7 @@ export async function startStatusServer(source: PetStateSource, options: {billin
       response.end();
       return;
     }
-    if (path === "/v1/billing" && options.billing) {
+    if (path === "/v1/billing" && request.method === "GET" && options.billing) {
       void options.billing.read().then(snapshot => {
         const json = JSON.stringify(parseBillingSnapshot(snapshot));
         if (Buffer.byteLength(json, "utf8") > MAX_WIRE_BYTES) throw new Error("billing response too large");
@@ -85,7 +87,28 @@ export async function startStatusServer(source: PetStateSource, options: {billin
       }).catch(() => {if (!response.destroyed && !response.headersSent) reject(response, 503);});
       return;
     }
-    if (path !== "/v1/events") {
+    if(path === "/v1/interaction" && request.method === "GET" && options.questions){
+      const query=new URL(request.url??"/","http://127.0.0.1").searchParams;
+      const id=query.get("request");const pending=isOpaqueRef(id)&&query.getAll("request").length===1?options.questions.read(id):undefined;
+      if(!pending){reject(response,409);return;}
+      jsonResponse(response,parsePetInteraction(pending),origin);return;
+    }
+    if(options.questions && request.method === "POST" && ["/v1/interaction/answer","/v1/interaction/availability","/v1/session/open"].includes(path)){
+      const bridge=options.questions;
+      void readBody(request).then(async body=>{
+        if(closed||response.destroyed)return;
+        if(!body||typeof body!=="object"||Array.isArray(body))throw Error("invalid action");
+        const row=body as Record<string,unknown>;
+        if(path==="/v1/interaction/answer")bridge.answer(row);
+        else if(path==="/v1/interaction/availability"){
+          if(typeof row.enabled!=="boolean"||Object.keys(row).some(k=>k!=="enabled"))throw Error("invalid availability");bridge.setEnabled(row.enabled);
+        }else{
+          if(!isOpaqueRef(row.sessionRef)||Object.keys(row).some(k=>k!=="sessionRef"))throw Error("invalid navigation");await bridge.open(row.sessionRef);
+        }
+        if(!response.destroyed){response.writeHead(204,{"Cache-Control":"no-store",...(origin?corsHeaders(origin):{})});response.end();}
+      }).catch(()=>{if(!response.destroyed&&!response.headersSent)reject(response,409)});return;
+    }
+    if (path !== "/v1/events" || request.method !== "GET") {
       reject(response, 404);
       return;
     }
@@ -104,9 +127,10 @@ export async function startStatusServer(source: PetStateSource, options: {billin
     });
     response.flushHeaders();
     clients.add(response);
+    options.questions?.setConnected(true);
     response.write(": connected\n\n");
     if (latest) writeSnapshot(response, latest);
-    request.on("close", () => clients.delete(response));
+    request.on("close", () => {clients.delete(response);options.questions?.setConnected(clients.size>0)});
   });
 
   const heartbeat = setInterval(() => {
@@ -149,6 +173,7 @@ export async function startStatusServer(source: PetStateSource, options: {billin
       if (closed) return;
       closed = true;
       options.billing?.close();
+      options.questions?.close();
       await shutdown(server, clients, source, heartbeat);
     },
   };
@@ -221,12 +246,24 @@ function authorized(header: string | undefined, token: string): boolean {
 
 function corsHeaders(origin: string): Record<string, string> {
   return {
-    "Access-Control-Allow-Headers": "Authorization",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Max-Age": "600",
     Vary: "Origin",
   };
+}
+
+function jsonResponse(response:ServerResponse,value:unknown,origin:string|undefined):void{
+  const json=JSON.stringify(value);if(Buffer.byteLength(json)>MAX_INTERACTION_BYTES){reject(response,413);return;}
+  response.writeHead(200,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff",...(origin?corsHeaders(origin):{})});response.end(json);
+}
+async function readBody(request:IncomingMessage):Promise<unknown>{
+  if(request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase()!=="application/json")throw Error("invalid action content type");
+  if(Number(request.headers["content-length"])>MAX_INTERACTION_BYTES)throw Error("action too large");
+  request.setTimeout(5000,()=>request.destroy());
+  try{const chunks:Buffer[]=[];let bytes=0;for await(const chunk of request){const data=Buffer.from(chunk);bytes+=data.length;if(bytes>MAX_INTERACTION_BYTES)throw Error("action too large");chunks.push(data)}return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown}
+  finally{request.setTimeout(0)}
 }
 
 function reject(response: ServerResponse, status: number): void {

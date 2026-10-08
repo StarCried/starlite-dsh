@@ -26,6 +26,11 @@ const approval = [
 const nestedTools = await source("dsh-tools/lib/types/types.d.ts");
 const llmTypes = await source("dsh-llm/lib/types/types.d.ts");
 const llmMessages = await source("dsh-llm/lib/types/message.d.ts");
+const questions = await source("dsh-user-questions/lib/types/types.d.ts");
+const titles = await source("dsh-session-title/lib/types/index.d.ts");
+const clientSessions = await source("dsh-api-session-controller/lib/types/client/contract/sessions.d.ts");
+const webServer = await source("dsh-host-webserver/lib/types/index.d.ts");
+const connection = await source("dsh-client-connection/lib/types/rpc.d.ts");
 
 // DSH 0.1.5 moved transient chunks out of SessionEventMap. If the new stream
 // exists, validate its payload and frame shapes even if an older declaration
@@ -40,6 +45,15 @@ const streamRequirements = usesAgentStream ? [
 ];
 
 const requirements = [
+  ["ordinary question waterfall", questions, /'user-questions\/request'[^\n]+next:\s*\(\)\s*=>\s*Promise<AskUserQuestionAnswer>/u],
+  ["question choices and multiple selection", questions, /options\?: AskUserQuestionOption\[\];[\s\S]{0,200}multiSelect\?: boolean;/u],
+  ["question answer shape", questions, /selected: string\[\];[\s\S]{0,160}custom\?: string;/u],
+  ["session title read", titles, /get\(session: Session\): SessionTitleSnapshot \| undefined;/u],
+  ["exact web session selection", clientSessions, /open\(id: SessionId\): void;/u],
+  ["catalog navigation", clientSessions, /openSubagent\(address: SubagentAddress\): void;/u],
+  ["loopback web server port", webServer, /get port\(\): number;/u],
+  ["loopback web server host", webServer, /get host\(\): Config\['host'\];/u],
+  ["browser authentication URL", connection, /authenticatedUrl\(baseUrl: string\): string;/u],
   ["agent/status payload", agent, /'agent\/status'[\s\S]{0,500}payload:\s*\{[\s\S]{0,180}agent:\s*Agent;[\s\S]{0,180}status:\s*AgentStatus;/u],
   ["agent/error payload", agent, /'agent\/error'[\s\S]{0,500}payload:\s*\{[\s\S]{0,180}agent:\s*Agent;[\s\S]{0,300}error:\s*unknown;/u],
   ["session/event callback", sessionIndex, /'session\/event'[^\n]*session:\s*Session,\s*event:\s*SessionEvent/u],

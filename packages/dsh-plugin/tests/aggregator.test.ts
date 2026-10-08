@@ -3,6 +3,17 @@ import type { PetSnapshot } from "@dsh-inochi2d-pet/protocol";
 import { DshStateAggregator } from "../src/aggregator.js";
 
 describe("DshStateAggregator", () => {
+  it("retains exact titles/references at idle and classifies work without arguments",async()=>{
+    const snapshots:PetSnapshot[]=[],source=new DshStateAggregator();await source.start(s=>snapshots.push(s));
+    const key={id:"PRIVATE"},info=source.sessionInfo(key,"测试会话");source.handleAgentStatus(key,"running");
+    source.handleSessionEvent(key,{type:"tool/call",data:{callId:"x",name:"bash",arguments:"PRIVATE"}});
+    expect(snapshots.at(-1)).toMatchObject({session:info,activity:"command"});
+    source.handleSessionEvent(key,{type:"tool/result",data:{callId:"x"}});
+    source.handleSessionEvent(key,{type:"compaction/start"});await vi.advanceTimersByTimeAsync(200);
+    expect(snapshots.at(-1)?.activity).toBe("compacting");
+    source.handleSessionEvent(key,{type:"turn/end",data:{reason:{kind:"cancelled"}}});
+    expect(snapshots.at(-1)).toMatchObject({state:"idle",session:info,activity:"idle"});expect(JSON.stringify(snapshots)).not.toContain("PRIVATE");await source.stop();
+  });
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-14T00:00:00Z"));

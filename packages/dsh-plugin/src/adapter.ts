@@ -3,6 +3,8 @@ import { DshStateAggregator, type AgentRunStatus, type DshEventLike } from "./ag
 import { isWslEnvironment, launchWindowsPet } from "./launcher.js";
 import { startStatusServer, type StatusServer } from "./server.js";
 import { DeepSeekBilling, type BillingContext } from "./billing.js";
+import {QuestionBridge} from "./questions.js";
+import {openDshSession} from "./navigation.js";
 
 type Listener = (...arguments_: unknown[]) => unknown;
 type Disposer = () => void | Promise<void>;
@@ -13,7 +15,7 @@ interface LoggerLike {
 }
 
 export interface CordisContextLike extends BillingContext {
-  on(event: string, listener: Listener): unknown;
+  on(event: string, listener: Listener, options?: {prepend?:boolean}): unknown;
   logger?: LoggerLike;
 }
 
@@ -21,6 +23,7 @@ export interface AdapterDependencies {
   readonly isWsl?: () => boolean;
   readonly startServer?: typeof startStatusServer;
   readonly launch?: typeof launchWindowsPet;
+  readonly openBrowser?: (url:string)=>Promise<void>;
 }
 
 export async function startDshAdapter(
@@ -36,7 +39,13 @@ export async function startDshAdapter(
 
   const aggregator = new DshStateAggregator();
   const billing = new DeepSeekBilling(context);
-  const server = await (dependencies.startServer ?? startStatusServer)(aggregator, {billing});
+  const questions = new QuestionBridge(aggregator,key=>openDshSession(context,key,dependencies.openBrowser));
+  const server = await (dependencies.startServer ?? startStatusServer)(aggregator, {billing,questions});
+  const refreshTitle=(key:unknown)=>{
+    try{const service=asRecord(context.get?.("sessionTitle"));const value=typeof service?.get==="function"?asRecord(service.get.call(service,key)):undefined;
+      aggregator.sessionInfo(key,typeof value?.title==="string"?value.title:undefined);
+    }catch{aggregator.sessionInfo(key)}
+  };
   const disposers: Disposer[] = [];
   let approvalSequence = 0;
 
@@ -46,16 +55,18 @@ export async function startDshAdapter(
       const agent = payload?.agent;
       const status = payload?.status;
       if ((status === "idle" || status === "running") && agent) {
+        refreshTitle(subjectKey(agent));
         aggregator.handleAgentStatus(subjectKey(agent), status as AgentRunStatus);
       }
     });
     subscribeRequired(context, disposers, "agent/error", (...arguments_) => {
       const payload = asRecord(arguments_[0]);
-      if (payload?.agent) aggregator.handleAgentError(subjectKey(payload.agent));
+      if (payload?.agent) {const key=subjectKey(payload.agent);questions.cancelSession(key);refreshTitle(key);aggregator.handleAgentError(key);}
     });
     subscribeRequired(context, disposers, "agent/assistant-stream", (...arguments_) => {
       const payload = asRecord(arguments_[0]);
       if (payload?.agent) {
+        refreshTitle(subjectKey(payload.agent));
         aggregator.handleAssistantStream(subjectKey(payload.agent), payload.frame);
       }
     });
@@ -63,6 +74,8 @@ export async function startDshAdapter(
       const session = arguments_[0];
       const event = asRecord(arguments_[1]);
       if (session && typeof event?.type === "string") {
+        const key=subjectKey(session);refreshTitle(key);
+        if(event.type==="turn/end")questions.cancelSession(key);
         aggregator.handleSessionEvent(subjectKey(session), event as unknown as DshEventLike);
         if (event.type === "assistant/message" || event.type === "assistant/attempt") billing.invalidate();
       }
@@ -86,14 +99,22 @@ export async function startDshAdapter(
         aggregator.handleApprovalResolved(key, approvalKey);
       }
     });
+    subscribeRequired(context,disposers,"user-questions/request",(...arguments_)=>{
+      const request=asRecord(arguments_[0]),next=arguments_[1];
+      if(typeof next!=="function")return undefined;
+      if(!request?.agent)return next();
+      const key=subjectKey(request.agent);refreshTitle(key);
+      return questions.ask(key,request,next as ()=>Promise<unknown>);
+    },{prepend:true});
     subscribeOptional(context, disposers, "agent/disposed", (...arguments_) => {
       const payload = asRecord(arguments_[0]);
-      if (payload?.agent) aggregator.disposeSession(subjectKey(payload.agent));
+      if (payload?.agent) {const key=subjectKey(payload.agent);questions.cancelSession(key);aggregator.disposeSession(key);}
     });
     for (const event of ["settings/updated", "credentials/reference-updated", "credentials/record-updated"]) {
       subscribeOptional(context, disposers, event, () => billing.invalidate(true));
     }
   } catch (error) {
+    questions.close();billing.close();
     await closeAdapter(disposers, server);
     throw error;
   }
@@ -114,6 +135,7 @@ export async function startDshAdapter(
     if (closed) return;
     closed = true;
     billing.close();
+    questions.close();
     await closeAdapter(disposers, server);
   };
 }
@@ -123,8 +145,9 @@ function subscribeRequired(
   disposers: Disposer[],
   event: string,
   listener: Listener,
+  options?: {prepend?:boolean},
 ): void {
-  const result = context.on(event, listener);
+  const result = context.on(event, listener, options);
   if (typeof result === "function") disposers.push(result as Disposer);
 }
 

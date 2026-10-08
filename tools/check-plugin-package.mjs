@@ -24,6 +24,7 @@ const expected = [
   "package/LICENSE",
   "package/README.md",
   "package/cordis.patch.yml",
+  "package/dist/client.js",
   "package/dist/index.js",
   "package/dist/index.js.map",
   "package/package.json",

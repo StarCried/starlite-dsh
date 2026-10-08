@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { PET_PROTOCOL_VERSION, type PetStateSource } from "@dsh-inochi2d-pet/protocol";
 import { isBrowserSafePort, startStatusServer } from "../src/server.js";
+import {DshStateAggregator} from "../src/aggregator.js";
+import {QuestionBridge} from "../src/questions.js";
 
 function idleSource(): PetStateSource {
   return {
@@ -18,6 +20,30 @@ function idleSource(): PetStateSource {
 }
 
 describe("status SSE server", () => {
+  it("answers one authenticated pending question and rejects stale/malformed actions",async()=>{
+    const source=new DshStateAggregator(),open=vi.fn(async()=>undefined),bridge=new QuestionBridge(source,open);
+    const server=await startStatusServer(source,{questions:bridge});const base=`http://127.0.0.1:${server.port}`;
+    const headers={Authorization:`Bearer ${server.token}`,"Content-Type":"application/json",Origin:"http://tauri.localhost"};
+    const stream=await fetch(`${base}/v1/events`,{headers});const reader=stream.body!.getReader();await reader.read();
+    try{
+      expect((await fetch(`${base}/v1/interaction/availability`,{method:"POST",headers,body:'{"enabled":true}'})).status).toBe(204);
+      const key={id:"PRIVATE session"},ref=source.sessionInfo(key,"标题").ref;
+      const next=vi.fn(async()=>undefined);const answer=bridge.ask(key,{questions:[{id:"q",question:"选择",options:[{label:"是"}]}]},next);
+      const frame=await reader.read();const text=new TextDecoder().decode(frame.value);const requestId=/"inputRequest":"([^"]+)"/u.exec(text)?.[1];
+      // An earlier title-only frame may share this read; consume until the input frame arrives.
+      let id=requestId;for(let count=0;!id&&count<5;count++){const chunk=await reader.read();id=/"inputRequest":"([^"]+)"/u.exec(new TextDecoder().decode(chunk.value))?.[1]}
+      expect(id).toBeDefined();
+      const dto=await (await fetch(`${base}/v1/interaction?request=${id}`,{headers})).json();expect(JSON.stringify(dto)).not.toContain("PRIVATE");
+      const body=JSON.stringify({requestId:id,sessionRef:ref,answers:[{id:"q",selected:["是"]}]});
+      expect((await fetch(`${base}/v1/interaction/answer`,{method:"POST",headers:{...headers,Origin:"https://evil.invalid"},body})).status).toBe(403);
+      expect((await fetch(`${base}/v1/interaction/answer`,{method:"POST",headers,body})).status).toBe(204);
+      await expect(answer).resolves.toEqual({answers:[{id:"q",selected:["是"]}]});expect(next).not.toHaveBeenCalled();
+      expect((await fetch(`${base}/v1/interaction/answer`,{method:"POST",headers,body})).status).toBe(409);
+      expect((await fetch(`${base}/v1/session/open`,{method:"POST",headers,body:JSON.stringify({sessionRef:ref,url:"evil"})})).status).toBe(409);expect(open).not.toHaveBeenCalled();
+      expect((await fetch(`${base}/v1/session/open`,{method:"POST",headers,body:JSON.stringify({sessionRef:ref})})).status).toBe(204);expect(open).toHaveBeenCalledExactlyOnceWith(key);
+      expect((await fetch(`${base}/v1/interaction/availability`,{method:"POST",headers:{...headers,"Content-Type":"text/plain"},body:'{"enabled":false}'})).status).toBe(409);
+    }finally{await reader.cancel();await server.close()}
+  });
   it("authenticates and canonicalizes billing without leaking source extras", async () => {
     const billing = {read:vi.fn(async () => ({billingVersion:1 as const, checkedAt:1000,
       balance:{status:"ready" as const,balances:[{currency:"CNY" as const,remaining:12.34}], key:"PRIVATE key"},

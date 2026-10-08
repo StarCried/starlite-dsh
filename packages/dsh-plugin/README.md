@@ -12,6 +12,18 @@ across the WSL boundary.
 
 See the repository README for installation and compatibility details.
 
+The companion can answer ordinary DSH questions (single/multiple selections and
+custom text). It claims a question only while its visible input UI is connected;
+disconnecting or disabling input returns it to DSH's existing answerer. Each
+answer is bounded and bound to one pending request. Tool permission approvals
+remain in DSH. The additive status fields carry the session title, fixed activity
+code and ephemeral references, never the actual session identity.
+
+Double clicking opens the exact displayed session through DSH's authenticated
+local Web UI. Real identities and browser authentication stay in WSL. The
+included Web client consumes a fragment hint after finding the authoritative
+session/catalog entry; it never creates a session or sends a prompt.
+
 Click the model to query the official DeepSeek account balance and today's DSH
 cost estimate. This uses the existing `llm-pi-ai.providers.deepseek` route and
 DSH's credential service; no API key is copied to Windows. Custom gateways or

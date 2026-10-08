@@ -31,6 +31,16 @@ describe("model-only pointer interaction", () => {
     bridge.update(mask); await Promise.resolve();
     expect(failed).toHaveBeenCalledOnce(); expect(bridge.hitTest(35,25)).toBe(false);
   });
+  it("opens settings only when the context click hits the model silhouette", () => {
+    const listeners=new Map<string,(event:MouseEvent)=>void>(),open=vi.fn();
+    const element={addEventListener:(name:string,listener:(event:MouseEvent)=>void)=>listeners.set(name,listener)} as unknown as HTMLElement;
+    installPointerBehavior(element,{begin:async()=>{},move:async()=>{},end:async()=>{}},vi.fn(),x=>x>30,open);
+    const preventDefault=vi.fn();
+    listeners.get('contextmenu')!({clientX:15,clientY:25,preventDefault} as unknown as MouseEvent);
+    expect(open).not.toHaveBeenCalled();expect(preventDefault).not.toHaveBeenCalled();
+    listeners.get('contextmenu')!({clientX:35,clientY:25,preventDefault} as unknown as MouseEvent);
+    expect(open).toHaveBeenCalledOnce();expect(preventDefault).toHaveBeenCalledOnce();
+  });
   it("does not click or drag from transparent pixels and retains the final rapid drag movement", async () => {
     const listeners = new Map<string,(event:PointerEvent)=>void>();
     const capture=vi.fn(),release=vi.fn(),click=vi.fn();

@@ -165,7 +165,7 @@ export async function startPet(): Promise<void> {
     begin: (x, y) => invoke("begin_model_drag", {x,y}),
     move: () => invoke("move_model_drag"),
     end: () => invoke("end_model_drag"),
-  }, () => animator?.click(), (x, y) => interaction.hitTest(x, y));
+  }, () => animator?.click(), (x, y) => interaction.hitTest(x, y), () => { void invoke("open_settings"); });
   await keepWindowVisible(window);
 }
 
@@ -197,9 +197,14 @@ export function installPointerBehavior(
   drag: {begin: (x: number, y: number) => Promise<unknown>; move: () => Promise<unknown>; end: () => Promise<unknown>},
   click: () => void | Promise<void>,
   hitTest: (x: number, y: number) => boolean,
+  openSettings?: () => void,
 ): void {
   let gesture: {id: number; x: number; y: number; moved: boolean; queued: boolean; chain: Promise<unknown>} | undefined;
   let finishing = false;
+  element.addEventListener("contextmenu", event => {
+    if (!openSettings || !hitTest(event.clientX, event.clientY)) return;
+    event.preventDefault(); openSettings();
+  });
   const finish = (event: PointerEvent, cancelled: boolean) => {
     const current = gesture;
     if (!current || event.pointerId !== current.id) return;

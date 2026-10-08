@@ -142,6 +142,7 @@ export class DshStateAggregator implements PetStateSource {
     session.errorUntil = now + ERROR_LATCH_MS;
     session.running = false;
     session.turnActive = false;
+    session.compacting = false;
     session.activeTools.clear();
     session.approvals.clear();
     this.#changed();

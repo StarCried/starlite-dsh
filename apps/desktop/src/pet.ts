@@ -232,14 +232,20 @@ export function installPointerBehavior(
   doubleClick?: () => void | Promise<void>,
 ): () => void {
   let gesture: {id: number; x: number; y: number; moved: boolean; queued: boolean; chain: Promise<unknown>} | undefined;
-  let finishing = false;
+  let dragTail:Promise<unknown>=Promise.resolve();
+  let clickEpoch=0;
   let clickTimer:ReturnType<typeof setTimeout>|undefined;
-  let firstClick:{x:number;y:number}|undefined;
-  const cancel=()=>{if(clickTimer)clearTimeout(clickTimer);clickTimer=undefined;firstClick=undefined;};
-  const completeClick=(event:PointerEvent)=>{
-    if(!doubleClick){void click();return;}
-    if(clickTimer&&firstClick&&Math.hypot(event.screenX-firstClick.x,event.screenY-firstClick.y)<6){cancel();void doubleClick();return;}
-    cancel();firstClick={x:event.screenX,y:event.screenY};clickTimer=setTimeout(()=>{cancel();void click();},350);
+  let firstClick:{x:number;y:number;ready:Promise<unknown>}|undefined;
+  const clearClick=()=>{if(clickTimer)clearTimeout(clickTimer);clickTimer=undefined;firstClick=undefined;};
+  const cancel=()=>{++clickEpoch;clearClick();};
+  const whenReady=(ready:Promise<unknown>,action:()=>void|Promise<void>,epoch:number)=>{
+    void ready.then(async()=>{if(epoch===clickEpoch)await action();}).catch(()=>{});
+  };
+  const completeClick=(event:PointerEvent,ready:Promise<unknown>)=>{
+    const epoch=clickEpoch;
+    if(!doubleClick){whenReady(ready,click,epoch);return;}
+    if(clickTimer&&firstClick&&Math.hypot(event.screenX-firstClick.x,event.screenY-firstClick.y)<6){const prior=firstClick.ready;clearClick();whenReady(Promise.all([prior,ready]),doubleClick,epoch);return;}
+    clearClick();firstClick={x:event.screenX,y:event.screenY,ready};clickTimer=setTimeout(()=>{clearClick();whenReady(ready,click,epoch);},350);
   };
   element.addEventListener("contextmenu", event => {
     if (!openSettings || !hitTest(event.clientX, event.clientY)) return;
@@ -250,18 +256,16 @@ export function installPointerBehavior(
     const current = gesture;
     if (!current || event.pointerId !== current.id) return;
     gesture = undefined;
-    finishing = true;
     current.moved ||= Math.hypot(event.screenX-current.x,event.screenY-current.y)>=5;
     if (element.hasPointerCapture(current.id)) element.releasePointerCapture(current.id);
-    void current.chain.then(async () => {
+    if(current.moved||cancelled)cancel();else completeClick(event,current.chain);
+    dragTail = current.chain.then(async () => {
       if (current.moved && !cancelled) await drag.move();
-      if(current.moved||cancelled)cancel();
-      if (!current.moved && !cancelled) completeClick(event);
-    }).finally(() => drag.end()).finally(() => {finishing=false}).catch(() => {});
+    }).finally(() => drag.end()).catch(() => {});
   };
   element.addEventListener("pointerdown", (event) => {
-    if (gesture || finishing || event.button !== 0 || !hitTest(event.clientX, event.clientY)) return;
-    gesture = {id:event.pointerId,x:event.screenX,y:event.screenY,moved:false,queued:false,chain:drag.begin(event.clientX,event.clientY)};
+    if (gesture || event.button !== 0 || !hitTest(event.clientX, event.clientY)) return;
+    gesture = {id:event.pointerId,x:event.screenX,y:event.screenY,moved:false,queued:false,chain:dragTail.then(()=>drag.begin(event.clientX,event.clientY))};
     // Attach rejection handling immediately while retaining the rejected chain.
     void gesture.chain.catch(() => {});
     element.setPointerCapture(event.pointerId);

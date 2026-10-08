@@ -6,6 +6,17 @@ import type { ModelHitMask } from "../src/vendor-types.js";
 const mask: ModelHitMask = {width:4,height:2,left:10,top:20,displayWidth:80,displayHeight:40,viewportWidth:100,viewportHeight:100,bits:new Uint8Array([0b00100110])};
 
 describe("model-only pointer interaction", () => {
+  it("retains a fast second click while the first native drag-end is still pending",async()=>{
+    vi.useFakeTimers();const listeners=new Map<string,(event:PointerEvent)=>void>(),single=vi.fn(),double=vi.fn();let end:()=>void=()=>{};
+    const drag={begin:vi.fn(async()=>{}),move:async()=>{},end:vi.fn(()=>new Promise<void>(done=>{end=done}))};
+    const element={addEventListener:(name:string,fn:(event:PointerEvent)=>void)=>listeners.set(name,fn),setPointerCapture:()=>{},hasPointerCapture:()=>true,releasePointerCapture:()=>{}} as unknown as HTMLElement;
+    const cancel=installPointerBehavior(element,drag,single,()=>true,undefined,double),event={button:0,pointerId:1,clientX:35,clientY:25,screenX:35,screenY:25} as PointerEvent;
+    try{
+      listeners.get("pointerdown")!(event);listeners.get("pointerup")!(event);await vi.advanceTimersByTimeAsync(1);expect(drag.end).toHaveBeenCalledOnce();
+      listeners.get("pointerdown")!(event);listeners.get("pointerup")!(event);await vi.advanceTimersByTimeAsync(400);expect(single).not.toHaveBeenCalled();end();await vi.advanceTimersByTimeAsync(1);
+      expect(drag.begin).toHaveBeenCalledTimes(2);expect(double).toHaveBeenCalledOnce();expect(single).not.toHaveBeenCalled();end();await vi.advanceTimersByTimeAsync(400);expect(single).not.toHaveBeenCalled();
+    }finally{cancel();vi.useRealTimers()}
+  });
   it("separates double clicks from single interaction and cancels clicks after dragging",async()=>{
     vi.useFakeTimers();
     const listeners=new Map<string,(event:PointerEvent)=>void>(),single=vi.fn(),double=vi.fn();

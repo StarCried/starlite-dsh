@@ -1,7 +1,7 @@
 import {spawn} from "node:child_process";
 
 interface Services {get?(name:string):unknown}
-/** Authenticated URL and real session identity never leave the DSH process boundary. */
+/** DSH opens its own authenticated URL; the companion receives only an opaque reference. */
 export async function openDshSession(context:Services,key:unknown,openUrl=openLocalBrowser):Promise<void>{
   const session=record(key), web=record(context.get?.("webServer")), connection=record(context.get?.("connection"));
   if(typeof session?.id!=="string"||!session.id||session.id.length>256||Array.from(session.id).some(c=>c.charCodeAt(0)<32)

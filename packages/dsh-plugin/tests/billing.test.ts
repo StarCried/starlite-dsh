@@ -1,0 +1,121 @@
+import { describe, expect, it, vi } from "vitest";
+import { DeepSeekBilling, billingDate, foldDailyUsage, officialProfile, type BillingPersistence } from "../src/billing.js";
+
+const NOW = Date.parse("2026-10-08T08:00:00Z");
+const usage = {inputTokens: 1_000_000, outputTokens: 100_000, cacheReadTokens: 200_000, cacheWriteTokens: 0, totalTokens: 1_300_000, reasoningTokens: 50_000};
+const header = (provider = "deepseek", model = "deepseek-flash") => ({type: "request/header", data: {header: {config: {provider, model}}}});
+const message = (step = 1, sample: unknown = usage, time = NOW) => ({type: "assistant/message",time,
+  data: {turn: 1, step, usage: sample, message: {source: {provider: "deepseek", model: "deepseek-flash"}, content: [{type:"text", text:"PRIVATE output"}]}}});
+const balanceResponse = () => new Response(JSON.stringify({is_available: true, balance_infos: [{currency: "CNY", total_balance: "123.45", granted_balance: "0", topped_up_balance: "123.45"}]}), {headers:{"Content-Type":"application/json"}});
+function fixture(events: readonly unknown[] = [header(), message()], inherited = 0) {
+  let revision = 1;
+  const close = vi.fn(async () => {});
+  const read = vi.fn(async () => ({events}));
+  const persistence: BillingPersistence = {list: vi.fn(async () => [{header:{id:"PRIVATE id"}, revision, sizeBytes:1000}]),
+    open: vi.fn(async () => ({inheritedEventCount: inherited, read, close}))};
+  const settings = {get: vi.fn(() => ({providers:{deepseek:{apiKeyEnv:"DEEPSEEK_API_KEY"}}}))};
+  const credentials = {resolve:vi.fn(async () => ({value:"PRIVATE-key"})),readRecord:vi.fn(async () => undefined)};
+  const context = {get: (name: string) => ({settings,credentials,sessionPersistence:persistence} as Record<string,unknown>)[name]};
+  const request = vi.fn<typeof fetch>(async () => balanceResponse());
+  let now = NOW;
+  const source = new DeepSeekBilling(context, request, () => now);
+  return {source, context, request, credentials, settings, persistence, close, read,
+    next: () => {now += 6000;}, revise: () => {revision++;}};
+}
+
+describe("official DeepSeek billing", () => {
+  it("counts cache/output once, replacements once, retries and simultaneous sessions independently", async () => {
+    const events = [header(), message(), message(), {type:"llm/retry-started"}, message(), message(2)];
+    const fold = foldDailyUsage(events,0,"2026-10-08");
+    expect(fold.priced).toBe(3);
+    expect(fold.maximums[0]).toBeCloseTo(3 * (2 + .8 + .008));
+    const f = fixture(events);
+    vi.mocked(f.persistence.list).mockResolvedValue([
+      {header:{id:"PRIVATE first"},revision:1}, {header:{id:"PRIVATE second"},revision:1},
+    ]);
+    const result = await f.source.read();
+    expect(result.today.pricedRequests).toBe(6);
+    expect(result.today.estimates[0]?.minimum).toBeCloseTo(3 * 2.808);
+    expect(JSON.stringify(result)).not.toContain("PRIVATE");
+    expect(f.close).toHaveBeenCalledTimes(2);
+    expect(f.persistence.open).toHaveBeenCalledWith("PRIVATE first","read",expect.any(Object));
+    f.source.close();
+  });
+  it("excludes fork-inherited usage and previous dates, and keeps unpriced attempts explicit", () => {
+    const events = [header(), message(), message(2), message(3,usage,NOW-86400000),
+      {type:"assistant/attempt",time:NOW,data:{turn:1,step:4,stream:[{chunk:{type:"usage",usage}}]}},
+      {type:"assistant/attempt",time:NOW,data:{turn:1,step:5,stream:[]}},
+      message(6,{...usage,cacheReadTokens:undefined}), message(7,{...usage,totalTokens:1}),
+      {...message(8),data:{...message(8).data,message:{source:{provider:"deepseek",model:"unknown"}}}},
+      header("other","other"), {type:"assistant/attempt",time:NOW,data:{turn:1,step:9,stream:[]}},
+    ];
+    const result = foldDailyUsage(events,2,"2026-10-08");
+    expect(result.priced).toBe(2);
+    expect(result.unpriced).toBe(4);
+    expect(billingDate(Date.parse("2026-10-07T16:00:00Z"))).toBe("2026-10-08");
+  });
+  it("rebuilds today from existing stored records after restarting and caches only numeric folds", async () => {
+    const f = fixture();
+    const [a,b] = await Promise.all([f.source.read(),f.source.read()]);
+    expect(a).toEqual(b); expect(f.request).toHaveBeenCalledTimes(1); expect(f.read).toHaveBeenCalledTimes(1);
+    f.next(); await f.source.read(); expect(f.read).toHaveBeenCalledTimes(1);
+    f.revise(); f.source.invalidate(); await f.source.read(); expect(f.read).toHaveBeenCalledTimes(2);
+    f.source.close();
+    const restarted = new DeepSeekBilling(f.context,f.request,()=>NOW);
+    expect((await restarted.read()).today.pricedRequests).toBe(1); restarted.close();
+  });
+  it("resolves keys only on demand and keeps credential changes, errors and redirects out of the wire", async () => {
+    const f = fixture();
+    expect(f.credentials.resolve).not.toHaveBeenCalled();
+    await f.source.read();
+    expect(f.request).toHaveBeenCalledWith("https://api.deepseek.com/user/balance",expect.objectContaining({method:"GET",redirect:"error",headers:{Authorization:"Bearer PRIVATE-key"}}));
+    f.credentials.resolve.mockResolvedValue({value:"changed-key"}); f.source.invalidate(true);
+    f.request.mockRejectedValue(new Error("PRIVATE response"));
+    const result = await f.source.read();
+    expect(result.balance).toEqual({status:"unavailable",balances:[]});
+    expect(result.today.pricedRequests).toBe(1);
+    expect(JSON.stringify(result)).not.toContain("PRIVATE"); f.source.close();
+  });
+  it("rejects gateway, credential override and model endpoint substitutions before resolving a key", async () => {
+    for (const profile of [null,{baseURL:"http://api.deepseek.com"},{baseURL:"https://api.deepseek.com.evil.invalid"},
+      {baseURL:"https://api.deepseek.com/?key=x"},{models:[{id:"deepseek-flash",baseURL:"https://gateway.invalid"}]},
+      {headers:{Authorization:"PRIVATE"}},
+    ]) expect(officialProfile(profile)).toBe(false);
+    expect(officialProfile({})).toBe(true); expect(officialProfile({baseURL:"https://api.deepseek.com/v1"})).toBe(true);
+    const f = fixture(); f.settings.get.mockReturnValue({providers:{deepseek:{baseURL:"https://gateway.invalid"}}} as never);
+    expect((await f.source.read()).balance.status).toBe("unconfigured");
+    expect(f.credentials.resolve).not.toHaveBeenCalled(); expect(f.request).not.toHaveBeenCalled(); f.source.close();
+  });
+  it("marks unreadable or excessive history partial and always closes the read handle", async () => {
+    const f = fixture(); f.read.mockRejectedValueOnce(new Error("PRIVATE path"));
+    const result = await f.source.read(); expect(result.today.partial).toBe(true); expect(f.close).toHaveBeenCalledOnce();
+    f.next(); vi.mocked(f.persistence.list).mockResolvedValue([{header:{id:"private"},revision:2,sizeBytes:20*1024*1024}]);
+    expect((await f.source.read()).today.partial).toBe(true); expect(f.read).toHaveBeenCalledOnce(); f.source.close();
+  });
+  it("does not invent balance or allow unbounded response data", async () => {
+    const f = fixture();
+    for (const body of [JSON.stringify({is_available:true,balance_infos:[{currency:"CNY",total_balance:"-1"}]}),"x".repeat(20000)]) {
+      f.request.mockResolvedValueOnce(new Response(body,{headers:{"Content-Type":"application/json"}})); f.source.invalidate(true);
+      expect((await f.source.read()).balance.status).toBe("unavailable");
+    }
+    f.source.close(); await expect(f.source.read()).rejects.toThrow("unavailable");
+  });
+  it("honors timeout cancellation and recovers without caching an aborted query", async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    try {
+      f.request.mockImplementationOnce(async (_url: unknown, options?: RequestInit) => new Promise<Response>((_resolve,reject) => {
+        options?.signal?.addEventListener("abort",()=>reject(new Error("PRIVATE timeout")),{once:true});
+      }));
+      const timed = expect(f.source.read()).rejects.toThrow("billing unavailable");
+      await vi.advanceTimersByTimeAsync(8000); await timed;
+      expect((await f.source.read()).balance.status).toBe("ready");
+    } finally {f.source.close(); vi.useRealTimers();}
+  });
+  it("does not reuse yesterday's fold and never prices unknown model property names", () => {
+    const midnight = Date.parse("2026-10-08T16:00:00Z");
+    expect(foldDailyUsage([header(),message(1,usage,midnight)],0,"2026-10-08").priced).toBe(0);
+    expect(foldDailyUsage([header(),message(1,usage,midnight)],0,"2026-10-09").priced).toBe(1);
+    expect(foldDailyUsage([{...message(),data:{...message().data,message:{source:{provider:"deepseek",model:"__proto__"}}}}],0,"2026-10-08").unpriced).toBe(1);
+  });
+});

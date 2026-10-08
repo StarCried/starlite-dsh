@@ -1,6 +1,7 @@
 export const name = "dsh-inochi2d-pet";
 
 interface PluginContext {
+  get?(name: string): unknown;
   on(event: string, listener: (...arguments_: unknown[]) => void): unknown;
   logger?: {
     warn?(message: string): void;

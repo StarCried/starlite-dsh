@@ -12,6 +12,31 @@ across the WSL boundary.
 
 See the repository README for installation and compatibility details.
 
+Click the model to query the official DeepSeek account balance and today's DSH
+cost estimate. This uses the existing `llm-pi-ai.providers.deepseek` route and
+DSH's credential service; no API key is copied to Windows. Custom gateways or
+model-level endpoint/authentication overrides are refused. Requests only query
+`GET https://api.deepseek.com/user/balance`, on demand (balance cache: 60 seconds).
+No paid model request is made by this feature or its tests.
+
+Today's estimate reads the profile's existing session records through read-only
+persistence handles, including records from before a restart. It excludes
+fork-inherited events, replaces repeated settlements of the same attempt, and
+counts retries separately. No extra history or financial ledger is saved. Dates
+use Asia/Shanghai. Only official Flash/V4 Pro model IDs listed in the pricing
+table are priced; missing usage, unknown models and incomplete reads are shown
+explicitly. Reasoning tokens are already included in output tokens.
+
+Prices were verified on 2026-10-08 against the official
+[CNY](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) and
+[USD](https://api-docs.deepseek.com/quick_start/pricing/) tables. The displayed
+range covers off-peak/peak prices, rather than guessing provider billing time or
+holidays. It is a DSH-only estimate, not the account's official daily bill;
+unfinished requests and other apps are not included. Review the table before
+each release. Scans are bounded to 512 sessions, 16 MiB per session and 100,000
+events per session; hitting a limit reports a partial estimate. Unsupported
+credential/persistence services affect only the fee query, never DSH startup.
+
 No prebuilt companion or npm package is published yet. For the current BYOM
 source preview, build and install the Windows companion and packed bundle using
 the repository development guide. After a prebuilt alpha is published, install

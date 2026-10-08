@@ -3,9 +3,11 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
   MAX_WIRE_BYTES,
   parsePetSnapshot,
+  parseBillingSnapshot,
   type PetSnapshot,
   type PetStateSource,
 } from "@dsh-inochi2d-pet/protocol";
+import type { BillingSource } from "./billing.js";
 
 const HEARTBEAT_MS = 15_000;
 const MAX_CLIENTS = 2;
@@ -35,7 +37,7 @@ export interface StatusServer {
   close(): Promise<void>;
 }
 
-export async function startStatusServer(source: PetStateSource): Promise<StatusServer> {
+export async function startStatusServer(source: PetStateSource, options: {billing?: BillingSource} = {}): Promise<StatusServer> {
   const token = randomBytes(32).toString("base64url");
   const clients = new Set<ServerResponse>();
   let latest: PetSnapshot | undefined;
@@ -68,6 +70,19 @@ export async function startStatusServer(source: PetStateSource): Promise<StatusS
         ...(origin ? corsHeaders(origin) : {}),
       });
       response.end();
+      return;
+    }
+    if (path === "/v1/billing" && options.billing) {
+      void options.billing.read().then(snapshot => {
+        const json = JSON.stringify(parseBillingSnapshot(snapshot));
+        if (Buffer.byteLength(json, "utf8") > MAX_WIRE_BYTES) throw new Error("billing response too large");
+        if (closed || response.destroyed) return;
+        response.writeHead(200, {
+          "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8",
+          "X-Content-Type-Options": "nosniff", ...(origin ? corsHeaders(origin) : {}),
+        });
+        response.end(json);
+      }).catch(() => {if (!response.destroyed && !response.headersSent) reject(response, 503);});
       return;
     }
     if (path !== "/v1/events") {
@@ -133,6 +148,7 @@ export async function startStatusServer(source: PetStateSource): Promise<StatusS
     async close() {
       if (closed) return;
       closed = true;
+      options.billing?.close();
       await shutdown(server, clients, source, heartbeat);
     },
   };

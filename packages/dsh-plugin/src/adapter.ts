@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { DshStateAggregator, type AgentRunStatus, type DshEventLike } from "./aggregator.js";
 import { isWslEnvironment, launchWindowsPet } from "./launcher.js";
 import { startStatusServer, type StatusServer } from "./server.js";
+import { DeepSeekBilling, type BillingContext } from "./billing.js";
 
 type Listener = (...arguments_: unknown[]) => unknown;
 type Disposer = () => void | Promise<void>;
@@ -11,7 +12,7 @@ interface LoggerLike {
   warn?(message: string): void;
 }
 
-export interface CordisContextLike {
+export interface CordisContextLike extends BillingContext {
   on(event: string, listener: Listener): unknown;
   logger?: LoggerLike;
 }
@@ -34,7 +35,8 @@ export async function startDshAdapter(
   }
 
   const aggregator = new DshStateAggregator();
-  const server = await (dependencies.startServer ?? startStatusServer)(aggregator);
+  const billing = new DeepSeekBilling(context);
+  const server = await (dependencies.startServer ?? startStatusServer)(aggregator, {billing});
   const disposers: Disposer[] = [];
   let approvalSequence = 0;
 
@@ -62,6 +64,7 @@ export async function startDshAdapter(
       const event = asRecord(arguments_[1]);
       if (session && typeof event?.type === "string") {
         aggregator.handleSessionEvent(subjectKey(session), event as unknown as DshEventLike);
+        if (event.type === "assistant/message" || event.type === "assistant/attempt") billing.invalidate();
       }
     });
     subscribeRequired(context, disposers, "approval/request", async (...arguments_) => {
@@ -87,6 +90,9 @@ export async function startDshAdapter(
       const payload = asRecord(arguments_[0]);
       if (payload?.agent) aggregator.disposeSession(subjectKey(payload.agent));
     });
+    for (const event of ["settings/updated", "credentials/reference-updated", "credentials/record-updated"]) {
+      subscribeOptional(context, disposers, event, () => billing.invalidate(true));
+    }
   } catch (error) {
     await closeAdapter(disposers, server);
     throw error;
@@ -107,6 +113,7 @@ export async function startDshAdapter(
   return async () => {
     if (closed) return;
     closed = true;
+    billing.close();
     await closeAdapter(disposers, server);
   };
 }

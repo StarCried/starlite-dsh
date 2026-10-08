@@ -13,7 +13,7 @@ const catalog = [{name:"Idle",durationMs:1000}];
 const initial:DesktopSettings={schemaVersion:3,preferences};
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 const choose=(path:string)=>{open.mockResolvedValueOnce(path);document.getElementById("choose-model")!.click();return tick()};
-beforeEach(()=>{vi.clearAllMocks();vi.stubGlobal("Option",function(text:string,value:string){const option=document.createElement("option");option.textContent=text;option.value=value;return option});document.body.innerHTML=readFileSync("apps/desktop/index.html","utf8").replace(/<script[\s\S]*?<\/script>/gu, "");invoke.mockResolvedValue(initial)});
+beforeEach(()=>{vi.clearAllMocks();vi.stubGlobal("Option",function(text:string,value:string){const option=document.createElement("option");option.textContent=text;option.value=value;return option});document.body.innerHTML=readFileSync(new URL("../index.html",import.meta.url),"utf8").replace(/<script[\s\S]*?<\/script>/gu, "");invoke.mockResolvedValue(initial)});
 it("keeps backend payloads separate and maps every local VRM asset",()=>{
  const settings:DesktopSettings={...initial,model:{backend:"vrm",modelPath:"m.vrm",sourceSha256:"hash",mappings,animations:catalog,vrm:{animations:[{name:"Idle",path:"a.vrma"}],profilePath:"p.json"}}};
  expect(modelConfig(settings)).toMatchObject({backend:"vrm",model:"asset:m.vrm",animations:[{name:"Idle",url:"asset:a.vrma"}],profile:"asset:p.json",ambient:{animations:["Idle"]},camera:{pitchDegrees:5,targetHeight:.54},gaze:{maxYawDegrees:25,maxPitchDegrees:15}});

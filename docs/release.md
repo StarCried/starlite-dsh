@@ -15,6 +15,12 @@
 4. npm tarball 和未签名 NSIS 安装包已经生成；安装、升级、卸载和 SmartScreen 路径经过人工检查。
 5. 工作树干净，版本号在 workspace、npm bundle、Cargo 和 Tauri 配置中一致。
 
+安装包必须使用当前产品名、版本号和 x64 文件名；旧版本或旧产品名的安装包
+不能代替它。检查比较前端与原生源代码、协议、锁文件、权限、图标、模型资源
+及全部运行时文件的修改时间，任何输入比安装包新都要求重新构建。这是防止
+明显过期产物的必要检查，不证明内容可复现，也不替代安装、升级和卸载验收。
+桌面与协议包的版本号也必须与 workspace 一致。
+
 演示资源的映射必须使用当前状态集合：明确指定 Idle，其余工作状态明确
 指定动作或禁用；Thinking 已合并到 Working，不能重新写入演示配置。
 Click / Ambient 支持最多 20 个不同动作的随机池。准备与发布门使用同一校验。
@@ -23,9 +29,7 @@ Click / Ambient 支持最多 20 个不同动作的随机池。准备与发布门
 
 ```powershell
 pnpm check:release
-pnpm release:metadata -- \
-  packages/dsh-plugin/.pack/dsh-inochi2d-pet-0.1.0-alpha.0.tgz \
-  "apps/desktop/src-tauri/target/release/bundle/nsis/DSH Companion_0.1.0-alpha.0_x64-setup.exe"
+pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-inochi2d-pet-0.1.0-alpha.0.tgz "apps/desktop/src-tauri/target/release/bundle/nsis/DSH Companion_0.1.0-alpha.0_x64-setup.exe"
 ```
 
 第二条命令在 `release-output` 生成 `SHA256SUMS`、CycloneDX SBOM 和完整第三方许可证汇编。Release 必须一起上传这些文件。

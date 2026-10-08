@@ -1,14 +1,17 @@
 import { execFileSync } from "node:child_process";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validDemoMappings } from "./release-mappings.mjs";
+import { checkReleaseInstaller } from "./release-installer.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const failures = [];
 import { RUNTIMES, assertRuntime } from "./model-runtime.mjs";
 const versionFiles = [
   ["workspace", "package.json", "version"],
+  ["desktop", "apps/desktop/package.json", "version"],
+  ["protocol", "packages/protocol/package.json", "version"],
   ["npm bundle", "packages/dsh-plugin/package.json", "version"],
   ["Tauri", "apps/desktop/src-tauri/tauri.conf.json", "version"],
 ];
@@ -84,25 +87,11 @@ for (const name of ["model.inp", "defaults.json", "ASSET_LICENSE.md"]) {
 
 const version = versions[0]?.[1] ?? "unknown";
 await requiredFile(`packages/dsh-plugin/.pack/dsh-inochi2d-pet-${version}.tgz`, 1);
-const nsisDirectory = resolve(root, "apps/desktop/src-tauri/target/release/bundle/nsis");
-const installerNames = await readdir(nsisDirectory).catch(() => []);
-const installerName = installerNames.find((name) => name.toLowerCase().endsWith("-setup.exe"));
-if (!installerName) {
-  failures.push("the unsigned NSIS release installer has not been built");
+const tauriConfig = await jsonFile("apps/desktop/src-tauri/tauri.conf.json");
+if (typeof tauriConfig?.productName !== "string" || !tauriConfig.productName) {
+  failures.push("Tauri product name is missing");
 } else {
-  const installer = await stat(resolve(nsisDirectory, installerName));
-  const inputs = [
-    ...RUNTIMES.map(name => `apps/desktop/public/runtime/${name}/runtime-provenance.json`),
-    "apps/desktop/src-tauri/resources/microlight/model.inp",
-    "apps/desktop/src-tauri/resources/microlight/defaults.json",
-    "apps/desktop/src-tauri/resources/microlight/ASSET_LICENSE.md",
-  ];
-  for (const input of inputs) {
-    const inputInfo = await stat(resolve(root, input)).catch(() => undefined);
-    if (inputInfo && inputInfo.mtimeMs > installer.mtimeMs) {
-      failures.push(`the NSIS installer is older than release input: ${input}`);
-    }
-  }
+  failures.push(...await checkReleaseInstaller(root, tauriConfig.productName, version));
 }
 
 try {

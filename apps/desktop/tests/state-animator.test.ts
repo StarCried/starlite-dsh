@@ -124,13 +124,27 @@ describe("StateAnimator", () => {
     expect(playAnimation).toHaveBeenCalledTimes(2);
   });
 
-  it("finishes the current state before playing the latest queued state",async()=>{
+  it.each(["blocked", "error", "approval", "completed"] as const)("immediately replaces work with %s and ignores the obsolete completion",async(state)=>{
+    const {animator,playAnimation,pending}=harness({...mappings,blocked:"Blocked",error:"Error"});
+    animator.apply(snapshot("working",0));animator.apply(snapshot(state,1));
+    const name={blocked:"Blocked",error:"Error",approval:"Approval",completed:"Completed"}[state];
+    expect(playAnimation).toHaveBeenCalledTimes(2);
+    expect(playAnimation).toHaveBeenLastCalledWith(name,{mode:"once",restart:true});
+    pending[0]?.("completed");await Promise.resolve();await Promise.resolve();
+    expect(playAnimation).toHaveBeenCalledTimes(2);
+    pending[1]?.("completed");await Promise.resolve();await Promise.resolve();
+    expect(playAnimation).toHaveBeenLastCalledWith("Idle",{mode:"loop",restart:false});
+  });
+
+  it("keeps rapid state changes current when obsolete completions arrive out of order",async()=>{
     const {animator,playAnimation,pending}=harness();
     animator.apply(snapshot("working",0));animator.apply(snapshot("completed",1));animator.apply(snapshot("approval",2));
-    expect(playAnimation).toHaveBeenCalledOnce();pending[0]?.("completed");
+    expect(playAnimation.mock.calls.map(call=>call[0])).toEqual(["Working","Completed","Approval"]);
+    pending[1]?.("completed");pending[0]?.("completed");
     await Promise.resolve();await Promise.resolve();
+    expect(playAnimation).toHaveBeenCalledTimes(3);
     expect(playAnimation).toHaveBeenLastCalledWith("Approval",{mode:"once",restart:true});
-    pending[1]?.("completed");await Promise.resolve();await Promise.resolve();
+    pending[2]?.("completed");await Promise.resolve();await Promise.resolve();
     expect(playAnimation).toHaveBeenLastCalledWith("Idle",{mode:"loop",restart:false});
   });
 

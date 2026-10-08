@@ -45,9 +45,9 @@ export class StateAnimator {
       if (!this.#foreground) this.#playIdle();
       return;
     }
-    // Work preempts Click/ambient. State-to-state changes keep only the latest
-    // requested state and wait for the current state gesture to finish.
-    if (this.#foreground !== "state") void this.#playOnce(animation, "state", state);
+    // A changed state is immediately relevant, especially approval, failure
+    // and blocked notifications. Do not queue it behind an obsolete gesture.
+    void this.#playOnce(animation, "state");
   }
 
   async click(): Promise<void> {
@@ -60,7 +60,7 @@ export class StateAnimator {
     await this.#playOnce(pool[Math.floor(Math.random() * pool.length)]!, "gesture");
   }
 
-  async #playOnce(animation: string, kind: "state" | "gesture", state?: VisualState): Promise<void> {
+  async #playOnce(animation: string, kind: "state" | "gesture"): Promise<void> {
     this.#clearAmbient();
     const generation = ++this.#generation;
     this.#foreground = kind;
@@ -70,10 +70,6 @@ export class StateAnimator {
     if (generation !== this.#generation) return;
     this.#foreground = undefined;
     if (result !== "completed") return;
-    if (kind === "state" && this.#state && this.#state !== state && this.#state !== "idle") {
-      const next = this.#mappings[this.#state];
-      if (next) { void this.#playOnce(next, "state", this.#state); return; }
-    }
     this.#playIdle();
   }
 

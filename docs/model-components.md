@@ -60,8 +60,10 @@ cancellation slot; old requests and late controllers cannot replace a new model.
 
 Only the explicitly selected Idle animation loops. Working (including Thinking),
 Blocked, Approval, Completed and Error play once and return to that Idle. An Idle
-snapshot cannot truncate an unfinished gesture. While a state gesture plays,
-later state changes retain only the latest request; it plays after completion.
+snapshot cannot truncate an unfinished gesture. A different non-idle state
+immediately replaces the previous gesture; approval, blocked and outcome
+notifications never wait behind an obsolete work animation. Late completions
+from replaced gestures cannot restore Idle or overwrite the current state.
 Click and occasional idle gestures have lower priority: work states interrupt
 them, and clicks cannot interrupt work, entry or another response. Logical busy
 states continue blocking clicks even after their gesture has returned to Idle.

@@ -28,7 +28,7 @@ export function parseBillingSnapshot(value: unknown): BillingSnapshot {
     || !date(today.date) || !date(today.pricingDate)
     || !count(today.pricedRequests) || !count(today.unpricedRequests)) throw new Error("invalid billing summary");
   const balances = currencies(balance.balances).map(entry => {
-    if (!amount(entry.remaining)) throw new Error("invalid balance");
+    if (!signedAmount(entry.remaining)) throw new Error("invalid balance");
     return {currency: entry.currency as BillingCurrency, remaining: entry.remaining as number};
   });
   if ((balance.status === "ready") !== (balances.length > 0)) throw new Error("invalid balance status");
@@ -59,6 +59,7 @@ function currencies(value: unknown): Record<string, unknown>[] {
   return entries;
 }
 function amount(value: unknown): boolean { return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1_000_000_000; }
+function signedAmount(value: unknown): boolean { return typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= 1_000_000_000; }
 function count(value: unknown): boolean { return Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= 1_000_000; }
 function timestamp(value: unknown): boolean { return Number.isSafeInteger(value) && (value as number) >= 0; }
 function date(value: unknown): boolean {

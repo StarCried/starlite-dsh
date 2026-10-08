@@ -12,6 +12,7 @@ describe("billing boundary", () => {
     const parsed = parseBillingSnapshot({...valid, secret: "PRIVATE", balance: {...valid.balance, key: "PRIVATE"}});
     expect(parsed).toEqual(valid);
     expect(JSON.stringify(parsed)).not.toContain("PRIVATE");
+    expect(parseBillingSnapshot({...valid,balance:{status:"ready",balances:[{currency:"CNY",remaining:-.25}]}}).balance.balances[0]?.remaining).toBe(-.25);
   });
   it("rejects malformed, duplicate, excessive and misleading financial fields", () => {
     for (const value of [null, {...valid,billingVersion:2}, {...valid,checkedAt:NaN},

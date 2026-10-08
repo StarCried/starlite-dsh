@@ -67,6 +67,11 @@ dsh --profile web
 桌面气泡最多显示两行，多余的可见内容由省略号收起，避免长回答遮住模型。
 思考内容使用浅灰色；首次切换到回答时渐显，尊重系统的减少动态效果设置。
 
+费用气泡使用独立的认证只读接口，不修改状态 SSE。点击查询官方 DeepSeek
+余额，以及当前 DSH profile 的北京时间当日用量估算；工作中点击不会启动
+点击动作。估算范围、缺失记录、支持的模型和已核实价格见插件 README。
+测试注入余额与持久化服务的固定数据，不调用模型或余额网络 API。
+
 VRM 的内嵌贴图通过本地 Blob 解码。桌宠 CSP 的 `img-src` 和 `connect-src`
 均需允许 `blob:`，否则 Three.js 的图片解码会被 WebView2 拦截，模型加载失败。
 
@@ -100,6 +105,10 @@ dsh --profile inochi2d-test --dump-config
 ```
 
 契约检查验证当前适配器依赖的实际事件签名和事件形状。每日 CI 跟踪 `@latest`，相关插件、协议或检查脚本推送到 `main` 时也会立即验证；失败表示需要人工审查 DSH 变更，不能通过猜测旧事件语义来兼容。
+
+发布检查还核对费用功能使用的 settings/credentials/sessionPersistence
+公开只读契约。旧 DSH 缺少这些可选服务时，运行中的状态桥接继续工作，
+费用显示不可用；不能据此把完整费用功能标记为该版本已验收。
 
 DSH `0.1.5-rc.1` 的实时文本使用 `agent/assistant-stream`，嵌套工具使用
 `tool/ptc-dispatch-start` / `tool/ptc-dispatch`。适配器同时保留已验证的

@@ -77,6 +77,30 @@ if (missing.length > 0) {
 
 console.log(`DSH ${String(packageJson.version)} exposes every required desktop-pet contract.`);
 
+// Fees are optional at runtime, but a release advertising them must verify
+// the public read/credential seams and durable usage vocabulary as well.
+const [settings, credentials, persistence, handle] = await Promise.all([
+  source("dsh-settings/lib/types/index.d.ts"),
+  source("dsh-credentials/lib/types/index.d.ts"),
+  source("dsh-session-persistence/lib/types/index.d.ts"),
+  source("dsh-session-persistence/lib/types/handle.d.ts"),
+]);
+const billingRequirements = [
+  ["settings resolved read", settings, /get<const Namespace extends string>\([^\n]+\): unknown;/u],
+  ["credential reference read", credentials, /abstract resolve\(ref: CredentialRef\): Promise<ResolvedCredential \| undefined>;/u],
+  ["credential record read", credentials, /abstract readRecord\(key: CredentialKey\): Promise<CredentialRecord \| undefined>;/u],
+  ["stored session list", persistence, /abstract list\(options\?: SessionPersistenceListOptions\): Promise<readonly SessionPersistenceSnapshot\[\]>;/u],
+  ["read-only session open", persistence, /abstract open\(id: SessionId, access: SessionAccess,/u],
+  ["inherited event boundary", handle, /readonly inheritedEventCount: SessionLogOffset;/u],
+  ["bounded event read", handle, /read\(offset\?: number, length\?: number, options\?: SessionHandleReadOptions\): Promise<SessionHandleReadResult>;/u],
+  ["durable event timestamp", sessionTypes, /time: number;/u],
+  ["attempt settlement", sessionTypes, /'assistant\/attempt':\s*\{/u],
+  ["usage sample", llmTypes, /interface TokenUsage\s*\{[\s\S]{0,100}inputTokens: number;\s*outputTokens: number;/u],
+];
+const billingMissing = billingRequirements.filter(([, contents, pattern]) => !pattern.test(contents)).map(([label]) => label);
+if (billingMissing.length) throw new Error(`DSH billing contract changed; review before release:\n- ${billingMissing.join("\n- ")}`);
+console.log(`DSH ${String(packageJson.version)} exposes the read-only billing contracts.`);
+
 async function source(relativePath) {
   for (const root of dependencyRoots) {
     const path = resolve(root, relativePath);

@@ -15,6 +15,7 @@ import { StatusConnection } from "./connection.js";
 import { createModelSlot, mountModel } from "./renderer.js";
 import { StateAnimator } from "./state-animator.js";
 import { InteractionMaskBridge } from "./interaction-mask.js";
+import { BillingBubble } from "./billing-bubble.js";
 
 const OFFLINE_EXIT_MS = 60_000;
 const FIXED_BUBBLES: Partial<Record<PetState, string>> = {
@@ -40,6 +41,19 @@ export async function startPet(): Promise<void> {
   let offlineTimer: ReturnType<typeof setTimeout> | undefined;
   let pausedByTray = false;
   let connected = false;
+  let connection: StatusConnection | undefined;
+  const fees = new BillingBubble({
+    read: async () => {
+      if (!connection) throw new Error("billing disconnected");
+      return connection.readBilling();
+    },
+    allowed: () => connected && !settings.preferences.privacyMode,
+    render: text => renderPlainBubble(bubble, text, "billing"),
+    restore: () => {
+      if (latestSnapshot) renderBubble(bubble, latestSnapshot, settings.preferences.privacyMode);
+      else bubble.hidden = true;
+    },
+  });
   const interaction = new InteractionMaskBridge(
     mask => invoke("set_model_hit_mask", {mask}),
     () => { void window.hide(); void invoke("open_settings"); },
@@ -65,6 +79,7 @@ export async function startPet(): Promise<void> {
 
   const beginOfflineCountdown = () => {
     connected = false;
+    fees.cancel();
     animator?.disconnected();
     void invoke("set_connection_state", { connected: false });
     bubble.hidden = true;
@@ -101,14 +116,15 @@ export async function startPet(): Promise<void> {
       empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-  globalThis.addEventListener("pagehide", () => { ++mountGeneration; stopMovement(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { ++mountGeneration; stopMovement(); fees.cancel(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); }, {once:true});
   await remount();
 
-  const connection = new StatusConnection({
+  connection = new StatusConnection({
     onSnapshot(snapshot) {
       latestSnapshot = snapshot;
       animator?.apply(snapshot);
-      renderBubble(bubble, snapshot, settings.preferences.privacyMode);
+      fees.stateChanged(snapshot.state);
+      if (!fees.visible) renderBubble(bubble, snapshot, settings.preferences.privacyMode);
     },
     onConnected() {
       connected = true;
@@ -127,7 +143,8 @@ export async function startPet(): Promise<void> {
     if (!urls) return;
     for (const url of urls) {
       try {
-        connection.connect(url);
+        connection?.connect(url);
+        fees.cancel();
         // A valid deep link represents a DSH instance that should be reachable.
         // Start the fail-closed lifetime here so an initial connection failure
         // cannot leave an invisible tray process running forever.
@@ -143,6 +160,7 @@ export async function startPet(): Promise<void> {
 
   await listen<DesktopSettings>("settings-changed", ({ payload }) => {
     settings = payload;
+    fees.cancel();
     if (latestSnapshot) renderBubble(bubble, latestSnapshot, settings.preferences.privacyMode);
     void remount()
       .then(() => {
@@ -165,7 +183,7 @@ export async function startPet(): Promise<void> {
     begin: (x, y) => invoke("begin_model_drag", {x,y}),
     move: () => invoke("move_model_drag"),
     end: () => invoke("end_model_drag"),
-  }, () => animator?.click(), (x, y) => interaction.hitTest(x, y), () => { void invoke("open_settings"); });
+  }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), () => { void invoke("open_settings"); });
   await keepWindowVisible(window);
 }
 
@@ -181,6 +199,10 @@ export function renderBubble(
     delete element.dataset.bubbleKind;
     return;
   }
+  renderPlainBubble(element, text, privacyMode ? "notice" : snapshot.bubble?.kind ?? "notice");
+}
+
+function renderPlainBubble(element: HTMLOutputElement, text: string, kind: string): void {
   let content = element.querySelector<HTMLSpanElement>(".bubble-content");
   if (!content) {
     content = document.createElement("span");
@@ -188,7 +210,7 @@ export function renderBubble(
     element.replaceChildren(content);
   }
   content.textContent = text;
-  element.dataset.bubbleKind = privacyMode ? "notice" : snapshot.bubble?.kind ?? "notice";
+  element.dataset.bubbleKind = kind;
   element.hidden = false;
 }
 

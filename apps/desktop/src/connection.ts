@@ -2,6 +2,8 @@ import {
   MAX_WIRE_BYTES,
   parsePetConnectionUrl,
   parsePetSnapshotJson,
+  parseBillingSnapshot,
+  type BillingSnapshot,
   type PetConnectionDescriptor,
   type PetSnapshot,
 } from "@dsh-inochi2d-pet/protocol";
@@ -33,6 +35,7 @@ export class StatusConnection {
   readonly #timers: ConnectionTimers;
   #descriptor: PetConnectionDescriptor | undefined;
   #abort: AbortController | undefined;
+  readonly #billingRequests = new Set<AbortController>();
   #run = 0;
   #lastSequence = -1;
 
@@ -60,6 +63,35 @@ export class StatusConnection {
     this.#abort?.abort();
     this.#abort = undefined;
     this.#descriptor = undefined;
+    for (const abort of this.#billingRequests) abort.abort();
+    this.#billingRequests.clear();
+  }
+
+  async readBilling(): Promise<BillingSnapshot> {
+    const descriptor = this.#descriptor;
+    if (!descriptor) throw new Error("billing disconnected");
+    const abort = new AbortController(); this.#billingRequests.add(abort);
+    const timer = this.#timers.setTimeout(() => abort.abort(), 10_000);
+    const request = this.#fetch;
+    try {
+      const response = await request(`http://127.0.0.1:${descriptor.port}/v1/billing`, {
+        cache: "no-store", headers: {Authorization: `Bearer ${descriptor.token}`}, signal: abort.signal,
+      });
+      if (!response.ok || !response.body || !response.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+        await response.body?.cancel(); throw new Error("billing unavailable");
+      }
+      const reader = response.body.getReader(); const decoder = new TextDecoder(); let json = ""; let bytes = 0;
+      try {
+        while (true) {
+          const {done,value} = await reader.read(); if (done) break;
+          bytes += value.byteLength; if (bytes > MAX_WIRE_BYTES) throw new Error("billing too large");
+          json += decoder.decode(value,{stream:true});
+        }
+        json += decoder.decode();
+      } finally {await reader.cancel().catch(() => undefined);}
+      if (descriptor !== this.#descriptor || abort.signal.aborted) throw new Error("billing disconnected");
+      return parseBillingSnapshot(JSON.parse(json));
+    } finally {this.#timers.clearTimeout(timer); this.#billingRequests.delete(abort);}
   }
 
   async #connectionLoop(descriptor: PetConnectionDescriptor, run: number): Promise<void> {

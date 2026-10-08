@@ -72,6 +72,7 @@ body {
 
 #bubble[data-bubble-kind="reasoning"] { color: #838995; }
 #bubble[data-bubble-kind="response"] .bubble-content { animation: bubble-reveal 180ms ease-out; }
+#bubble[data-bubble-kind="billing"] .bubble-content { -webkit-line-clamp: 4; animation: bubble-reveal 180ms ease-out; }
 @keyframes bubble-reveal { from { opacity: 0.35; } to { opacity: 1; } }
 
 #bubble::after {

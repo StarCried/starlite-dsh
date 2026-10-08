@@ -14,7 +14,7 @@ export function renderPlainBubble(element:HTMLElement,text:string,kind:string,ti
 }
 export function renderBubble(element:HTMLElement,snapshot:PetSnapshot,privacy:boolean,mode:DesktopPreferences["bubbleMode"]="compact"):void{
   if(snapshot.state==="idle"){element.hidden=true;element.replaceChildren();delete element.dataset.bubbleKind;delete element.dataset.interactive;return;}
-  const activity=snapshot.activity?ACTIVITIES[snapshot.activity]:STATE_ACTIVITY[snapshot.state];
+  const activity=snapshot.activity==="waiting"&&!snapshot.inputRequest?STATE_ACTIVITY.approval:snapshot.activity?ACTIVITIES[snapshot.activity]:STATE_ACTIVITY[snapshot.state];
   const text=privacy||mode==="compact"?activity:snapshot.bubble?.text??activity;
   renderPlainBubble(element,text,privacy||mode==="compact"?"notice":snapshot.bubble?.kind??"notice",privacy?"DSH":snapshot.session?.title??"DSH 会话");
   element.dataset.bubbleMode=privacy?"compact":mode;

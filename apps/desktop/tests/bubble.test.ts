@@ -54,4 +54,7 @@ describe("bubble rendering", () => {
     const output=element();renderBubble(output,{...snapshot("working","PRIVATE content"),session:{ref:"123e4567-e89b-42d3-a456-426614174000",title:"当前会话"},activity:"command"},false);
     expect(output.querySelector(".bubble-title")?.textContent).toBe("当前会话");expect(output.querySelector(".bubble-content")?.textContent).toBe("运行命令");expect(output.children).toHaveLength(2);expect(output.textContent).not.toContain("PRIVATE");
   });
+  it("keeps permission confirmation in DSH rather than implying a text form",()=>{
+    const output=element();renderBubble(output,{...snapshot("approval"),activity:"waiting"},false);expect(output.querySelector(".bubble-content")?.textContent).toBe("等待确认，请查看 DSH");expect(output.querySelector("form")).toBeNull();
+  });
 });

@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildConnectionUrl,
   isWslEnvironment,
   parseRegisteredExecutable,
+  resolveWindowsExecutable,
 } from "../src/launcher.js";
 
 describe("Windows launcher contract", () => {
@@ -44,5 +45,31 @@ describe("Windows launcher contract", () => {
     if (!process.env.WSL_INTEROP && !process.env.WSL_DISTRO_NAME) {
       expect(isWslEnvironment({})).toBe(false);
     }
+  });
+
+  it("starts the selected local build without consulting stale registration", async () => {
+    const registration = vi.fn(async () => "invalid stale registration");
+    const path = "E:\\Local builds\\dsh-inochi2d-pet.exe";
+    await expect(resolveWindowsExecutable(path, registration)).resolves.toBe(path);
+    expect(registration).not.toHaveBeenCalled();
+  });
+
+  it("keeps the installed protocol handler when no local build was selected", async () => {
+    const registration = vi.fn(async () =>
+      '    (Default)    REG_SZ    "E:\\Apps\\dsh-inochi2d-pet.exe" "%1"\n');
+    await expect(resolveWindowsExecutable(undefined, registration))
+      .resolves.toBe("E:\\Apps\\dsh-inochi2d-pet.exe");
+    expect(registration).toHaveBeenCalledOnce();
+  });
+
+  it("rejects command strings, remote builds and invalid overrides without falling back", async () => {
+    const registration = vi.fn(async () => "stale registration");
+    for (const path of [
+      "", "dsh-inochi2d-pet.exe", "/mnt/e/dsh-inochi2d-pet.exe",
+      "\\\\server\\share\\dsh-inochi2d-pet.exe", "E:\\Apps\\other.exe",
+      '"E:\\Apps\\dsh-inochi2d-pet.exe"', "E:\\Apps\\dsh-inochi2d-pet.exe --flag",
+      "E:\\Apps\n\\dsh-inochi2d-pet.exe",
+    ]) await expect(resolveWindowsExecutable(path, registration)).rejects.toThrow(/DSH_INOCHI2D_PET_EXE/);
+    expect(registration).not.toHaveBeenCalled();
   });
 });

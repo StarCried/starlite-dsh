@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { release } from "node:os";
-import { basename } from "node:path";
+import { basename, win32 } from "node:path";
 import { execFile, spawn } from "node:child_process";
 
 const PROTOCOL_COMMAND_KEY =
@@ -20,8 +20,9 @@ export function isWslEnvironment(environment: NodeJS.ProcessEnv = process.env): 
 /** Starts the registered Windows protocol handler without waiting for the UI. */
 export async function launchWindowsPet(connection: PetConnection): Promise<void> {
   const url = buildConnectionUrl(connection);
-  const windowsExecutable = parseRegisteredExecutable(
-    await execFileText("reg.exe", ["query", PROTOCOL_COMMAND_KEY, "/ve"]),
+  const windowsExecutable = await resolveWindowsExecutable(
+    process.env.DSH_INOCHI2D_PET_EXE,
+    () => execFileText("reg.exe", ["query", PROTOCOL_COMMAND_KEY, "/ve"]),
   );
   const executable = (await execFileText("wslpath", ["-u", windowsExecutable])).trim();
   if (!executable.startsWith("/") || basename(executable).toLowerCase() !== "dsh-inochi2d-pet.exe") {
@@ -46,6 +47,21 @@ export async function launchWindowsPet(connection: PetConnection): Promise<void>
     child.once("spawn", () => finish());
     child.unref();
   });
+}
+
+/** An explicit local build takes precedence without rewriting the user's registration. */
+export async function resolveWindowsExecutable(
+  override: string | undefined,
+  readRegistration: () => Promise<string>,
+): Promise<string> {
+  if (override === undefined) return parseRegisteredExecutable(await readRegistration());
+  if (!win32.isAbsolute(override)
+    || !/^[a-z]:[\\/]/iu.test(override)
+    || /[\p{Cc}"<>|]/u.test(override)
+    || win32.basename(override).toLowerCase() !== "dsh-inochi2d-pet.exe") {
+    throw new Error("DSH_INOCHI2D_PET_EXE must name a local Windows companion executable");
+  }
+  return override;
 }
 
 export function buildConnectionUrl(connection: PetConnection): string {

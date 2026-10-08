@@ -51,6 +51,19 @@ VRM 还需导入外部 VRMA 动作，可选择角色配置。明确选择待机�
 或禁用；点击回应与偶发小动作可多选。仅待机循环，其他动作完整播放一次。
 模型不会上传。
 
+本地验证新构建时，可在启动 DSH 的 WSL 环境中指定 Windows 可执行文件，避免旧协议注册
+启动另一个构建。例如：
+
+```bash
+export DSH_INOCHI2D_PET_EXE='E:\StarCried\dsh-inochi2d-pet\apps\desktop\src-tauri\target\release\dsh-inochi2d-pet.exe'
+dsh --profile web
+```
+
+该变量仅接受本机盘符上的绝对路径及 `dsh-inochi2d-pet.exe` 文件名，不接受命令参数。
+未设置时使用已安装的协议注册；无效路径会停止桌宠启动，但不妨碍 DSH 运行。
+实际思考和回答通过 `agent/assistant-stream` 同步到气泡，每 200 ms 合并更新一次，
+长文本显示末尾 120 个字符；开启固定文案隐私模式时只显示状态文案。
+
 VRM 的内嵌贴图通过本地 Blob 解码。桌宠 CSP 的 `img-src` 和 `connect-src`
 均需允许 `blob:`，否则 Three.js 的图片解码会被 WebView2 拦截，模型加载失败。
 

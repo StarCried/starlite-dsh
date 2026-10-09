@@ -52,6 +52,17 @@ describe("model-only pointer interaction", () => {
     expect(send).toHaveBeenLastCalledWith(null);
     finish(); await Promise.resolve();
   });
+  it("invalidates old viewport coverage without sending a drag-cancelling null mask",async()=>{
+    let finish!:()=>void;
+    const send=vi.fn(()=>new Promise<void>(done=>{finish=done}));
+    const bridge=new InteractionMaskBridge(send,vi.fn());
+    bridge.update(mask);bridge.update({...mask,left:20});bridge.invalidateForViewport();
+    expect(bridge.hitTest(35,25)).toBe(false);
+    finish();await Promise.resolve();expect(send).toHaveBeenCalledOnce();
+    bridge.update({...mask,left:30});expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith({...mask,left:30,bits:Array.from(mask.bits)});
+    finish();await Promise.resolve();
+  });
   it("clears local coverage and contains a native failure", async () => {
     const failed=vi.fn(); const bridge=new InteractionMaskBridge(async()=>{throw new Error("IPC unavailable")},failed);
     bridge.update(mask); await Promise.resolve();

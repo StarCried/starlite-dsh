@@ -18,6 +18,12 @@ export class InteractionMaskBridge {
     this.#hasPending = true;
     void this.#flush();
   }
+  /** Native viewport resizing clears its coverage while preserving an active drag. */
+  invalidateForViewport(): void {
+    this.#mask = undefined;
+    this.#pending = undefined;
+    this.#hasPending = false;
+  }
   hitTest(x: number, y: number): boolean {
     const mask = this.#mask;
     if (!mask || !Number.isFinite(x) || !Number.isFinite(y)) return false;

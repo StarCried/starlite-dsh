@@ -15,6 +15,7 @@ import { StatusConnection } from "./connection.js";
 import { createModelSlot, mountModel } from "./renderer.js";
 import { StateAnimator } from "./state-animator.js";
 import { InteractionMaskBridge } from "./interaction-mask.js";
+import { ModelViewportBridge } from "./model-viewport.js";
 import { BillingBubble } from "./billing-bubble.js";
 import {WorkBubble,renderPlainBubble} from "./work-bubble.js";
 export {renderBubble} from "./work-bubble.js";
@@ -26,6 +27,7 @@ export async function startPet(): Promise<void> {
   const host = requiredElement("model");
   const bubble = requiredElement<HTMLOutputElement>("bubble");
   const empty = requiredElement("empty-model");
+  const anchor = requiredElement("pet-view");
   let settings = await invoke<DesktopSettings>("get_settings");
   const slot = await createModelSlot();
   let mountGeneration = 0;
@@ -37,11 +39,16 @@ export async function startPet(): Promise<void> {
   let connected = false;
   let connection: StatusConnection | undefined;
   let cancelClick=()=>{};
+  let geometryQueue:Promise<unknown>=Promise.resolve();
+  const geometryInvoke=(command:string,args:Record<string,unknown>)=>{
+    const next=geometryQueue.catch(()=>{}).then(()=>invoke(command,args));
+    geometryQueue=next;return next;
+  };
   type Region={left:number;top:number;width:number;height:number;viewportWidth:number;viewportHeight:number}|null;
   let regionPending:Region|undefined,regionSending=false;
   const sendRegion=async()=>{
     if(regionSending)return;regionSending=true;
-    try{while(regionPending!==undefined){const region=regionPending;regionPending=undefined;await invoke("set_bubble_interaction_region",{region});}}
+    try{while(regionPending!==undefined){const region=regionPending;regionPending=undefined;await geometryInvoke("set_bubble_interaction_region",{region});}}
     catch{regionPending=undefined;void window.hide();void invoke("open_settings");}
     finally{regionSending=false;}
   };
@@ -78,15 +85,26 @@ export async function startPet(): Promise<void> {
     },
   });
   const interaction = new InteractionMaskBridge(
-    mask => invoke("set_model_hit_mask", {mask}),
+    mask => geometryInvoke("set_model_hit_mask", {mask}),
     () => { void window.hide(); void invoke("open_settings"); },
+  );
+  const viewport = new ModelViewportBridge(host,anchor,
+    value=>geometryInvoke("set_model_viewport",{viewport:value}),
+    ()=>{interaction.invalidateForViewport();regionPending=null;},
+    ()=>{updateRegion();void window.outerPosition().then(position=>{
+      if(viewport.pending)return;
+      const point=viewport.hostPosition(position,devicePixelRatio||1);
+      controller?.setHostPosition?.(point.x,point.y);
+    }).catch(()=>{});},
+    ()=>{void window.hide();void invoke("open_settings");},
   );
   await listen<{x: number; y: number}>("pet-cursor", ({payload}) => {
     controller?.setPointerPosition(payload.x, payload.y);
   });
   const stopMovement = await window.onMoved(({ payload }: {payload: PhysicalPosition}) => {
-    const scale = devicePixelRatio || 1;
-    controller?.setHostPosition?.(payload.x / scale, payload.y / scale);
+    if(viewport.pending)return;
+    const point=viewport.hostPosition(payload,devicePixelRatio||1);
+    controller?.setHostPosition?.(point.x,point.y);
   });
 
   empty.addEventListener("click", () => {
@@ -120,18 +138,29 @@ export async function startPet(): Promise<void> {
     const next = settings;
     animator?.disconnected(); animator = undefined;
     slot.destroy(); controller = undefined;
+    interaction.update(undefined);
+    await viewport.configure(next.model?.backend==="vrm");
+    if(generation!==mountGeneration)return;
     host.replaceChildren(); empty.hidden = Boolean(next.model);
     if (!next.model) return;
     try {
       const mounted = await slot.mount(signal => mountModel(host, next, signal));
       if (!mounted || generation !== mountGeneration) return;
+      await viewport.ready();
+      if(generation!==mountGeneration)return;
       controller = mounted;
       void window.outerPosition().then(position => {
         if (controller !== mounted) return;
-        const scale = devicePixelRatio || 1;
-        mounted.setHostPosition?.(position.x / scale, position.y / scale);
+        if(viewport.pending)return;
+        const point=viewport.hostPosition(position,devicePixelRatio||1);
+        mounted.setHostPosition?.(point.x,point.y);
       }).catch(() => {});
-      mounted.observeInteractionMask(mask => interaction.update(mask));
+      mounted.observeInteractionMask(mask => {
+        // A frame drawn before the native resize still describes the old
+        // viewport. Wait for fresh coverage instead of stretching that mask.
+        if(viewport.pending || mask && (mask.viewportWidth!==innerWidth || mask.viewportHeight!==innerHeight))return;
+        interaction.update(mask);
+      });
       animator = new StateAnimator(mounted, next.model.mappings);
       if (latestSnapshot) animator.apply(latestSnapshot);
       syncRendering();
@@ -141,7 +170,7 @@ export async function startPet(): Promise<void> {
       empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-  globalThis.addEventListener("pagehide", () => { ++mountGeneration; stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { ++mountGeneration; stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   await remount();
 
   connection = new StatusConnection({

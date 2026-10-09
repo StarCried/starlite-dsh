@@ -29,6 +29,14 @@ body {
   inset: 0;
 }
 
+.vrm-viewport #model {
+  inset: auto;
+  left: var(--model-left);
+  top: var(--model-top);
+  width: var(--model-width);
+  height: var(--model-height);
+}
+
 #model > .model-surface,
 #model .inochi2d-widget,
 #model .model-vrm-widget {
@@ -47,9 +55,9 @@ body {
   color-scheme: light;
   position: absolute;
   z-index: 10;
-  top: 10px;
-  left: 50%;
-  width: min(420px, calc(100% - 32px));
+  top: var(--bubble-top, 10px);
+  left: var(--bubble-left, 50%);
+  width: var(--bubble-width, min(420px, calc(100% - 32px)));
   transform: translateX(-50%);
   padding: 10px 14px;
   border: 1px solid rgb(255 255 255 / 28%);
@@ -73,7 +81,7 @@ body {
 
 #bubble .bubble-title {display:block;font-weight:600;color:#292e38;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #bubble[data-bubble-mode="compact"] .bubble-content {display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-#bubble[data-interactive="true"] {pointer-events:auto;user-select:text;touch-action:auto;max-height:calc(100% - 48px);overflow:auto;}
+#bubble[data-interactive="true"] {pointer-events:auto;user-select:text;touch-action:auto;max-height:var(--bubble-max-height, calc(100% - 48px));overflow:auto;}
 #bubble .question-body {display:block;white-space:normal;}
 #bubble fieldset {min-width:0;margin:8px 0;padding:8px;border:1px solid #d0d5de;border-radius:8px;}
 #bubble legend {font-weight:600;white-space:pre-wrap;}

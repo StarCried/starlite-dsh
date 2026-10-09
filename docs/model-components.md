@@ -47,8 +47,13 @@ requires that publication before this branch can run remotely.
 ## Desktop selection
 
 The default pet window is 320 × 480 CSS pixels, two thirds of its previous
-480 × 720 dimensions. The renderer fills the window with the same portrait
-framing; the settings window keeps its existing size.
+480 × 720 dimensions. VRM keeps this logical model area fixed while its canvas
+and transparent native window can expand for animation limbs. Canvas viewport
+events are observed before mounting, and native geometry, silhouette masks and
+interactive bubble bounds update in order. The bubble stays anchored to the
+logical model area at its original width; transparent margins do not scale the
+character or induce host-motion physics. Inochi2D retains its window-filling
+layout; the settings window keeps its existing size.
 
 Choose `.inp` or `.vrm` in settings. VRM accepts a separate selection of VRMA
 files (exact file stems become action names) and an optional data-only character

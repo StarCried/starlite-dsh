@@ -2,7 +2,7 @@
 use std::sync::Mutex;
 
 use serde::Deserialize;
-use tauri::{PhysicalPosition, PhysicalSize};
+use tauri::{Manager, PhysicalPosition, PhysicalSize};
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -127,6 +127,14 @@ pub fn set_model_viewport(
     Ok(())
 }
 
+/// Let the existing window-state plugin persist the logical anchor, not a
+/// temporary transparent margin that would be subtracted again next launch.
+pub fn restore_before_exit(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = set_model_viewport(window, app.state(), app.state(), None);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,5 +242,21 @@ mod tests {
             assert!(v.validate().is_err());
         }
         assert!(geometry(None, viewport(), PhysicalPosition::new(0, 0), f64::NAN).is_err());
+    }
+
+    #[test]
+    fn restored_window_state_can_reopen_and_expand_without_position_drift() {
+        let scale = 1.5;
+        let viewport = viewport();
+        let origin = PhysicalPosition::new(200, 300);
+        let mut expanded = geometry(None, viewport, origin, scale).unwrap();
+        // Simulate a user's physical drag before a normal application exit.
+        expanded.position.x += 35;
+        expanded.position.y -= 20;
+        let saved = geometry(Some(viewport), viewport.base(), expanded.position, scale).unwrap();
+        let reopened = geometry(None, viewport, saved.position, scale).unwrap();
+        assert_eq!(reopened.position, expanded.position);
+        assert_eq!(reopened.size, expanded.size);
+        assert_eq!(saved.position, PhysicalPosition::new(235, 280));
     }
 }

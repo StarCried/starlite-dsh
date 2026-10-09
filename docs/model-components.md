@@ -82,6 +82,9 @@ DPI, preserving the character's screen anchor. Resizing clears obsolete model
 and bubble coverage and rebases an active drag instead of cancelling it. A null
 viewport restores the logical window. Settings windows cannot invoke this
 command; no additional window permissions or desktop-input logging are needed.
+Normal tray and offline exits restore the logical window before the existing
+window-state plugin saves it, so transparent margins cannot accumulate across
+restarts. Abrupt process termination does not provide this cleanup hook.
 
 The desktop accepts clicks and drag starts only on the rendered model silhouette.
 The native window polls the global cursor and switches transparent background

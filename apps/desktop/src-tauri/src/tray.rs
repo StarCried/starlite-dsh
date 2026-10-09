@@ -91,7 +91,10 @@ fn handle_menu(app: &AppHandle, id: &str) {
         "reset" => {
             let _ = app.emit("tray-action", "reset");
         }
-        "quit" => app.exit(0),
+        "quit" => {
+            crate::model_viewport::restore_before_exit(app);
+            app.exit(0);
+        }
         _ => {}
     }
 }

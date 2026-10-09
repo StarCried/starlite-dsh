@@ -56,6 +56,7 @@ fn open_settings(app: AppHandle) {
 
 #[tauri::command]
 fn exit_app(app: AppHandle) {
+    model_viewport::restore_before_exit(&app);
     app.exit(0);
 }
 

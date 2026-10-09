@@ -1,5 +1,6 @@
 mod hit_test;
 mod model;
+mod model_viewport;
 mod settings;
 mod tray;
 mod vrm;
@@ -75,6 +76,7 @@ pub fn run() {
         )
         .manage(tray::UiState::default())
         .manage(hit_test::HitTestState::default())
+        .manage(model_viewport::ModelViewportState::default())
         .invoke_handler(tauri::generate_handler![
             get_settings,
             inspect_model,
@@ -84,6 +86,7 @@ pub fn run() {
             open_settings,
             exit_app,
             hit_test::set_model_hit_mask,
+            model_viewport::set_model_viewport,
             hit_test::set_bubble_interaction_region,
             hit_test::begin_model_drag,
             hit_test::move_model_drag,

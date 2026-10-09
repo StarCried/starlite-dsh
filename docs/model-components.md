@@ -75,6 +75,14 @@ Its portrait framing and bounded pointer gaze match the local review page.
 
 ## Mouse interaction
 
+The main pet window accepts bounded `set_model_viewport` geometry from the VRM
+renderer. A 320 × 480 logical model area can acquire transparent canvas margins;
+native resizing offsets the window by the padding difference at its current
+DPI, preserving the character's screen anchor. Resizing clears obsolete model
+and bubble coverage and rebases an active drag instead of cancelling it. A null
+viewport restores the logical window. Settings windows cannot invoke this
+command; no additional window permissions or desktop-input logging are needed.
+
 The desktop accepts clicks and drag starts only on the rendered model silhouette.
 The native window polls the global cursor and switches transparent background
 areas to mouse passthrough, including transparent gaps inside the model and the

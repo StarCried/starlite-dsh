@@ -67,9 +67,36 @@ impl HitMask {
 
 #[derive(Default)]
 pub struct HitTestState {
+    pub(crate) window_geometry: Mutex<()>,
     mask: Mutex<Option<HitMask>>,
     bubble: Mutex<Option<BubbleRegion>>,
     drag: Mutex<Option<DragOrigin>>,
+}
+
+impl HitTestState {
+    pub(crate) fn rebase_viewport(
+        &self,
+        delta: tauri::PhysicalPosition<i32>,
+    ) -> Result<(), String> {
+        *self
+            .mask
+            .lock()
+            .map_err(|_| "interaction state unavailable")? = None;
+        *self
+            .bubble
+            .lock()
+            .map_err(|_| "interaction state unavailable")? = None;
+        if let Some(drag) = self
+            .drag
+            .lock()
+            .map_err(|_| "drag state unavailable")?
+            .as_mut()
+        {
+            drag.position.x = drag.position.x.saturating_add(delta.x);
+            drag.position.y = drag.position.y.saturating_add(delta.y);
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -171,6 +198,10 @@ pub fn begin_model_drag(
     if window.label() != "main" || app.state::<crate::tray::UiState>().click_through() {
         return Err("model interaction unavailable".into());
     }
+    let _movement = state
+        .window_geometry
+        .lock()
+        .map_err(|_| "window geometry unavailable")?;
     let origin = window
         .inner_position()
         .map_err(|_| "window position unavailable")?;
@@ -206,6 +237,10 @@ pub fn move_model_drag(
     if window.label() != "main" || app.state::<crate::tray::UiState>().click_through() {
         return Err("model interaction unavailable".into());
     }
+    let _movement = state
+        .window_geometry
+        .lock()
+        .map_err(|_| "window geometry unavailable")?;
     let cursor = window
         .cursor_position()
         .map_err(|_| "cursor position unavailable")?;
@@ -382,6 +417,37 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn viewport_rebase_clears_stale_regions_and_preserves_drag_displacement() {
+        let state = HitTestState::default();
+        *state.mask.lock().unwrap() = Some(mask());
+        *state.bubble.lock().unwrap() = Some(BubbleRegion {
+            left: 16.0,
+            top: 10.0,
+            width: 288.0,
+            height: 200.0,
+            viewport_width: 320.0,
+            viewport_height: 480.0,
+        });
+        *state.drag.lock().unwrap() = Some(DragOrigin {
+            x: 500.0,
+            y: 300.0,
+            position: tauri::PhysicalPosition::new(100, 200),
+            threshold: 5.0,
+        });
+        state
+            .rebase_viewport(tauri::PhysicalPosition::new(-80, -120))
+            .unwrap();
+        assert!(state.mask.lock().unwrap().is_none());
+        assert!(state.bubble.lock().unwrap().is_none());
+        let drag = state.drag.lock().unwrap();
+        let drag = drag.as_ref().unwrap();
+        assert_eq!(
+            drag.destination(550.0, 325.0).unwrap(),
+            tauri::PhysicalPosition::new(70, 105)
+        );
+        assert_eq!((drag.x, drag.y), (500.0, 300.0));
+    }
     #[test]
     fn interactive_bubble_is_bounded_and_respects_dpi() {
         let mut r = BubbleRegion {

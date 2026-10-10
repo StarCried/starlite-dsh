@@ -244,12 +244,16 @@ export async function startPet(): Promise<void> {
     end: () => invoke("end_model_drag"),
   }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), () => { void invoke("open_settings"); },()=>{
     const ref=latestSnapshot?.session?.ref;
-    if(!ref||!connected)return;
-    void connection?.openSession(ref).catch(()=>{
-      if(latestSnapshot?.session?.ref===ref&&!latestSnapshot?.inputRequest){renderPlainBubble(bubble,"暂时无法打开 DSH 会话","notice",settings.preferences.privacyMode?"DSH":latestSnapshot?.session?.title);updateRegion();}
+    if(!connected||!connection)return;
+    void openDisplayedDsh(connection,ref).catch(()=>{
+      if(latestSnapshot?.session?.ref===ref&&!latestSnapshot?.inputRequest){renderPlainBubble(bubble,ref?"暂时无法打开 DSH 会话":"暂时无法打开 DSH Web UI","notice",settings.preferences.privacyMode?"DSH":latestSnapshot?.session?.title);updateRegion();}
     });
   });
   await keepWindowVisible(window);
+}
+
+export function openDisplayedDsh(connection: Pick<StatusConnection,"openSession"|"openWebUi">, sessionRef?: string): Promise<void> {
+  return sessionRef ? connection.openSession(sessionRef) : connection.openWebUi();
 }
 
 export function installPointerBehavior(

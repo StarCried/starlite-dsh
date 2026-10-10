@@ -13,8 +13,8 @@ function fixture(events: readonly unknown[] = [header(), message()], inherited =
   const read = vi.fn(async () => ({events}));
   const persistence: BillingPersistence = {list: vi.fn(async () => [{header:{id:"PRIVATE id"}, revision, sizeBytes:1000}]),
     open: vi.fn(async () => ({inheritedEventCount: inherited, read, close}))};
-  const settings = {get: vi.fn(() => ({providers:{deepseek:{apiKeyEnv:"DEEPSEEK_API_KEY"}}}))};
-  const credentials = {resolve:vi.fn(async () => ({value:"PRIVATE-key"})),readRecord:vi.fn(async () => undefined)};
+  const settings = {get: vi.fn((namespace: string): unknown => namespace === "llm-pi-ai" ? {providers:{deepseek:{apiKeyEnv:"DEEPSEEK_API_KEY"}}} : undefined)};
+  const credentials = {resolve:vi.fn(async (): Promise<{value:string} | undefined> => ({value:"PRIVATE-key"})),readRecord:vi.fn(async (): Promise<unknown> => undefined)};
   const context = {get: (name: string) => ({settings,credentials,sessionPersistence:persistence} as Record<string,unknown>)[name]};
   const request = vi.fn<typeof fetch>(async () => balanceResponse());
   let now = NOW;
@@ -24,6 +24,70 @@ function fixture(events: readonly unknown[] = [header(), message()], inherited =
 }
 
 describe("official DeepSeek billing", () => {
+  it("uses the shipped native route and its credential without a pi-ai provider profile", async () => {
+    const nativeMessage = {...message(),data:{...message().data,message:{source:{provider:"deepseek-official",model:"deepseek-flash"}}}};
+    const f = fixture([header("deepseek-official"),nativeMessage]);
+    f.settings.get.mockImplementation(namespace => namespace === "llm-deepseek" ? {apiKeyEnv:"DEEPSEEK_API_KEY"} : {providers:{}});
+    const result = await f.source.read();
+    expect(result.balance.status).toBe("ready");
+    expect(result.today.pricedRequests).toBe(1);
+    expect(result.today.estimates[0]?.maximum).toBeCloseTo(2.808);
+    expect(f.credentials.resolve).toHaveBeenCalledExactlyOnceWith("DEEPSEEK_API_KEY");
+    expect(f.credentials.readRecord).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("PRIVATE");
+    f.source.close();
+  });
+  it("uses native custom references and refreshes a missing key immediately after a credential update", async () => {
+    const f = fixture([]);
+    f.settings.get.mockImplementation(namespace => namespace === "llm-deepseek" ? {apiKeyEnv:"CUSTOM_DEEPSEEK_KEY",baseURL:"https://api.deepseek.com/v1"} : undefined);
+    f.credentials.resolve.mockResolvedValueOnce(undefined);
+    expect((await f.source.read()).balance.status).toBe("unconfigured");
+    expect(f.request).not.toHaveBeenCalled();
+    f.source.invalidate(true);
+    expect((await f.source.read()).balance.status).toBe("ready");
+    expect(f.credentials.resolve).toHaveBeenNthCalledWith(2,"CUSTOM_DEEPSEEK_KEY");
+    expect(f.credentials.readRecord).not.toHaveBeenCalled();
+    f.source.close();
+  });
+  it.each([
+    {profile:{baseURL:"https://gateway.invalid"},environment:undefined,ready:false},
+    {profile:{},environment:"https://gateway.invalid",ready:false},
+    {profile:{baseURL:"https://api.deepseek.com"},environment:"https://gateway.invalid",ready:true},
+    {profile:{},environment:"https://api.deepseek.com/v1",ready:true},
+  ])("validates the effective native endpoint before reading credentials: %j", async ({profile,environment,ready}) => {
+    const f = fixture();
+    f.settings.get.mockImplementation(namespace => namespace === "llm-deepseek" ? profile : undefined);
+    const context = {get:(name:string) => name === "launchEnvironment" ? {get:() => environment === undefined ? undefined : {value:environment}} : f.context.get(name)};
+    const source = new DeepSeekBilling(context,f.request,()=>NOW);
+    const result = await source.read();
+    expect(result.balance.status).toBe(ready ? "ready" : "unconfigured");
+    expect(f.credentials.resolve).toHaveBeenCalledTimes(ready ? 1 : 0);
+    expect(f.request).toHaveBeenCalledTimes(ready ? 1 : 0);
+    source.close();f.source.close();
+  });
+  it("only prices providers whose current endpoints are official, including native durable attempts", async () => {
+    const nativeMessage = {...message(),data:{...message().data,message:{source:{provider:"deepseek-official",model:"deepseek-flash"}}}};
+    const events = [header(),message(),header("deepseek-official"),{type:"llm/retry-started"},
+      {type:"assistant/attempt",time:NOW,data:{turn:1,step:2,stream:[{chunk:{type:"usage",usage}}]}},
+      {...nativeMessage,data:{...nativeMessage.data,step:3}}];
+    const f = fixture(events);
+    f.settings.get.mockImplementation(namespace => namespace === "llm-deepseek" ? {baseURL:"https://api.deepseek.com"} : {providers:{deepseek:{baseURL:"https://gateway.invalid"}}});
+    expect((await f.source.read()).today.pricedRequests).toBe(2);
+    f.settings.get.mockImplementation(namespace => namespace === "llm-deepseek" ? {baseURL:"https://gateway.invalid"} : {providers:{deepseek:{}}});
+    f.source.invalidate(true);
+    expect((await f.source.read()).today.pricedRequests).toBe(1);
+    f.source.close();
+  });
+  it("preserves the existing stored pi-ai credential when the native route has no key", async () => {
+    const f = fixture();
+    f.settings.get.mockImplementation(namespace => namespace === "llm-deepseek" ? {} : {providers:{deepseek:{}}});
+    f.credentials.resolve.mockResolvedValue(undefined);
+    f.credentials.readRecord.mockResolvedValue({kind:"api-key",key:"PRIVATE-stored-key"});
+    expect((await f.source.read()).balance.status).toBe("ready");
+    expect(f.request).toHaveBeenCalledWith(expect.any(String),expect.objectContaining({headers:{Authorization:"Bearer PRIVATE-stored-key"}}));
+    expect(f.credentials.readRecord).toHaveBeenCalledExactlyOnceWith("llm-pi-ai/deepseek");
+    f.source.close();
+  });
   it("counts cache/output once, replacements once, retries and simultaneous sessions independently", async () => {
     const events = [header(), message(), message(), {type:"llm/retry-started"}, message(), message(2)];
     const fold = foldDailyUsage(events,0,"2026-10-08");
@@ -82,7 +146,7 @@ describe("official DeepSeek billing", () => {
       {headers:{Authorization:"PRIVATE"}},
     ]) expect(officialProfile(profile)).toBe(false);
     expect(officialProfile({})).toBe(true); expect(officialProfile({baseURL:"https://api.deepseek.com/v1"})).toBe(true);
-    const f = fixture(); f.settings.get.mockReturnValue({providers:{deepseek:{baseURL:"https://gateway.invalid"}}} as never);
+    const f = fixture(); f.settings.get.mockImplementation(namespace => namespace === "llm-pi-ai" ? {providers:{deepseek:{baseURL:"https://gateway.invalid"}}} : undefined);
     expect((await f.source.read()).balance.status).toBe("unconfigured");
     expect(f.credentials.resolve).not.toHaveBeenCalled(); expect(f.request).not.toHaveBeenCalled(); f.source.close();
   });

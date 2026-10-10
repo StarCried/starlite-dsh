@@ -1,8 +1,34 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PetSnapshot, PetStateSource } from "@dsh-inochi2d-pet/protocol";
 import { startDshAdapter, type CordisContextLike } from "../src/adapter.js";
+import type { BillingSource } from "../src/billing.js";
 
 describe("DSH compatibility adapter", () => {
+  it("enables native billing immediately when DSH saves a credential after startup", async () => {
+    const listeners = new Map<string, (...arguments_: unknown[]) => unknown>();
+    let configured = false;
+    let billing: BillingSource | undefined;
+    const request = vi.fn(async () => new Response(JSON.stringify({is_available:true,balance_infos:[{currency:"CNY",total_balance:"12.34"}]}),{headers:{"Content-Type":"application/json"}}));
+    const services: Record<string,unknown> = {
+      settings:{get:(namespace:string) => namespace === "llm-deepseek" ? {apiKeyEnv:"DEEPSEEK_API_KEY",baseURL:"https://api.deepseek.com"} : undefined},
+      credentials:{resolve:async () => configured ? {value:"PRIVATE-key"} : undefined},
+    };
+    vi.stubGlobal("fetch",request);
+    let stop: (() => void | Promise<void>) | undefined;
+    try {
+      stop = await startDshAdapter({get:name => services[name],on(event,listener){listeners.set(event,listener);return () => listeners.delete(event);}}, {
+        isWsl:() => true,
+        startServer:async (_source,options) => {billing = options?.billing;return {port:41234,token:"a".repeat(43),close:async()=>undefined};},
+        launch:async()=>undefined,
+      });
+      expect((await billing!.read()).balance.status).toBe("unconfigured");
+      expect(request).not.toHaveBeenCalled();
+      configured = true;
+      listeners.get("credentials/reference-updated")?.("DEEPSEEK_API_KEY");
+      expect((await billing!.read()).balance.status).toBe("ready");
+      expect(request).toHaveBeenCalledExactlyOnceWith("https://api.deepseek.com/user/balance",expect.objectContaining({method:"GET",redirect:"error"}));
+    } finally {await stop?.();vi.unstubAllGlobals();}
+  });
   it("subscribes without importing DSH internals and cleans up", async () => {
     const listeners = new Map<string, (...arguments_: unknown[]) => unknown>();
     const disposed: string[] = [];

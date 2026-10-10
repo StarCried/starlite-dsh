@@ -93,16 +93,25 @@ console.log(`DSH ${String(packageJson.version)} exposes every required desktop-p
 
 // Fees are optional at runtime, but a release advertising them must verify
 // the public read/credential seams and durable usage vocabulary as well.
-const [settings, credentials, persistence, handle] = await Promise.all([
+const [settings, credentials, persistence, handle, nativeDeepSeek, launchEnvironment] = await Promise.all([
   source("dsh-settings/lib/types/index.d.ts"),
   source("dsh-credentials/lib/types/index.d.ts"),
   source("dsh-session-persistence/lib/types/index.d.ts"),
   source("dsh-session-persistence/lib/types/handle.d.ts"),
+  source("dsh-llm-deepseek/lib/types/index.d.ts"),
+  source("dsh-launch-environment/lib/types/index.d.ts"),
 ]);
 const billingRequirements = [
   ["settings resolved read", settings, /get<const Namespace extends string>\([^\n]+\): unknown;/u],
   ["credential reference read", credentials, /abstract resolve\(ref: CredentialRef\): Promise<ResolvedCredential \| undefined>;/u],
   ["credential record read", credentials, /abstract readRecord\(key: CredentialKey\): Promise<CredentialRecord \| undefined>;/u],
+  ["native DeepSeek route", nativeDeepSeek, /`deepseek-official`/u],
+  ["native DeepSeek settings namespace", nativeDeepSeek, /export declare const name = "llm-deepseek";/u],
+  ["native DeepSeek credential reference", nativeDeepSeek, /apiKeyEnv\?: string;/u],
+  ["native DeepSeek endpoint", nativeDeepSeek, /baseURL\?: string;/u],
+  ["native DeepSeek official default", nativeDeepSeek, /PUBLIC_BASE_URL = "https:\/\/api\.deepseek\.com"/u],
+  ["trusted launch environment", launchEnvironment, /DSH_LAUNCH_ENVIRONMENT_KEY = "launchEnvironment"/u],
+  ["launch environment value read", launchEnvironment, /get\(name: string\): LaunchEnvironmentEntry \| undefined;/u],
   ["stored session list", persistence, /abstract list\(options\?: SessionPersistenceListOptions\): Promise<readonly SessionPersistenceSnapshot\[\]>;/u],
   ["read-only session open", persistence, /abstract open\(id: SessionId, access: SessionAccess,/u],
   ["inherited event boundary", handle, /readonly inheritedEventCount: SessionLogOffset;/u],

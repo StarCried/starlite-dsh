@@ -28,22 +28,27 @@ included Web client consumes a fragment hint after finding the authoritative
 session/catalog entry; it never creates a session or sends a prompt.
 
 Click the model to query the official DeepSeek account balance and today's DSH
-cost estimate. This uses the existing `llm-pi-ai.providers.deepseek` route and
+cost estimate. This supports DSH's default `llm-deepseek` / `deepseek-official`
+route and the optional `llm-pi-ai.providers.deepseek` route, using
 DSH's credential service; no API key is copied to Windows. Custom gateways or
 model-level endpoint/authentication overrides are refused. Requests only query
 `GET https://api.deepseek.com/user/balance`, on demand (balance cache: 60 seconds).
 No paid model request is made by this feature or its tests.
 
-Configure the official `deepseek` route in DSH's Models page first; an empty
-provider profile is reported as unconfigured and never triggers a network
-request. Existing stored API keys or credential references are resolved by DSH,
+Configure DeepSeek in DSH's Models page first; the default official route needs
+only its API key, with no separate pi-ai profile. The native route honors its
+configured endpoint and trusted `DEEPSEEK_BASE_URL` launch override; gateways
+never trigger a balance request. If both routes have credentials, the native
+route supplies the displayed balance. Missing credentials are reported as
+unconfigured and never trigger a network request. Existing stored API keys or credential references are resolved by DSH,
 not entered in the companion. A negative balance reported by the provider is
 preserved rather than converted to zero.
 
 Today's estimate reads the profile's existing session records through read-only
 persistence handles, including records from before a restart. It excludes
 fork-inherited events, replaces repeated settlements of the same attempt, and
-counts retries separately. No extra history or financial ledger is saved. Dates
+counts retries separately. Only routes with a verified official endpoint are
+included. No extra history or financial ledger is saved. Dates
 use Asia/Shanghai. Only official Flash/V4 Pro model IDs listed in the pricing
 table are priced; missing usage, unknown models and incomplete reads are shown
 explicitly. Reasoning tokens are already included in output tokens.

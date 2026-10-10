@@ -74,7 +74,9 @@ dsh --profile web
 费用气泡使用独立的认证只读接口，不修改状态 SSE。点击查询官方 DeepSeek
 余额，以及当前 DSH profile 的北京时间当日用量估算；工作中点击不会启动
 点击动作。估算范围、缺失记录、支持的模型和已核实价格见插件 README。
-先在 DSH 的模型设置中配置官方 `deepseek` 路由；凭据由 DSH 解析，不能填入桌宠。
+支持 DSH 默认 `llm-deepseek` / `deepseek-official` 路由，以及可选的
+`llm-pi-ai.providers.deepseek` 路由；默认路由填好 key 即可。按实际设置与
+可信启动环境检查官方地址，只统计通过检查的路由。凭据由 DSH 解析，不能填入桌宠。
 测试注入余额与持久化服务的固定数据，不调用模型或余额网络 API。
 
 VRM 的内嵌贴图通过本地 Blob 解码。桌宠 CSP 的 `img-src` 和 `connect-src`

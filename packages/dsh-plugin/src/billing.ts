@@ -36,6 +36,7 @@ export interface BillingPersistence {
 }
 export interface BillingSource { read(): Promise<BillingSnapshot>; close(): void; }
 interface SessionUsage { priced: number; unpriced: number; maximums: number[]; }
+interface OfficialRoute { provider: "deepseek-official" | "deepseek"; profile: Record<string, unknown>; }
 
 /** Reads existing DSH services only; never writes credentials or session files. */
 export class DeepSeekBilling implements BillingSource {
@@ -74,9 +75,9 @@ export class DeepSeekBilling implements BillingSource {
   }
   async #query(now: number, signal: AbortSignal): Promise<BillingSnapshot> {
     const date = billingDate(now);
-    const profile = record(record((this.#context.get?.("settings") as Settings | undefined)?.get("llm-pi-ai"))?.providers)?.deepseek;
-    const official = officialProfile(profile);
-    const balancePromise = official ? this.#readBalance(profile, now, signal) : Promise.resolve({status: "unconfigured" as const, balances: []});
+    const routes = officialRoutes(this.#context);
+    const official = routes.length > 0;
+    const balancePromise = official ? this.#readBalance(routes, now, signal) : Promise.resolve({status: "unconfigured" as const, balances: []});
     const today: BillingSnapshot["today"] = {
       date, timeZone: "Asia/Shanghai", partial: !official, pricedRequests: 0, unpricedRequests: 0,
       pricingDate: PRICING_DATE, estimates: CURRENCIES.map(currency => ({currency, minimum: 0, maximum: 0})),
@@ -99,7 +100,7 @@ export class DeepSeekBilling implements BillingSource {
               handle = await persistence.open(id, "read", {signal});
               const {events} = await handle.read(0, MAX_EVENTS + 1, {signal});
               if (events.length > MAX_EVENTS || !Number.isSafeInteger(handle.inheritedEventCount) || handle.inheritedEventCount < 0 || handle.inheritedEventCount > events.length) {today.partial = true; continue;}
-              usage = {revision: session.revision, date, usage: foldDailyUsage(events, handle.inheritedEventCount, date)};
+              usage = {revision: session.revision, date, usage: foldDailyUsage(events, handle.inheritedEventCount, date, routes.map(route => route.provider))};
               this.#cache.set(id, usage);
             } catch {today.partial = true; continue;}
             finally {await handle?.close().catch(() => {today.partial = true;});}
@@ -114,11 +115,17 @@ export class DeepSeekBilling implements BillingSource {
     if (signal.aborted || this.#closed) throw new Error("billing unavailable");
     return parseBillingSnapshot({billingVersion: 1, checkedAt: now, balance, today});
   }
-  async #readBalance(profile: unknown, now: number, signal: AbortSignal): Promise<BillingSnapshot["balance"]> {
+  async #readBalance(routes: readonly OfficialRoute[], now: number, signal: AbortSignal): Promise<BillingSnapshot["balance"]> {
     if (this.#balance && now - this.#balance.at < 60_000) return this.#balance.value;
     let value: BillingSnapshot["balance"];
     try {
-      const key = await resolveKey(this.#context, profile);
+      // Prefer DSH's native route, then the explicitly configured pi-ai route.
+      // A missing native key must not hide an existing pi-ai credential.
+      let key: string | undefined;
+      for (const route of routes) {
+        key = await resolveKey(this.#context, route);
+        if (key) break;
+      }
       if (!key) value = {status: "unconfigured", balances: []};
       else {
         const request = this.#fetch;
@@ -174,10 +181,25 @@ function officialEndpoint(value: unknown): boolean {
       && ["/", "/v1", "/v1/", "/anthropic", "/anthropic/"].includes(url.pathname);
   } catch {return false;}
 }
-async function resolveKey(context: BillingContext, profile: unknown): Promise<string | undefined> {
+function officialRoutes(context: BillingContext): OfficialRoute[] {
+  const settings = context.get?.("settings") as Settings | undefined;
+  const routes: OfficialRoute[] = [];
+  const native = record(settings?.get("llm-deepseek"));
+  if (native) {
+    const environment = context.get?.("launchEnvironment") as {get(name: string): {value: string} | undefined} | undefined;
+    // Match the native adapter's trusted launch environment; credentials are
+    // deliberately not an endpoint configuration source.
+    const baseURL = native.baseURL ?? (environment ? environment.get("DEEPSEEK_BASE_URL")?.value : process.env.DEEPSEEK_BASE_URL) ?? "https://api.deepseek.com";
+    if (officialProfile({...native, baseURL})) routes.push({provider: "deepseek-official", profile: native});
+  }
+  const pi = record(record(record(settings?.get("llm-pi-ai"))?.providers)?.deepseek);
+  if (pi && officialProfile(pi)) routes.push({provider: "deepseek", profile: pi});
+  return routes;
+}
+async function resolveKey(context: BillingContext, route: OfficialRoute): Promise<string | undefined> {
   const credentials = context.get?.("credentials") as Credentials | undefined;
   if (!credentials) return undefined;
-  const reference = record(profile)?.apiKeyEnv;
+  const reference = route.profile.apiKeyEnv ?? (route.provider === "deepseek-official" ? "DEEPSEEK_API_KEY" : undefined);
   let value: unknown;
   if (reference !== undefined) {
     if (typeof reference !== "string" || !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(reference)) return undefined;
@@ -191,13 +213,13 @@ async function resolveKey(context: BillingContext, profile: unknown): Promise<st
 }
 
 /** Last settlement wins per attempt; retry-started opens a separate billable slot. */
-export function foldDailyUsage(events: readonly unknown[], inherited: number, date: string): SessionUsage {
+export function foldDailyUsage(events: readonly unknown[], inherited: number, date: string, providers: readonly string[] = ["deepseek"]): SessionUsage {
   const result: SessionUsage = {priced: 0, unpriced: 0, maximums: [0, 0]};
   let header: Record<string, unknown> | undefined;
   let last: {turn: unknown; step: unknown; sample: Record<string, unknown> | undefined; route: Record<string, unknown> | undefined; time: number} | undefined;
   const flush = () => {
-    if (!last || billingDate(last.time) !== date || (typeof last.route?.provider === "string" && last.route.provider !== "deepseek")) {last = undefined; return;}
-    const rates = typeof last.route?.model === "string" && last.route.provider === "deepseek" && Object.hasOwn(RATES,last.route.model) ? RATES[last.route.model] : undefined;
+    if (!last || billingDate(last.time) !== date || (typeof last.route?.provider === "string" && !providers.includes(last.route.provider))) {last = undefined; return;}
+    const rates = typeof last.route?.model === "string" && typeof last.route.provider === "string" && providers.includes(last.route.provider) && Object.hasOwn(RATES,last.route.model) ? RATES[last.route.model] : undefined;
     const sample = normalizeUsage(last.sample);
     if (!rates || !sample) result.unpriced++;
     else {

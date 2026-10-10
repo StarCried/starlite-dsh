@@ -96,8 +96,6 @@ pub fn run() {
         .setup(|app| {
             #[cfg(all(debug_assertions, windows))]
             app.deep_link().register_all()?;
-            model::install_bundled_if_empty(app.handle())
-                .map_err(|error| format!("bundled model installation failed: {error}"))?;
             tray::setup(app)?;
             hit_test::setup(app.handle())?;
             if settings::load(app.handle()).model.is_none() {

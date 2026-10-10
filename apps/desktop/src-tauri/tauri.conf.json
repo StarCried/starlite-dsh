@@ -50,7 +50,6 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "resources": ["resources/microlight/*"],
     "publisher": "StarCried",
     "copyright": "Copyright © 2026 StarCried",
     "shortDescription": "Inochi2D and VRM desktop companion for DeepSeek Harness",

@@ -2,9 +2,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use inochi2d_pipeline::{build, inspect_file, BuildRequest};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{to_value, Value};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::settings::{
@@ -24,11 +24,6 @@ pub struct ModelInspection {
     animations: Vec<Value>,
     compatibility_supported: bool,
     issues: Vec<Value>,
-}
-
-#[derive(Debug, Deserialize)]
-struct BundledModelDefaults {
-    mappings: settings::AnimationMappings,
 }
 
 pub fn inspect(
@@ -160,49 +155,6 @@ pub fn install(app: &AppHandle, request: ModelInstallRequest) -> Result<DesktopS
     }
 }
 
-/// Installs the release demo on first launch through the same transactional
-/// pipeline as a user-selected model. Development builds intentionally omit
-/// the optional resource and continue with an empty model configuration.
-pub fn install_bundled_if_empty(app: &AppHandle) -> Result<(), String> {
-    if settings::load(app).model.is_some() {
-        return Ok(());
-    }
-    let directory = app
-        .path()
-        .resource_dir()
-        .map_err(|error| error.to_string())?
-        .join("resources")
-        .join("microlight");
-    let model = directory.join("model.inp");
-    if !model.is_file() {
-        return Ok(());
-    }
-    let defaults_path = directory.join("defaults.json");
-    let bytes = fs::read(&defaults_path).map_err(|error| {
-        format!(
-            "bundled animation defaults are unavailable ({}): {error}",
-            defaults_path.display()
-        )
-    })?;
-    if bytes.len() > 64 * 1024 {
-        return Err("bundled animation defaults exceed 64 KiB".into());
-    }
-    let defaults: BundledModelDefaults =
-        serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
-    install(
-        app,
-        ModelInstallRequest {
-            backend: ModelBackend::Inochi2d,
-            animation_sources: vec![],
-            profile_path: None,
-            source_path: path_string(&model)?,
-            mappings: defaults.mappings,
-            preferences: settings::DesktopPreferences::default(),
-        },
-    )?;
-    Ok(())
-}
-
 pub fn update(app: &AppHandle, request: ModelInstallRequest) -> Result<DesktopSettings, String> {
     if !request.source_path.is_empty() {
         return Err("updating settings cannot import a new source model".into());
@@ -246,49 +198,5 @@ fn backend_for_path(path: &std::path::Path) -> Result<ModelBackend, String> {
         Some("inp") => Ok(ModelBackend::Inochi2d),
         Some("vrm") => Ok(ModelBackend::Vrm),
         _ => Err("select an Inochi2D .inp or VRM .vrm model file".into()),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Release CI opts into this test with the approved asset path. Ordinary
-    /// development remains artwork-free and therefore skips it.
-    #[test]
-    fn approved_demo_model_survives_inspect_build_and_mapping_validation() {
-        let Ok(source) = std::env::var("DSH_PET_DEMO_MODEL") else {
-            return;
-        };
-        let source = PathBuf::from(source);
-        let defaults_path = source
-            .parent()
-            .expect("demo model must have a parent directory")
-            .join("defaults.json");
-        let defaults: BundledModelDefaults = serde_json::from_slice(
-            &fs::read(defaults_path).expect("demo animation defaults must be readable"),
-        )
-        .expect("demo animation defaults must be valid JSON");
-        let inspection = inspect_file(&source).expect("demo model must be inspectable");
-        assert!(
-            inspection.compatibility.supported,
-            "demo model must be compatible with the Web runtime"
-        );
-        let inspected = values(inspection.animations).expect("animation metadata must serialize");
-        settings::validate_mappings(&defaults.mappings, &inspected)
-            .expect("demo mappings must exactly match source animations");
-
-        let temporary = tempfile::tempdir().expect("temporary output directory must be available");
-        let output = temporary.path().join("prepared");
-        let manifest = build(&BuildRequest {
-            input: source,
-            output_dir: output.clone(),
-            fallback: None,
-        })
-        .expect("demo model must pass the release pipeline");
-        let prepared = values(manifest.animations).expect("prepared animations must serialize");
-        settings::validate_mappings(&defaults.mappings, &prepared)
-            .expect("demo mappings must survive preparation");
-        assert!(output.join(manifest.model.file).is_file());
     }
 }

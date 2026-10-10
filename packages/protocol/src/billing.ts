@@ -3,8 +3,10 @@ export type BillingCurrency = "CNY" | "USD";
 export interface BillingSnapshot {
   billingVersion: 1;
   checkedAt: number;
+  pricingPeriod?: "peak" | "off-peak" | "unknown";
   balance: {
     status: "ready" | "unconfigured" | "unavailable";
+    source?: "deepseek-official" | "deepseek";
     balances: { currency: BillingCurrency; remaining: number }[];
   };
   today: {
@@ -32,13 +34,17 @@ export function parseBillingSnapshot(value: unknown): BillingSnapshot {
     return {currency: entry.currency as BillingCurrency, remaining: entry.remaining as number};
   });
   if ((balance.status === "ready") !== (balances.length > 0)) throw new Error("invalid balance status");
+  if (root.pricingPeriod !== undefined && !["peak","off-peak","unknown"].includes(String(root.pricingPeriod))) throw new Error("invalid pricing period");
+  if (balance.source !== undefined && (!["deepseek-official","deepseek"].includes(String(balance.source)) || balance.status === "unconfigured")) throw new Error("invalid balance source");
   const estimates = currencies(today.estimates).map(entry => {
     if (!amount(entry.minimum) || !amount(entry.maximum) || (entry.minimum as number) > (entry.maximum as number)) throw new Error("invalid estimate");
     return {currency: entry.currency as BillingCurrency, minimum: entry.minimum as number, maximum: entry.maximum as number};
   });
   return {
     billingVersion: 1, checkedAt: root.checkedAt as number,
-    balance: {status: balance.status as BillingSnapshot["balance"]["status"], balances},
+    ...(root.pricingPeriod === undefined ? {} : {pricingPeriod: root.pricingPeriod as NonNullable<BillingSnapshot["pricingPeriod"]>}),
+    balance: {status: balance.status as BillingSnapshot["balance"]["status"], balances,
+      ...(balance.source === undefined ? {} : {source: balance.source as NonNullable<BillingSnapshot["balance"]["source"]>})},
     today: {
       date: today.date as string, timeZone: "Asia/Shanghai", partial: today.partial,
       pricedRequests: today.pricedRequests as number, unpricedRequests: today.unpricedRequests as number,

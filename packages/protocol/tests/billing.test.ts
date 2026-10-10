@@ -12,6 +12,8 @@ describe("billing boundary", () => {
     const parsed = parseBillingSnapshot({...valid, secret: "PRIVATE", balance: {...valid.balance, key: "PRIVATE"}});
     expect(parsed).toEqual(valid);
     expect(JSON.stringify(parsed)).not.toContain("PRIVATE");
+    expect(parseBillingSnapshot({...valid,pricingPeriod:"off-peak",balance:{...valid.balance,source:"deepseek-official"}}))
+      .toEqual({...valid,pricingPeriod:"off-peak",balance:{...valid.balance,source:"deepseek-official"}});
     expect(parseBillingSnapshot({...valid,balance:{status:"ready",balances:[{currency:"CNY",remaining:-.25}]}}).balance.balances[0]?.remaining).toBe(-.25);
   });
   it("rejects malformed, duplicate, excessive and misleading financial fields", () => {
@@ -23,6 +25,9 @@ describe("billing boundary", () => {
       {...valid,today:{...valid.today,date:"2026-02-30"}},
       {...valid,today:{...valid.today,estimates:[{currency:"CNY",minimum:.2,maximum:.1}]}},
       {...valid,today:{...valid.today,unpricedRequests:-1}},
+      {...valid,pricingPeriod:"PRIVATE unknown period"},
+      {...valid,balance:{...valid.balance,source:"PRIVATE account"}},
+      {...valid,balance:{status:"unconfigured",balances:[],source:"deepseek-official"}},
     ]) expect(() => parseBillingSnapshot(value)).toThrow();
   });
 });

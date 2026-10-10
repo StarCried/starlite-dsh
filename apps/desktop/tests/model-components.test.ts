@@ -17,7 +17,7 @@ const choose=(path:string)=>{open.mockResolvedValueOnce(path);document.getElemen
 beforeEach(()=>{vi.clearAllMocks();vi.stubGlobal("Option",function(text:string,value:string){const option=document.createElement("option");option.textContent=text;option.value=value;return option});document.body.innerHTML=readFileSync(resolve(import.meta.dirname,"../index.html"),"utf8").replace(/<script[\s\S]*?<\/script>/gu, "");invoke.mockResolvedValue(initial)});
 it("keeps backend payloads separate and maps every local VRM asset",()=>{
  const settings:DesktopSettings={...initial,model:{backend:"vrm",modelPath:"m.vrm",sourceSha256:"hash",mappings,animations:catalog,vrm:{animations:[{name:"Idle",path:"a.vrma"}],profilePath:"p.json"}}};
- expect(modelConfig(settings)).toMatchObject({backend:"vrm",model:"asset:m.vrm",animations:[{name:"Idle",url:"asset:a.vrma"}],profile:"asset:p.json",ambient:{animations:["Idle"]},render:{viewportPadding:{left:128,top:64,right:128,bottom:128}},camera:{pitchDegrees:5,targetHeight:.54},gaze:{maxYawDegrees:25,maxPitchDegrees:15}});
+ expect(modelConfig(settings)).toMatchObject({backend:"vrm",model:"asset:m.vrm",animations:[{name:"Idle",url:"asset:a.vrma"}],profile:"asset:p.json",ambient:{animations:["Idle"]},render:{viewportPadding:{left:128,top:64,right:128,bottom:192}},camera:{pitchDegrees:5,targetHeight:.54},gaze:{maxYawDegrees:25,maxPitchDegrees:15}});
  const tracks=[{name:"Idle",timestepMs:10,length:10,leadIn:0,leadOut:0,weight:1,lanes:[]}];
  expect(modelConfig({...settings,model:{...settings.model!,backend:"inochi2d",inochi2d:{animations:tracks}}}).animations).toEqual(tracks);
  expect(modelConfig({...settings,model:{...settings.model!,backend:"inochi2d",inochi2d:{animations:tracks}}}).render).not.toHaveProperty("viewportPadding");

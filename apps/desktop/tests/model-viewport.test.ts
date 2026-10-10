@@ -20,7 +20,7 @@ it("reserves fixed gesture and bubble bounds before mounting without changing po
   const bridge=new ModelViewportBridge(host,anchor,send,invalidate,applied,vi.fn(),bubble);
   await bridge.configure(true);
   expect(send).toHaveBeenCalledOnce();
-  expect(send).toHaveBeenCalledWith({left:-128,top:-532,width:576,height:1140,baseWidth:320,baseHeight:480});
+  expect(send).toHaveBeenCalledWith({left:-128,top:-532,width:576,height:1204,baseWidth:320,baseHeight:480});
   expect(anchor.style.getPropertyValue("--model-width")).toBe("320px");
   expect(anchor.style.getPropertyValue("--model-height")).toBe("480px");
   expect(anchor.style.getPropertyValue("--model-left")).toBe("128px");

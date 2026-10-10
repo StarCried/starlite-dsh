@@ -10,7 +10,7 @@ export interface ModelViewport {
 const BASE: ModelViewport = {left:0,top:0,width:320,height:480,baseWidth:320,baseHeight:480};
 // Fixed canvas margins cover the selected full-body gestures and spring motion.
 // Keep this shared with renderer configuration: action bounds never resize it.
-export const VRM_VIEWPORT_PADDING = Object.freeze({left:128,top:64,right:128,bottom:128});
+export const VRM_VIEWPORT_PADDING = Object.freeze({left:128,top:64,right:128,bottom:192});
 const MAX_BUBBLE_HEIGHT = 432;
 const BUBBLE_MARGIN = 12;
 const BUBBLE_GAP = 24;

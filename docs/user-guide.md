@@ -38,6 +38,6 @@ dsh plugin --profile web add dsh-inochi2d-pet@0.1.0-alpha.0
 
 更新程序先退出托盘中的桌宠，运行同版本配套的新安装包，再更新 WSL profile 中的插件。设置与模型保持在应用数据目录；旧版设置迁移保留原有偏好，Thinking 映射合并到 Working。更换角色通过设置重新导入，失败不会替换现有可用模型。
 
-在 Windows“已安装的应用”中卸载程序；WSL 用 `dsh plugin --help` 查看当前版本提供的移除命令，移除当前 profile 中的 `dsh-inochi2d-pet`。不猜测不支持的 CLI 参数。用户模型与设置的删除是独立操作，卸载前确认是否要保留。停止使用公开博客模型时也需清除站点输出中的旧资源。
+在 Windows“已安装的应用”中卸载程序；WSL 运行 `dsh plugin --profile web remove dsh-inochi2d-pet` 移除插件（使用其他 profile 时替换 `web`）。用户模型与设置的删除是独立操作，卸载前确认是否要保留。停止使用公开博客模型时也需清除站点输出中的旧资源。
 
 源码构建、固定运行时和隔离测试见 [开发指南](development.md)。微光未随程序许可授予其他软件使用权；资源包授权与来源未确认前仅保留本地。

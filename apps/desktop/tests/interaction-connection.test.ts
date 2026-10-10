@@ -13,9 +13,14 @@ it("uses bounded authenticated questions and only an opaque navigation action",a
     expect(JSON.stringify(await connection.readInteraction(id))).not.toContain("PRIVATE");
     await connection.answerInteraction({requestId:id,sessionRef:ref,answers:[{id:"q",selected:["A"]}]});
     await connection.openSession(ref);const call=request.mock.calls.at(-1)!;expect(call[0]).toBe("http://127.0.0.1:45678/v1/session/open");expect(call[1]).toMatchObject({method:"POST",body:JSON.stringify({sessionRef:ref}),headers:{Authorization:`Bearer ${"a".repeat(43)}`,"Content-Type":"application/json"}});
+    await connection.openWebUi();const home=request.mock.calls.at(-1)!;expect(home[0]).toBe("http://127.0.0.1:45678/v1/web/open");expect(home[1]).toMatchObject({method:"POST",body:"{}",headers:{Authorization:`Bearer ${"a".repeat(43)}`,"Content-Type":"application/json"}});
+    const calls=request.mock.calls.length;
     await expect(connection.openSession("http://evil.invalid/")).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(calls);
+    request.mockResolvedValueOnce(new Response(null,{status:409}));await expect(connection.openSession(ref)).rejects.toThrow("action unavailable");expect(request.mock.calls.at(-1)![0]).toBe("http://127.0.0.1:45678/v1/session/open");expect(request).toHaveBeenCalledTimes(calls+1);
     request.mockResolvedValueOnce(new Response("x".repeat(32769),{headers:{"Content-Type":"application/json"}}));await expect(connection.readInteraction(id)).rejects.toThrow("too large");
     request.mockImplementationOnce(async (_input,options)=>new Promise((_resolve,reject)=>options!.signal!.addEventListener("abort",()=>reject(Error("cancelled")),{once:true})));
     const pending=expect(connection.readInteraction(id)).rejects.toThrow("cancelled");connection.stop();await pending;
   }finally{connection.stop()}
+  const calls=request.mock.calls.length;await expect(connection.openWebUi()).rejects.toThrow("disconnected");expect(request).toHaveBeenCalledTimes(calls);
 });

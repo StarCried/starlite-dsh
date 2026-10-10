@@ -84,6 +84,9 @@ export class StatusConnection {
     if(!isOpaqueRef(sessionRef))throw Error("invalid session reference");
     await this.#request("/v1/session/open",MAX_INTERACTION_BYTES,{sessionRef});
   }
+  async openWebUi():Promise<void>{
+    await this.#request("/v1/web/open",MAX_INTERACTION_BYTES,{});
+  }
   #cancelRequests():void{for(const abort of this.#requests)abort.abort();this.#requests.clear();}
   async #request(path:string,limit:number,body?:unknown):Promise<unknown>{
     const descriptor = this.#descriptor;

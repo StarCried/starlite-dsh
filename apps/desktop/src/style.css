@@ -82,7 +82,7 @@ body {
 #bubble .bubble-title {display:block;font-weight:600;color:#292e38;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #bubble[data-bubble-mode="compact"] .bubble-content {display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #bubble[data-interactive="true"] {pointer-events:auto;user-select:text;touch-action:auto;max-height:var(--bubble-max-height, calc(100% - 48px));overflow:auto;}
-.vrm-viewport #bubble {max-height:var(--bubble-max-height);}
+.vrm-viewport #bubble {max-height:var(--bubble-max-height);overflow:auto;}
 #bubble .question-body {display:block;white-space:normal;}
 #bubble fieldset {min-width:0;margin:8px 0;padding:8px;border:1px solid #d0d5de;border-radius:8px;}
 #bubble legend {font-weight:600;white-space:pre-wrap;}
@@ -99,7 +99,33 @@ body {
 
 #bubble[data-bubble-kind="reasoning"] { color: #838995; }
 #bubble[data-bubble-kind="response"] .bubble-content { animation: bubble-reveal 180ms ease-out; }
-#bubble[data-bubble-kind="billing"] .bubble-content { -webkit-line-clamp: 4; animation: bubble-reveal 180ms ease-out; }
+#bubble[data-bubble-kind="billing"] {
+  padding: 12px 15px;
+  border-color: rgb(199 219 234 / 90%);
+  background: #f8fcff;
+  box-shadow: 0 8px 28px rgb(22 47 70 / 20%);
+}
+#bubble[data-bubble-kind="billing"]::after { background: #f8fcff; border-color: rgb(199 219 234 / 90%); }
+#bubble[data-bubble-kind="billing"] > .bubble-title { padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid #e0eaf2; }
+#bubble .billing-card { white-space: normal; animation: bubble-reveal 180ms ease-out; font-variant-numeric: tabular-nums; }
+#bubble .billing-header, #bubble .billing-today, #bubble .billing-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#bubble .billing-label { color: #60758a; font-size: 11px; font-weight: 600; }
+#bubble .billing-status { flex: none; border-radius: 5px; padding: 2px 6px; color: #4c708b; background: #e8f1f8; font-size: 10px; }
+#bubble .billing-balance { display: flex; align-items: baseline; gap: 3px; margin: 5px 0 7px; color: #23445d; line-height: 1.2; }
+#bubble .billing-symbol { font-size: 19px; font-weight: 500; }
+#bubble .billing-amount { font-size: 31px; font-weight: 650; letter-spacing: -.025em; }
+#bubble .billing-currency { margin-left: 4px; color: #7b8fa0; font-size: 11px; }
+#bubble .billing-secondary { margin: -2px 0 8px; color: #60758a; font-size: 11px; }
+#bubble .billing-today { align-items: baseline; border-top: 1px solid #e0eaf2; padding-top: 8px; }
+#bubble .billing-estimates { display: flex; flex-direction: column; align-items: flex-end; color: #355974; font-size: 12px; font-weight: 600; }
+#bubble .billing-estimate { white-space: nowrap; }
+#bubble .billing-hint { margin: 5px 0 0; color: #7a8b9b; font-size: 10px; line-height: 1.5; }
+#bubble .billing-footer { margin-top: 8px; padding-top: 7px; border-top: 1px solid #e0eaf2; color: #8293a1; font-size: 10px; }
+#bubble .billing-period { color: #7d6c51; }
+#bubble .billing-period[data-period="off-peak"] { color: #408079; }
+#bubble .billing-period[data-period="unknown"] { color: #7a8b9b; }
+#bubble .billing-timezone { flex: none; }
+#bubble .billing-message { margin: 12px 0 2px; color: #355974; font-size: 15px; font-weight: 600; }
 @keyframes bubble-reveal { from { opacity: 0.35; } to { opacity: 1; } }
 
 #bubble::after {

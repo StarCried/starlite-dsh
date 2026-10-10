@@ -82,6 +82,7 @@ body {
 #bubble .bubble-title {display:block;font-weight:600;color:#292e38;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #bubble[data-bubble-mode="compact"] .bubble-content {display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #bubble[data-interactive="true"] {pointer-events:auto;user-select:text;touch-action:auto;max-height:var(--bubble-max-height, calc(100% - 48px));overflow:auto;}
+.vrm-viewport #bubble {max-height:var(--bubble-max-height);}
 #bubble .question-body {display:block;white-space:normal;}
 #bubble fieldset {min-width:0;margin:8px 0;padding:8px;border:1px solid #d0d5de;border-radius:8px;}
 #bubble legend {font-weight:600;white-space:pre-wrap;}

@@ -17,8 +17,8 @@ const STATES: ReadonlyArray<{ key: AnimationState; label: string; required: bool
   { key: "error", label: "出错", required: false },
   { key: "blocked", label: "遇到阻碍", required: false },
   { key: "approval", label: "等待确认", required: false },
-  { key: "click", label: "点击回应（可多选，随机播放）", required: false },
-  { key: "ambient", label: "偶发小动作（可多选，随机播放）", required: false },
+  { key: "click", label: "点击回应", required: false },
+  { key: "ambient", label: "偶发小动作", required: false },
 ];
 
 export async function startSettings(): Promise<void> {
@@ -138,19 +138,46 @@ function renderMappings(
 ): void {
   host.replaceChildren();
   for (const state of STATES) {
+    const pool = state.key === "click" || state.key === "ambient";
+    if (pool) {
+      const fieldset = document.createElement("fieldset");
+      fieldset.className = "animation-pool";
+      fieldset.dataset.pool = state.key;
+      fieldset.setAttribute("aria-describedby", "animation-pool-help");
+      const legend = document.createElement("legend");
+      legend.textContent = `${state.label} · 随机播放`;
+      fieldset.append(legend);
+      const choices = document.createElement("div");
+      choices.className = "animation-choices";
+      const selected = current?.[state.key];
+      for (const animation of animations) {
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = animation.name;
+        input.checked = Array.isArray(selected) && selected.includes(animation.name);
+        const text = document.createElement("span");
+        text.textContent = animation.name;
+        label.append(input, text);
+        choices.append(label);
+      }
+      if (!animations.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty-animations";
+        empty.textContent = "导入模型与动作后，在这里勾选。";
+        choices.append(empty);
+      }
+      fieldset.append(choices);
+      host.append(fieldset);
+      continue;
+    }
     const row = document.createElement("div");
     row.className = "mapping-row";
     const label = document.createElement("label");
     label.textContent = state.label;
     const select = document.createElement("select");
     select.dataset.state = state.key;
-    const pool = state.key === "click" || state.key === "ambient";
-    select.multiple = pool;
-    if (pool) {
-      select.size = Math.min(6, Math.max(2, animations.length));
-      select.setAttribute("aria-describedby", "animation-pool-help");
-    }
-    if (!pool) select.append(new Option(state.required ? "请选择待机动作" : "禁用", ""));
+    select.append(new Option(state.required ? "请选择待机动作" : "禁用", ""));
     select.required = state.required;
     for (const animation of animations) select.append(new Option(animation.name, animation.name));
     const selected = current?.[state.key];
@@ -179,8 +206,11 @@ function suggestMappings(inspection: ModelInspection): AnimationMappings {
 function readMappings(host: HTMLElement): AnimationMappings {
   const values = Object.fromEntries(
     [...host.querySelectorAll<HTMLSelectElement>("select[data-state]")]
-      .map((select) => [select.dataset.state, select.multiple ? [...select.selectedOptions].map(option => option.value) : select.value || null]),
+      .map((select) => [select.dataset.state, select.value || null]),
   ) as unknown as AnimationMappings;
+  for (const key of ["click", "ambient"] as const) {
+    values[key] = [...host.querySelectorAll<HTMLInputElement>(`[data-pool="${key}"] input:checked`)].map(input => input.value);
+  }
   if (!values.idle) throw new Error("待机动画必须选择且必须存在于模型中。");
   return values;
 }

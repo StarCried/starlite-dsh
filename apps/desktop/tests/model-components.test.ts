@@ -54,4 +54,16 @@ it("retains installed preferences and leaves failed replacement unsaved",async()
  expect(invoke.mock.calls.some(([name])=>name==="install_model")).toBe(false);
  expect(document.getElementById("settings-error")!.textContent).toContain("invalid model");
 });
+it("keeps existing random pools and saves checkbox edits without modifier keys",async()=>{
+ const animations=[{name:"Idle"},{name:"Click_1"},{name:"Click_2"},{name:"Ambient_1"}];
+ const installed={...initial,model:{backend:"vrm",modelPath:"m.vrm",sourceSha256:"hash",animations,mappings:{...mappings,click:["Click_1"],ambient:["Ambient_1"]},vrm:{animations:[]}}};
+ invoke.mockResolvedValue(installed);
+ await startSettings();
+ const choice=(pool:string,name:string)=>document.querySelector(`[data-pool="${pool}"] input[value="${name}"]`) as HTMLInputElement;
+ expect(choice("click","Click_1").checked).toBe(true);
+ expect(choice("ambient","Ambient_1").checked).toBe(true);
+ choice("click","Click_2").click();choice("ambient","Ambient_1").click();
+ document.getElementById("settings-form")!.dispatchEvent(new Event("submit",{cancelable:true}));await tick();
+ expect(invoke).toHaveBeenCalledWith("update_settings",{request:expect.objectContaining({mappings:expect.objectContaining({idle:"Idle",click:["Click_1","Click_2"],ambient:[]})})});
+});
 

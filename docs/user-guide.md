@@ -20,7 +20,7 @@ dsh plugin --profile web add dsh-inochi2d-pet@0.1.0-alpha.0
 
 本地候选用完整 tarball 路径代替包名，例如 `/mnt/e/path/dsh-inochi2d-pet-0.1.0-alpha.0.tgz`。仅安装到要使用的 profile，不编辑插件缓存或把临时认证链接保存进配置。
 
-4. 首次打开 Windows 程序，在设置中选择有权使用的 `.inp` 或 `.vrm`。VRM 再多选 `.vrma` 动作，按需选择 `profile.json`。明确选择待机；其他状态映射或禁用；点击回应与偶发动作可多选，随机播放。微光资源包选择 `desktop/Weiguang.vrm`、`desktop/motions` 中所有动作及 `desktop/profile.json`，并按包内映射表配置。博客轻量版不用于替换桌宠包。
+4. 首次打开 Windows 程序，在设置中选择有权使用的 `.inp` 或 `.vrm`。VRM 再多选 `.vrma` 动作，按需选择 `profile.json`。明确选择待机；其他状态映射或禁用；点击回应与偶发动作直接勾选多个，每次随机播放。微光资源包选择 `desktop/Weiguang.vrm`、`desktop/motions` 中所有动作及 `desktop/profile.json`，并按包内映射表配置。博客轻量版不用于替换桌宠包。
 5. 保存后在 WSL 启动 `dsh --profile web`。插件随 DSH 拉起桌宠。未配置模型时打开设置；断开后隐藏并等待重连。缺少 Windows 程序或契约不兼容时，DSH 本身仍可运行。
 
 ## 日常使用

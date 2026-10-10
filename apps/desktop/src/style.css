@@ -125,33 +125,42 @@ body {
 
 #settings-view {
   height: 100%;
-  padding: 24px;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   color: #e7ebf3;
   background: #171c27;
+  color-scheme: dark;
 }
+#settings-view[hidden] { display: none; }
+.settings-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 24px 8px; scrollbar-gutter: stable; scrollbar-color: #47546d #171c27; }
 
 #settings-view header,
 #settings-view section {
-  max-width: 720px;
+  max-width: 800px;
   margin: 0 auto 20px;
 }
 
 #settings-view section {
-  padding: 18px;
+  padding: 22px;
   border: 1px solid #30394b;
   border-radius: 16px;
   background: #1d2432;
 }
 #settings-view header p { color: #a7b1c4; line-height: 1.6; }
+#settings-view .eyebrow { margin: 0 0 8px; color: #a9c7f5; font-size: 12px; letter-spacing: .12em; }
+#settings-view header h1 { margin-bottom: 8px; letter-spacing: -.025em; }
 #settings-view .actions {
-  position: sticky;
-  bottom: 0;
-  padding: 16px 0 4px;
+  flex: none;
+  min-height: 76px;
+  padding: 16px 24px;
   border-top: 1px solid #30394b;
   background: #171c27;
+  box-shadow: 0 -8px 24px rgb(7 11 20 / 16%);
   justify-content: flex-end;
 }
+#settings-view .actions button { flex: none; min-width: 112px; min-height: 40px; font-weight: 600; }
+#settings-view .actions #settings-error { flex: 1; min-width: 0; margin: 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 #settings-view button:hover { border-color: #92b3e9; }
 #settings-view :is(button, select, input):focus-visible { outline: 2px solid #92b3e9; outline-offset: 2px; }
 #settings-view button[type="submit"] { color: #152137; background: #a9c7f5; border-color: #a9c7f5; }
@@ -171,6 +180,8 @@ h2 { font-size: 17px; }
 
 .preferences,
 #animation-mappings {
+  display: flex;
+  gap: 14px;
   flex-direction: column;
   align-items: stretch;
 }
@@ -178,7 +189,7 @@ h2 { font-size: 17px; }
 .mapping-row label,
 .preferences label {
   display: grid;
-  grid-template-columns: 140px minmax(160px, 1fr);
+  grid-template-columns: 150px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
 }
@@ -186,20 +197,29 @@ h2 { font-size: 17px; }
 .mapping-row,
 .mapping-row label { width: 100%; }
 .mapping-row select { width: 100%; min-width: 0; }
-.mapping-row select[multiple] { min-height: 160px; padding: 8px; }
-.mapping-row select[multiple] option { padding: 4px 6px; }
-#animation-pool-help { color: #b9b4ca; line-height: 1.5; }
+.animation-pool { min-width: 0; margin: 6px 0 0; padding: 12px; border: 1px solid #364259; border-radius: 12px; }
+.animation-pool legend { padding: 0 6px; font-size: 14px; font-weight: 600; color: #cbd8ec; }
+.animation-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-height: 212px; overflow-y: auto; scrollbar-color: #47546d #1d2432; }
+.animation-choices label { display: flex; gap: 9px; align-items: center; min-width: 0; padding: 9px; border: 1px solid transparent; border-radius: 7px; background: #222c3c; cursor: pointer; }
+.animation-choices label:has(input:checked) { background: #2b3e5b; border-color: #7195c9; }
+.animation-choices input { flex: none; margin: 0; accent-color: #a9c7f5; }
+.animation-choices span { overflow-wrap: anywhere; font-size: 13px; }
+.empty-animations { grid-column: 1 / -1; margin: 8px; color: #9aa8bf; font-size: 13px; }
+#animation-pool-help { margin: 0 0 20px; color: #a7b1c4; font-size: 13px; line-height: 1.7; }
+#settings-view .row { flex-wrap: wrap; }
+#settings-view .preferences > p { margin: 2px 0 0; color: #a7b1c4; font-size: 13px; line-height: 1.7; }
 
 .preferences .check { display: block; }
 
 button,
 select,
 input {
-  border: 1px solid #4d4863;
+  border: 1px solid #45536c;
   border-radius: 8px;
   padding: 8px 10px;
   color: inherit;
-  background: #262238;
+  background: #242e40;
+  font: inherit;
 }
 
 button { cursor: pointer; }
@@ -214,6 +234,15 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 
 #settings-error { color: #ffaaa4; }
 #inspection-status { color: #b8d8ff; }
+#inspection-status:empty { display: none; }
+
+@media (max-width: 560px) {
+  .settings-scroll { padding: 20px 14px 4px; }
+  #settings-view section { padding: 16px; }
+  .mapping-row label, .preferences label { grid-template-columns: 1fr; gap: 7px; }
+  .animation-choices { grid-template-columns: 1fr; }
+  #settings-view .actions { padding: 14px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

@@ -111,3 +111,46 @@ it("does not alter Inochi2D geometry when a bubble changes size",async()=>{
   expect(send).not.toHaveBeenCalled();expect(anchor.style.getPropertyValue("--model-top")).toBe("");
   await bridge.destroy();
 });
+
+it("scrolls a tall question into the available screen space without moving the model",async()=>{
+  bubble.dataset.interactive="true";
+  vi.spyOn(bubble,"getBoundingClientRect").mockImplementation(()=>({height:Math.min(700,Number.parseFloat(anchor.style.getPropertyValue("--bubble-max-height"))||700)}) as DOMRect);
+  const send=vi.fn(async(_value:ModelViewport|null)=>{});
+  const bridge=new ModelViewportBridge(host,anchor,send,vi.fn(),vi.fn(),vi.fn(),bubble);
+  bridge.setScreenSpace(356);
+  await bridge.configure(true);event(expanded);await bridge.ready();
+  expect(anchor.style.getPropertyValue("--bubble-max-height")).toBe("224px");
+  expect(bridge.setScreenSpace(356)).toBe(0);
+  for(const scale of [1,1.25,1.5,2]){
+    // A negative monitor origin must not affect the work-area-relative budget.
+    const screenTop=-900,anchorY=screenTop+Math.round(356*scale);
+    const native=send.mock.calls.at(-1)![0]!;
+    const origin=anchorY+Math.round(native.top*scale);
+    expect(origin).toBe(screenTop);
+    expect(bridge.hostPosition({x:0,y:origin},scale).y).toBe(anchorY/scale);
+  }
+  expect(send.mock.calls.at(-1)![0]!.top).toBe(-356);
+  const calls=send.mock.calls.length;bridge.setScreenSpace(356);expect(send).toHaveBeenCalledTimes(calls);
+  await bridge.destroy();
+});
+
+it("requests only the missing screen clearance when a minimum question or fees cannot fit",async()=>{
+  bubble.dataset.interactive="true";
+  vi.spyOn(bubble,"getBoundingClientRect").mockImplementation(()=>({height:Math.min(700,Number.parseFloat(anchor.style.getPropertyValue("--bubble-max-height"))||700)}) as DOMRect);
+  const send=vi.fn(async(_value:ModelViewport|null)=>{});
+  const bridge=new ModelViewportBridge(host,anchor,send,vi.fn(),vi.fn(),vi.fn(),bubble);
+  bridge.setScreenSpace(160);await bridge.configure(true);event(expanded);await bridge.ready();
+  expect(anchor.style.getPropertyValue("--bubble-max-height")).toBe("128px");
+  expect(bridge.setScreenSpace(160)).toBe(100);
+  // After the caller moves the anchor by exactly this correction, a repeated
+  // position read must not cause another move or expand the form indefinitely.
+  const calls=send.mock.calls.length;
+  expect(bridge.setScreenSpace(260)).toBe(0);expect(send).toHaveBeenCalledTimes(calls);
+  bubble.dataset.interactive="false";
+  vi.mocked(bubble.getBoundingClientRect).mockReturnValue({height:120} as DOMRect);
+  await vi.waitFor(()=>expect(anchor.style.getPropertyValue("--bubble-max-height")).toBe("432px"));
+  expect(bridge.setScreenSpace(228)).toBe(24);
+  expect(bridge.setScreenSpace(252)).toBe(0);
+  bubble.hidden=true;await Promise.resolve();expect(bridge.setScreenSpace(0)).toBe(0);
+  await bridge.destroy();
+});

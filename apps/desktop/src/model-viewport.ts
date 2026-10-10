@@ -11,6 +11,7 @@ const BASE: ModelViewport = {left:0,top:0,width:320,height:480,baseWidth:320,bas
 const BUBBLE_MARGIN = 12;
 // Includes the speech tail, so even the top of an expanded gesture stays clear.
 const BUBBLE_GAP = 24;
+const MIN_INPUT_HEIGHT = 128;
 
 function validViewport(value: unknown): value is ModelViewport {
   if (!value || typeof value !== "object") return false;
@@ -27,6 +28,7 @@ export class ModelViewportBridge {
   #renderViewport = BASE;
   #viewport = BASE;
   #bubbleHeight = 0;
+  #screenSpace: number | undefined;
   readonly #bubbleResize: ResizeObserver;
   readonly #bubbleVisibility: MutationObserver;
   #pending = 0;
@@ -53,7 +55,7 @@ export class ModelViewportBridge {
     this.#bubbleResize = new ResizeObserver(() => this.#updateBubble());
     this.#bubbleResize.observe(bubble);
     this.#bubbleVisibility = new MutationObserver(() => this.#updateBubble());
-    this.#bubbleVisibility.observe(bubble, {attributes:true,attributeFilter:["hidden"]});
+    this.#bubbleVisibility.observe(bubble, {attributes:true,attributeFilter:["hidden","data-interactive"]});
   }
 
   get pending(): boolean { return this.#pending > 0; }
@@ -73,6 +75,18 @@ export class ModelViewportBridge {
     };
   }
 
+  /** CSS px from the logical model anchor to the current monitor's work-area
+   * top. Return the minimum downward anchor correction if even a short bubble
+   * cannot fit. Long input forms scroll before requiring any model movement. */
+  setScreenSpace(aboveModel: number): number {
+    if (!Number.isFinite(aboveModel)) return 0;
+    this.#screenSpace = aboveModel;
+    if (!this.#vrm) return 0;
+    if (this.anchor.style.getPropertyValue("--bubble-max-height") !== `${this.#maxBubbleHeight(this.#renderViewport)}px`) this.#apply(this.#renderViewport);
+    if (!this.#bubbleHeight || this.bubble.hidden) return 0;
+    return Math.max(0,this.#bubbleHeight+BUBBLE_MARGIN+BUBBLE_GAP-this.#renderViewport.top-aboveModel);
+  }
+
   ready(): Promise<void> { return this.#tail; }
 
   destroy(): Promise<void> {
@@ -89,10 +103,20 @@ export class ModelViewportBridge {
   }
 
   #updateBubble(): void {
-    if (this.#vrm && this.#measureBubble() !== this.#bubbleHeight) this.#apply(this.#renderViewport);
+    if (this.#vrm && (this.#measureBubble() !== this.#bubbleHeight
+      || this.anchor.style.getPropertyValue("--bubble-max-height") !== `${this.#maxBubbleHeight(this.#renderViewport)}px`)) this.#apply(this.#renderViewport);
+  }
+
+  #maxBubbleHeight(value: ModelViewport): number {
+    const limit = value.baseHeight-48;
+    if (this.#screenSpace === undefined || this.bubble.dataset.interactive !== "true") return limit;
+    return Math.max(MIN_INPUT_HEIGHT,Math.min(limit,Math.floor(this.#screenSpace+value.top-BUBBLE_MARGIN-BUBBLE_GAP)));
   }
 
   #apply(value: ModelViewport | null): void {
+    // Apply the screen budget before measuring, so the native window reserves
+    // the scrollable form's visible height rather than its full content height.
+    if (value) this.anchor.style.setProperty("--bubble-max-height",`${this.#maxBubbleHeight(value)}px`);
     const bubbleHeight = this.#measureBubble();
     const reserve = value && bubbleHeight ? bubbleHeight + BUBBLE_MARGIN + BUBBLE_GAP : 0;
     const native = value ? {...value,top:value.top-reserve,height:value.height+reserve} : null;
@@ -106,7 +130,7 @@ export class ModelViewportBridge {
       "--model-width":`${native.baseWidth}px`, "--model-height":`${native.baseHeight}px`,
       "--bubble-left":`${-native.left + native.baseWidth / 2}px`,
       "--bubble-top":`${BUBBLE_MARGIN}px`, "--bubble-width":`${Math.min(420,native.baseWidth-32)}px`,
-      "--bubble-max-height":`${native.baseHeight-48}px`,
+      "--bubble-max-height":`${this.#maxBubbleHeight(this.#renderViewport)}px`,
     } : {};
     for (const key of ["--model-left","--model-top","--model-width","--model-height","--bubble-left","--bubble-top","--bubble-width","--bubble-max-height"]) {
       if (variables[key]) this.anchor.style.setProperty(key,variables[key]);

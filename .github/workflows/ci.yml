@@ -137,23 +137,11 @@ jobs:
           name: model-runtimes
           path: apps/desktop/public/runtime
       - run: pnpm install --frozen-lockfile
-      - name: Stage the separately licensed release model when present
-        shell: pwsh
-        run: |
-          if (Test-Path assets/microlight/model.inp) {
-            pnpm stage:demo-model
-          }
       - run: pnpm check
       - run: cargo fmt --check --manifest-path apps/desktop/src-tauri/Cargo.toml
       - run: cargo clippy --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
       - run: cargo clippy --locked --release --manifest-path apps/desktop/src-tauri/Cargo.toml -- -D warnings
-      - name: Rust tests (including the release model when present)
-        shell: pwsh
-        run: |
-          if (Test-Path assets/microlight/model.inp) {
-            $env:DSH_PET_DEMO_MODEL = (Resolve-Path assets/microlight/model.inp).Path
-          }
-          cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
       - run: pnpm desktop:build
       - run: pnpm pack:plugin
       - uses: actions/upload-artifact@v7

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validDemoMappings } from "./release-mappings.mjs";
+import { checkProgramAssets } from "./release-assets.mjs";
 import { checkReleaseInstaller } from "./release-installer.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -66,24 +66,7 @@ if (!cargoRevision) failures.push("inochi2d-pipeline must use a fixed Git revisi
 const pipelinePin = (await textFile("release/inochi2d-pipeline.rev"))?.trim();
 if (!/^[0-9a-f]{40}$/u.test(pipelinePin ?? "") || pipelinePin !== cargoRevision) failures.push("inochi2d-pipeline revision differs from its release pin");
 
-await requiredFile("assets/microlight/model.inp", 1);
-const demoDefaults = await jsonFile("assets/microlight/defaults.json");
-if (!demoDefaults || !validDemoMappings(demoDefaults.mappings)) {
-  failures.push("MicroLight requires valid exact-name mappings in assets/microlight/defaults.json");
-}
-const assetLicense = await textFile("assets/microlight/ASSET_LICENSE.md");
-if (!assetLicense || assetLicense.length < 120) {
-  failures.push("MicroLight requires a complete assets/microlight/ASSET_LICENSE.md");
-} else {
-  if (!/SPDX-License-Identifier:/u.test(assetLicense)) failures.push("MicroLight license lacks an SPDX identifier");
-  if (!/redistribut|再分发/iu.test(assetLicense)) failures.push("MicroLight license does not explicitly address redistribution");
-}
-for (const name of ["model.inp", "defaults.json", "ASSET_LICENSE.md"]) {
-  await requireIdenticalFiles(
-    `assets/microlight/${name}`,
-    `apps/desktop/src-tauri/resources/microlight/${name}`,
-  );
-}
+failures.push(...await checkProgramAssets(root));
 
 const version = versions[0]?.[1] ?? "unknown";
 await requiredFile(`packages/dsh-plugin/.pack/dsh-inochi2d-pet-${version}.tgz`, 1);
@@ -121,16 +104,6 @@ if (failures.length > 0) {
 async function requiredFile(relativePath, minimumBytes) {
   const info = await stat(resolve(root, relativePath)).catch(() => undefined);
   if (!info?.isFile() || info.size < minimumBytes) failures.push(`required release file is missing: ${relativePath}`);
-}
-
-async function requireIdenticalFiles(source, staged) {
-  const [left, right] = await Promise.all([
-    readFile(resolve(root, source)).catch(() => undefined),
-    readFile(resolve(root, staged)).catch(() => undefined),
-  ]);
-  if (!left || !right || !left.equals(right)) {
-    failures.push(`staged release resource does not match ${source}`);
-  }
 }
 
 async function textFile(relativePath) {

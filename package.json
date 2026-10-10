@@ -25,7 +25,6 @@
     "desktop:build": "pnpm --dir apps/desktop tauri build",
     "pack:plugin": "pnpm --dir packages/dsh-plugin run pack:check",
     "sync:runtime": "node tools/sync-model-runtime.mjs",
-    "stage:demo-model": "node tools/stage-demo-model.mjs",
     "check:dsh-contract": "node tools/check-dsh-contract.mjs",
     "check:release": "node tools/check-release.mjs",
     "release:metadata": "node tools/generate-release-metadata.mjs"

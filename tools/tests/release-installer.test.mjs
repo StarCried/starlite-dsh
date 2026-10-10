@@ -47,5 +47,5 @@ it("accepts inputs older than the current installer but rejects missing build in
   expect(await checkReleaseInstaller(root, "DSH Companion", "0.1.0-alpha.0", ["apps/desktop/src-tauri/Cargo.lock"])).toEqual(["release build input is missing or unsafe: apps/desktop/src-tauri/Cargo.lock"]);
 });
 it("covers native packaging, desktop permissions, sources and locked dependencies", () => {
-  for (const path of ["pnpm-lock.yaml", "packages/protocol/src", "apps/desktop/src", "apps/desktop/public/runtime", "apps/desktop/src-tauri/src", "apps/desktop/src-tauri/capabilities", "apps/desktop/src-tauri/resources", "apps/desktop/src-tauri/Cargo.lock", "apps/desktop/src-tauri/tauri.conf.json"]) expect(INSTALLER_INPUTS).toContain(path);
+  for (const path of ["pnpm-lock.yaml", "packages/protocol/src", "apps/desktop/src", "apps/desktop/public/runtime", "apps/desktop/src-tauri/src", "apps/desktop/src-tauri/capabilities", "apps/desktop/src-tauri/Cargo.lock", "apps/desktop/src-tauri/tauri.conf.json"]) expect(INSTALLER_INPUTS).toContain(path);
 });

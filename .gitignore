@@ -27,9 +27,3 @@ apps/desktop/src-tauri/icons/64x64.png
 apps/desktop/src-tauri/icons/Square*.png
 apps/desktop/src-tauri/icons/StoreLogo.png
 apps/desktop/src-tauri/icons/icon.png
-apps/desktop/src-tauri/resources/microlight/model.inp
-apps/desktop/src-tauri/resources/microlight/defaults.json
-apps/desktop/src-tauri/resources/microlight/ASSET_LICENSE.md
-
-# The release model is the only .inp path that may be deliberately tracked.
-!assets/microlight/model.inp

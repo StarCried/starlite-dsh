@@ -12,6 +12,13 @@ across the WSL boundary.
 
 See the repository README for installation and compatibility details.
 
+In DSH Settings, open Plugins → Plugin list → Global, or search `inochi2d-pet`.
+The default Plugin configuration tab only shows web configuration cards; the
+companion's settings live in its Windows app. Reopen Settings to refresh the list.
+The bridge follows DSH's lifecycle. The separate Windows renderer hides on
+disconnect, then exits after a 60-second reconnect grace (stalled sockets first
+have a 45-second heartbeat timeout). Native Windows DSH is not supported.
+
 The companion can answer ordinary DSH questions (single/multiple selections and
 custom text). It claims a question only while its visible input UI is connected;
 disconnecting or disabling input returns it to DSH's existing answerer. Each
@@ -53,11 +60,22 @@ use Asia/Shanghai. Only official Flash/V4 Pro model IDs listed in the pricing
 table are priced; missing usage, unknown models and incomplete reads are shown
 explicitly. Reasoning tokens are already included in output tokens.
 
-Prices were verified on 2026-10-08 against the official
+Models sharing one official account share its balance; requests are priced by
+their actual recorded model. The card identifies the selected configuration.
+When native and pi-ai routes use different accounts, today's DSH estimate still
+covers both eligible routes in this profile, not a per-account bill. Historical
+usage cannot be reliably assigned to an account after a credential change.
+
+Prices were verified on 2026-10-10 against the official
 [CNY](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) and
 [USD](https://api-docs.deepseek.com/quick_start/pricing/) tables. The displayed
-range covers off-peak/peak prices, rather than guessing provider billing time or
-holidays. It is a DSH-only estimate, not the account's official daily bill;
+range covers off-peak/peak prices, rather than guessing each request's provider
+billing time. A separate badge shows the current published tariff period:
+09:00–12:00 and 14:00–18:00 Beijing on Monday–Friday, excluding Chinese public
+holidays. All other times are off-peak at half price. The offline 2026 calendar
+uses the [official holiday schedule](https://www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm);
+an unverified year's weekday daytime period is marked unknown. It is a DSH-only
+estimate, not the account's official daily bill;
 unfinished requests and other apps are not included. Review the table before
 each release. Scans are bounded to 512 sessions, 16 MiB per session and 100,000
 events per session; hitting a limit reports a partial estimate. Unsupported

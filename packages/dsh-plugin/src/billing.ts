@@ -1,10 +1,11 @@
 import { parseBillingSnapshot, type BillingSnapshot } from "@dsh-inochi2d-pet/protocol";
+import {deepSeekPricingPeriod} from "./pricing-period.js";
 
-const PRICING_DATE = "2026-10-08";
+const PRICING_DATE = "2026-10-10";
 const CURRENCIES = ["CNY", "USD"] as const;
 // Official peak prices per million tokens, verified on PRICING_DATE.
 // Off-peak is half. A range avoids pretending to know provider billing time
-// or China's holiday calendar. Unknown model IDs never inherit a price.
+// at the boundary of tariff periods. Unknown model IDs never inherit a price.
 const RATES: Record<string, readonly [number, number, number][]> = {
   "deepseek-flash": [[.04, 2, 8], [.006, .3, 1.2]],
   "deepseek-v4-flash": [[.04, 2, 8], [.006, .3, 1.2]],
@@ -113,18 +114,19 @@ export class DeepSeekBilling implements BillingSource {
     }
     const balance = await balancePromise;
     if (signal.aborted || this.#closed) throw new Error("billing unavailable");
-    return parseBillingSnapshot({billingVersion: 1, checkedAt: now, balance, today});
+    return parseBillingSnapshot({billingVersion: 1, checkedAt: now, pricingPeriod: deepSeekPricingPeriod(now), balance, today});
   }
   async #readBalance(routes: readonly OfficialRoute[], now: number, signal: AbortSignal): Promise<BillingSnapshot["balance"]> {
     if (this.#balance && now - this.#balance.at < 60_000) return this.#balance.value;
     let value: BillingSnapshot["balance"];
+    let source: BillingSnapshot["balance"]["source"];
     try {
       // Prefer DSH's native route, then the explicitly configured pi-ai route.
       // A missing native key must not hide an existing pi-ai credential.
       let key: string | undefined;
       for (const route of routes) {
         key = await resolveKey(this.#context, route);
-        if (key) break;
+        if (key) {source = route.provider;break;}
       }
       if (!key) value = {status: "unconfigured", balances: []};
       else {
@@ -153,9 +155,9 @@ export class DeepSeekBilling implements BillingSource {
           return {currency: entry.currency as "CNY" | "USD", remaining: Number(entry.total_balance)};
         });
         if (new Set(balances.map(item => item.currency)).size !== balances.length) throw new Error("duplicate currency");
-        value = {status: "ready", balances};
+        value = {status: "ready", balances, ...(source ? {source} : {})};
       }
-    } catch {value = {status: "unavailable", balances: []};}
+    } catch {value = {status: "unavailable", balances: [], ...(source ? {source} : {})};}
     if (!signal.aborted && !this.#closed) this.#balance = {at: now, value};
     return value;
   }

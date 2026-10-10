@@ -30,6 +30,8 @@ describe("official DeepSeek billing", () => {
     f.settings.get.mockImplementation(namespace => namespace === "llm-deepseek" ? {apiKeyEnv:"DEEPSEEK_API_KEY"} : {providers:{}});
     const result = await f.source.read();
     expect(result.balance.status).toBe("ready");
+    expect(result.balance.source).toBe("deepseek-official");
+    expect(result.pricingPeriod).toBe("peak");
     expect(result.today.pricedRequests).toBe(1);
     expect(result.today.estimates[0]?.maximum).toBeCloseTo(2.808);
     expect(f.credentials.resolve).toHaveBeenCalledExactlyOnceWith("DEEPSEEK_API_KEY");
@@ -136,7 +138,7 @@ describe("official DeepSeek billing", () => {
     f.credentials.resolve.mockResolvedValue({value:"changed-key"}); f.source.invalidate(true);
     f.request.mockRejectedValue(new Error("PRIVATE response"));
     const result = await f.source.read();
-    expect(result.balance).toEqual({status:"unavailable",balances:[]});
+    expect(result.balance).toEqual({status:"unavailable",balances:[],source:"deepseek"});
     expect(result.today.pricedRequests).toBe(1);
     expect(JSON.stringify(result)).not.toContain("PRIVATE"); f.source.close();
   });

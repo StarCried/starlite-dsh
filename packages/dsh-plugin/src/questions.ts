@@ -24,6 +24,10 @@ export class QuestionBridge {
     const key=this.aggregator.sessionKey(ref);if(key===undefined||this.#closed)throw Error("session unavailable");
     await this.openSession(key);
   }
+  async openWebUi():Promise<void>{
+    if(this.#closed)throw Error("DSH Web UI unavailable");
+    await this.openSession(undefined);
+  }
   cancelSession(key:unknown):void{for(const item of this.#pending.values())if(item.key===key)item.abort()}
   async ask(key:unknown,raw:unknown,next:()=>Promise<unknown>):Promise<unknown>{
     if(this.#closed||!this.#connected||!this.#enabled||this.#pending.size>=32)return next();

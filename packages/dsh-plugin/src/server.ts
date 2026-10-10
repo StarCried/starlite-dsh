@@ -93,7 +93,7 @@ export async function startStatusServer(source: PetStateSource, options: {billin
       if(!pending){reject(response,409);return;}
       jsonResponse(response,parsePetInteraction(pending),origin);return;
     }
-    if(options.questions && request.method === "POST" && ["/v1/interaction/answer","/v1/interaction/availability","/v1/session/open"].includes(path)){
+    if(options.questions && request.method === "POST" && ["/v1/interaction/answer","/v1/interaction/availability","/v1/session/open","/v1/web/open"].includes(path)){
       const bridge=options.questions;
       void readBody(request).then(async body=>{
         if(closed||response.destroyed)return;
@@ -102,6 +102,8 @@ export async function startStatusServer(source: PetStateSource, options: {billin
         if(path==="/v1/interaction/answer")bridge.answer(row);
         else if(path==="/v1/interaction/availability"){
           if(typeof row.enabled!=="boolean"||Object.keys(row).some(k=>k!=="enabled"))throw Error("invalid availability");bridge.setEnabled(row.enabled);
+        }else if(path==="/v1/web/open"){
+          if(Object.keys(row).length!==0)throw Error("invalid navigation");await bridge.openWebUi();
         }else{
           if(!isOpaqueRef(row.sessionRef)||Object.keys(row).some(k=>k!=="sessionRef"))throw Error("invalid navigation");await bridge.open(row.sessionRef);
         }

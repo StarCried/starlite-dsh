@@ -1,11 +1,11 @@
 import {spawn} from "node:child_process";
 
 interface Services {get?(name:string):unknown}
-/** DSH opens its own authenticated URL; the companion receives only an opaque reference. */
+/** An undefined key explicitly opens the Web UI home; supplied keys must identify a session. */
 export async function openDshSession(context:Services,key:unknown,openUrl=openLocalBrowser):Promise<void>{
   const session=record(key), web=record(context.get?.("webServer")), connection=record(context.get?.("connection"));
-  if(typeof session?.id!=="string"||!session.id||session.id.length>256||Array.from(session.id).some(c=>c.charCodeAt(0)<32)
-    ||web?.host!=="127.0.0.1"||!Number.isInteger(web.port)||Number(web.port)<1||Number(web.port)>65535
+  if(key!==undefined&&(typeof session?.id!=="string"||!session.id||session.id.length>256||Array.from(session.id).some(c=>c.charCodeAt(0)<32)))throw Error("DSH session unavailable");
+  if(web?.host!=="127.0.0.1"||!Number.isInteger(web.port)||Number(web.port)<1||Number(web.port)>65535
     ||typeof connection?.authenticatedUrl!=="function")throw Error("DSH Web UI unavailable");
   const url=new URL(`http://127.0.0.1:${web.port}/`);
   const authenticated=(connection.authenticatedUrl as (base:string)=>unknown).call(connection,url.href);
@@ -14,7 +14,7 @@ export async function openDshSession(context:Services,key:unknown,openUrl=openLo
   if(target.origin!==url.origin||target.pathname!=="/")throw Error("DSH Web UI unavailable");
   // DSH's authentication redirect drops query parameters. A browser-owned
   // fragment survives that redirect and never enters an HTTP request/log.
-  target.hash=new URLSearchParams({companionSession:session.id}).toString();
+  target.hash=key===undefined?"":new URLSearchParams({companionSession:session!.id as string}).toString();
   await openUrl(target.href);
 }
 // The opener needs OS launcher variables, never DSH/provider credentials.

@@ -20,6 +20,24 @@ function idleSource(): PetStateSource {
 }
 
 describe("status SSE server", () => {
+  it("requires a distinct authenticated empty action to open the Web UI home",async()=>{
+    const source=new DshStateAggregator(),open=vi.fn(async()=>undefined),bridge=new QuestionBridge(source,open);
+    const server=await startStatusServer(source,{questions:bridge});const base=`http://127.0.0.1:${server.port}`;
+    const headers={Authorization:`Bearer ${server.token}`,"Content-Type":"application/json",Origin:"http://tauri.localhost"};
+    const post=(path:string,body:unknown,requestHeaders:HeadersInit=headers)=>fetch(`${base}${path}`,{method:"POST",headers:requestHeaders,body:JSON.stringify(body)});
+    try{
+      expect((await post("/v1/web/open",{}, {"Content-Type":"application/json"})).status).toBe(401);
+      expect((await post("/v1/web/open",{}, {...headers,Origin:"https://evil.invalid"})).status).toBe(403);
+      for(const body of [null,[],{sessionRef:null},{url:"http://evil.invalid/"}])expect((await post("/v1/web/open",body)).status).toBe(409);
+      expect((await post("/v1/session/open",{})).status).toBe(409);
+      const key={id:"PRIVATE session"},ref=source.sessionInfo(key).ref;source.disposeSession(key);
+      expect((await post("/v1/session/open",{sessionRef:ref})).status).toBe(409);expect(open).not.toHaveBeenCalled();
+      const response=await post("/v1/web/open",{});expect(response.status).toBe(204);expect(await response.text()).toBe("");
+      expect(open).toHaveBeenCalledExactlyOnceWith(undefined);
+      open.mockRejectedValueOnce(Error("PRIVATE authenticated URL"));
+      const failed=await post("/v1/web/open",{});expect(failed.status).toBe(409);expect(await failed.text()).toBe("");
+    }finally{await server.close()}
+  });
   it("answers one authenticated pending question and rejects stale/malformed actions",async()=>{
     const source=new DshStateAggregator(),open=vi.fn(async()=>undefined),bridge=new QuestionBridge(source,open);
     const server=await startStatusServer(source,{questions:bridge});const base=`http://127.0.0.1:${server.port}`;

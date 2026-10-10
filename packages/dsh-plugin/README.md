@@ -20,7 +20,9 @@ remain in DSH. The additive status fields carry the session title, fixed activit
 code and ephemeral references, never the actual session identity.
 
 Double clicking opens the exact displayed session through DSH's authenticated
-local Web UI. WSL hands the authenticated URL directly to the browser launcher;
+local Web UI, or the Web UI home when no session is displayed. Retired or invalid
+session references are rejected rather than silently opening a different target.
+WSL hands the authenticated URL directly to the browser launcher;
 the companion never receives the real identity or browser credentials. The
 included Web client consumes a fragment hint after finding the authoritative
 session/catalog entry; it never creates a session or sends a prompt.

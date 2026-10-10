@@ -27,3 +27,10 @@ it("uses the selected reference for navigation and retires it on disposal",async
  const f=await fixture(),a={},b={};const ref=f.aggregator.sessionInfo(a,"A").ref;f.aggregator.sessionInfo(b,"B");await f.bridge.open(ref);expect(f.open).toHaveBeenCalledWith(a);
  f.aggregator.disposeSession(a);await expect(f.bridge.open(ref)).rejects.toThrow();await f.aggregator.stop();
 });
+it("opens home explicitly without recovering stale sessions or navigating after close",async()=>{
+ const f=await fixture(),key={id:"private"},ref=f.aggregator.sessionInfo(key).ref;
+ await f.bridge.openWebUi();expect(f.open).toHaveBeenCalledExactlyOnceWith(undefined);
+ f.aggregator.disposeSession(key);await expect(f.bridge.open(ref)).rejects.toThrow("session unavailable");
+ await expect(f.bridge.open("invalid")).rejects.toThrow("session unavailable");expect(f.open).toHaveBeenCalledOnce();
+ f.bridge.close();await expect(f.bridge.openWebUi()).rejects.toThrow("Web UI unavailable");expect(f.open).toHaveBeenCalledOnce();await f.aggregator.stop();
+});

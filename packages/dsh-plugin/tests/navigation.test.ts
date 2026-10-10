@@ -2,6 +2,20 @@ import {describe,it,expect,vi} from "vitest";
 import {browserEnvironment,openDshSession} from "../src/navigation.js";
 import {followCompanionSession,type Sessions} from "../src/client.js";
 describe("exact companion navigation",()=>{
+  it("opens the authenticated Web UI home only for an explicit absent session",async()=>{
+    const open=vi.fn(async(_url:string)=>undefined);
+    const context={get:(name:string)=>name==="webServer"?{host:"127.0.0.1",port:4194}:{authenticatedUrl:(url:string)=>`${url}?launchToken=private#stale-hint`}};
+    await openDshSession(context,undefined,open);
+    const target=new URL(open.mock.calls[0]![0]!);
+    expect(target.origin).toBe("http://127.0.0.1:4194");expect(target.pathname).toBe("/");
+    expect(target.searchParams.get("launchToken")).toBe("private");expect(target.hash).toBe("");
+    for(const key of [null,{},"session",{id:""},{id:"bad\nidentity"}])await expect(openDshSession(context,key,open)).rejects.toThrow("session unavailable");
+    expect(open).toHaveBeenCalledOnce();
+    for(const authenticated of ["https://evil.invalid/","http://127.0.0.1:4194/other"]){
+      await expect(openDshSession({get:(name:string)=>name==="webServer"?{host:"127.0.0.1",port:4194}:{authenticatedUrl:()=>authenticated}},undefined,open)).rejects.toThrow("Web UI unavailable");
+    }
+    expect(open).toHaveBeenCalledOnce();
+  });
   it("keeps authentication in the host opener and rejects non-loopback services",async()=>{
     const open=vi.fn(async(_url:string)=>undefined);
     const context={get:(name:string)=>name==="webServer"?{host:"127.0.0.1",port:4194}:{authenticatedUrl:(url:string)=>{const target=new URL(url);target.searchParams.set("launchToken","private");return target.href}}};

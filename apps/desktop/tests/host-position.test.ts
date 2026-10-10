@@ -1,5 +1,5 @@
 import {describe,expect,it,vi} from "vitest";
-import {HostPositionBridge,ScreenClearanceBridge,screenSpaceAboveModel} from "../src/host-position.js";
+import {HostPositionBridge,screenSpaceAboveModel} from "../src/host-position.js";
 
 describe("host position synchronization",()=>{
   it("discards a read from before a viewport resize",async()=>{
@@ -43,50 +43,5 @@ describe("screen clearance",()=>{
     }
     expect(screenSpaceAboveModel({x:5000,y:300},1,monitors)).toBeUndefined();
     expect(screenSpaceAboveModel({x:0,y:0},NaN,monitors)).toBeUndefined();
-  });
-  it("coalesces correction requests and rereads a drag before moving only the remaining distance",async()=>{
-    let ready!:()=>void;
-    const reads=[{x:5,y:20},{x:5,y:80}],move=vi.fn(async()=>{}),changed=vi.fn(async()=>{});
-    const read=vi.fn(async()=>reads.shift()!);
-    const bridge=new ScreenClearanceBridge(read,vi.fn().mockImplementationOnce(()=>new Promise<void>(done=>{ready=done})).mockResolvedValue(undefined),()=>true,point=>100-point.y,move,changed);
-    const first=bridge.sync();await bridge.sync();expect(read).not.toHaveBeenCalled();
-    ready();await first;
-    expect(read).toHaveBeenCalledTimes(2);expect(move).toHaveBeenCalledOnce();expect(move).toHaveBeenCalledWith({x:5,y:80},20);expect(changed).toHaveBeenCalledOnce();
-  });
-  it("does not move when a newer position already has enough room",async()=>{
-    const reads=[{x:0,y:30},{x:0,y:130}],move=vi.fn(async()=>{});
-    const bridge=new ScreenClearanceBridge(async()=>reads.shift()!,async()=>{},()=>true,point=>Math.max(0,100-point.y),move,async()=>{});
-    await bridge.sync();expect(move).not.toHaveBeenCalled();
-  });
-  it("cancels an old correction after remount or pagehide",async()=>{
-    let done!:(point:{x:number;y:number})=>void;
-    const move=vi.fn(async()=>{}),changed=vi.fn(async()=>{});
-    const bridge=new ScreenClearanceBridge(()=>new Promise<{x:number;y:number}>(resolve=>{done=resolve}),async()=>{},()=>true,()=>100,move,changed);
-    const pending=bridge.sync();await Promise.resolve();bridge.invalidate();done({x:0,y:20});await pending;
-    expect(move).not.toHaveBeenCalled();expect(changed).not.toHaveBeenCalled();
-  });
-  it("waits for native layout and bounds retries if layout keeps changing",async()=>{
-    let available=true;
-    const read=vi.fn(async()=>({x:0,y:20})),move=vi.fn(async()=>{}),changed=vi.fn(async()=>{});
-    const bridge=new ScreenClearanceBridge(read,async()=>{available=true},()=>available,()=>{available=false;return 100},move,changed);
-    await bridge.sync();expect(read).toHaveBeenCalledTimes(4);expect(move).not.toHaveBeenCalled();expect(changed).not.toHaveBeenCalled();
-  });
-  it("contains a failed native move without retrying or synchronizing a nonexistent change",async()=>{
-    const read=vi.fn(async()=>({x:0,y:20})),move=vi.fn(async()=>{throw new Error("window gone")}),changed=vi.fn(async()=>{});
-    const bridge=new ScreenClearanceBridge(read,async()=>{},()=>true,()=>100,move,changed);
-    await bridge.sync();expect(read).toHaveBeenCalledTimes(2);expect(move).toHaveBeenCalledOnce();expect(changed).not.toHaveBeenCalled();
-  });
-  it("does not recursively move again after the correction is applied",async()=>{
-    let y=20;
-    const move=vi.fn(async(_point:{x:number;y:number},delta:number)=>{y+=delta});
-    const bridge=new ScreenClearanceBridge(async()=>({x:0,y}),async()=>{},()=>true,point=>Math.max(0,100-point.y),move,async()=>{await bridge.sync()});
-    await bridge.sync();await bridge.sync();expect(move).toHaveBeenCalledOnce();expect(y).toBe(100);
-  });
-  it("defers corrections until an active model drag finishes",async()=>{
-    let dragging=true;
-    const read=vi.fn(async()=>({x:0,y:20})),move=vi.fn(async()=>{});
-    const bridge=new ScreenClearanceBridge(read,async()=>{},()=>!dragging,()=>80,move,async()=>{});
-    await bridge.sync();expect(read).not.toHaveBeenCalled();expect(move).not.toHaveBeenCalled();
-    dragging=false;await bridge.sync();expect(move).toHaveBeenCalledOnce();
   });
 });

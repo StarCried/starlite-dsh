@@ -1,6 +1,7 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { DesktopSettings } from "./types.js";
 import type { ModelCore, ModelModule, ModelSlot, WidgetController } from "./vendor-types.js";
+import { VRM_VIEWPORT_PADDING } from "./model-viewport.js";
 const CORE_URL = "/runtime/model-widget-core/index.js";
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
 const loadCore = () => import(/* @vite-ignore */ CORE_URL) as Promise<ModelCore>;
@@ -15,7 +16,7 @@ export function modelConfig(settings: DesktopSettings): Record<string, unknown> 
   return {
     backend: model.backend, model: convertFileSrc(model.modelPath), fallback: TRANSPARENT_PIXEL,
     display: { width: 320, height: 480 },
-    render: { fps: settings.preferences.fps, maxDevicePixelRatio: settings.preferences.maxDevicePixelRatio, initialScale: settings.preferences.scale, autoFit: true, ...(model.backend === "vrm" ? {fitPadding:.92} : {}) },
+    render: { fps: settings.preferences.fps, maxDevicePixelRatio: settings.preferences.maxDevicePixelRatio, initialScale: settings.preferences.scale, autoFit: true, ...(model.backend === "vrm" ? {fitPadding:.92,viewportPadding:VRM_VIEWPORT_PADDING} : {}) },
     mobile: { show: true }, interactions: { pointer: true, click: false, drag: false },
     animations: model.backend === "inochi2d" ? model.inochi2d!.animations : model.vrm!.animations.map(({name,path}) => ({name,url:convertFileSrc(path)})),
     ...(model.backend === "vrm" && model.vrm?.profilePath ? {profile:convertFileSrc(model.vrm.profilePath)} : {}),

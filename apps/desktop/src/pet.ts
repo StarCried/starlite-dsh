@@ -16,8 +16,8 @@ import { createModelSlot, mountModel } from "./renderer.js";
 import { StateAnimator } from "./state-animator.js";
 import { InteractionMaskBridge } from "./interaction-mask.js";
 import { ModelViewportBridge } from "./model-viewport.js";
-import { HostPositionBridge, ScreenClearanceBridge, screenSpaceAboveModel } from "./host-position.js";
-import { BillingBubble } from "./billing-bubble.js";
+import { HostPositionBridge, screenSpaceAboveModel } from "./host-position.js";
+import { BillingBubble, renderBillingBubble } from "./billing-bubble.js";
 import {WorkBubble,renderPlainBubble} from "./work-bubble.js";
 export {renderBubble} from "./work-bubble.js";
 
@@ -39,7 +39,6 @@ export async function startPet(): Promise<void> {
   let pausedByTray = false;
   let connected = false;
   let closing = false;
-  let modelDragging = false;
   let connection: StatusConnection | undefined;
   let cancelClick=()=>{};
   let geometryQueue:Promise<unknown>=Promise.resolve();
@@ -82,7 +81,7 @@ export async function startPet(): Promise<void> {
       return connection.readBilling();
     },
     allowed: () => connected && !settings.preferences.privacyMode && !latestSnapshot?.inputRequest,
-    render: text => {renderPlainBubble(bubble, text, "billing",latestSnapshot?.session?.title);updateRegion();},
+    render: view => {renderBillingBubble(bubble, view,latestSnapshot?.session?.title);updateRegion();},
     restore: () => {
       if (latestSnapshot) workBubble.update(latestSnapshot, settings.preferences);
       else bubble.hidden = true;
@@ -96,38 +95,14 @@ export async function startPet(): Promise<void> {
     const [position,monitors]=await Promise.all([window.outerPosition(),availableMonitors()]);
     return {x:position.x,y:position.y,monitors,scale:devicePixelRatio||1};
   };
-  const applyScreenBudget=(position:Awaited<ReturnType<typeof readPosition>>)=>{
-    const point=viewport.hostPosition(position,position.scale);
-    const space=screenSpaceAboveModel(point,position.scale,position.monitors);
-    return space===undefined ? 0 : viewport.setScreenSpace(space);
-  };
-  const clearance=new ScreenClearanceBridge(
-    readPosition,()=>viewport.ready(),
-    ()=>!closing&&!modelDragging&&Boolean(controller)&&!viewport.pending,
-    applyScreenBudget,
-    async()=>{
-      const mounted=controller;
-      await geometryTask(async()=>{
-        if(closing||modelDragging||!mounted||controller!==mounted||viewport.pending)return;
-        // Read inside the shared native geometry queue: a drag or resize that
-        // finished while waiting must not be replaced by an older position.
-        const latest=await readPosition();
-        if(closing||modelDragging||controller!==mounted||viewport.pending)return;
-        const remaining=applyScreenBudget(latest);
-        if(remaining<=0||viewport.pending)return;
-        hostPosition.invalidate();
-        await window.setPosition(new PhysicalPosition(latest.x,latest.y+Math.ceil(remaining*latest.scale)));
-      });
-    },
-    ()=>hostPosition.sync(),
-  );
   const hostPosition=new HostPositionBridge(
     readPosition,
     ()=>!closing&&Boolean(controller)&&!viewport.pending,
     position=>{
       const point=viewport.hostPosition(position,position.scale);
       controller?.setHostPosition?.(point.x,point.y);
-      if(applyScreenBudget(position)>0)void clearance.sync();
+      const space=screenSpaceAboveModel(point,position.scale,position.monitors);
+      if(space!==undefined)viewport.setScreenSpace(space);
     },
   );
   const viewport = new ModelViewportBridge(host,anchor,
@@ -135,7 +110,7 @@ export async function startPet(): Promise<void> {
     ()=>{hostPosition.invalidate();interaction.invalidateForViewport();regionPending=null;},
     ()=>{updateRegion();void hostPosition.sync().catch(()=>{});},
     ()=>{void window.hide();void invoke("open_settings");},
-    bubble,
+    bubble,updateRegion,
   );
   await listen<{x: number; y: number}>("pet-cursor", ({payload}) => {
     controller?.setPointerPosition(payload.x, payload.y);
@@ -173,7 +148,6 @@ export async function startPet(): Promise<void> {
   const remount = async () => {
     const generation = ++mountGeneration;
     hostPosition.invalidate();
-    clearance.invalidate();
     const next = settings;
     animator?.disconnected(); animator = undefined;
     slot.destroy(); controller = undefined;
@@ -204,7 +178,7 @@ export async function startPet(): Promise<void> {
       empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-  globalThis.addEventListener("pagehide", () => { closing=true; ++mountGeneration; hostPosition.invalidate(); clearance.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { closing=true; ++mountGeneration; hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   await remount();
 
   connection = new StatusConnection({
@@ -273,15 +247,11 @@ export async function startPet(): Promise<void> {
   document.addEventListener("visibilitychange", syncRendering);
 
   cancelClick=installPointerBehavior(host, {
-    begin: async (x, y) => {
-      modelDragging=true;clearance.invalidate();
-      try{return await invoke("begin_model_drag",{x,y});}
-      catch(error){modelDragging=false;throw error;}
-    },
+    begin: (x, y) => invoke("begin_model_drag",{x,y}),
     move: () => invoke("move_model_drag"),
     end: async () => {
       try{return await invoke("end_model_drag");}
-      finally{modelDragging=false;void hostPosition.sync().catch(()=>{});}
+      finally{void hostPosition.sync().catch(()=>{});}
     },
   }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), () => { void invoke("open_settings"); },()=>{
     const ref=latestSnapshot?.session?.ref;

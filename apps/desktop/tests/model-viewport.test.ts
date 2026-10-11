@@ -108,10 +108,44 @@ it("bottom-aligns a balance card after hidden content and a previously clipped q
   // grows, then sees the shorter replacement card rather than the old form.
   bridge.setScreenSpace(1000);
   expect(anchor.style.getPropertyValue("--bubble-top")).toBe("76px");
-  height=220;resized();
-  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("288px");
-  expect(Number.parseFloat(anchor.style.getPropertyValue("--bubble-top"))+height).toBe(508);
+  height=220;bubble.dataset.bubbleKind="billing";resized();
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("328px");
+  expect(Number.parseFloat(anchor.style.getPropertyValue("--bubble-top"))+height).toBe(548);
   expect(send).toHaveBeenCalledOnce();
+});
+
+it("repositions an equal-height balance overlay and restores work layout on kind changes alone",async()=>{
+  height=220;bubble.dataset.bubbleKind="notice";bubble.dataset.interactive="true";
+  const send=vi.fn(async()=>{}),bridge=new ModelViewportBridge(host,anchor,send,vi.fn(),vi.fn(),vi.fn(),bubble);
+  await bridge.configure(true);
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("288px");
+  // Both kinds are interactive and equally tall: no resize or visibility event
+  // accompanies a work/form-to-balance switch.
+  bubble.dataset.bubbleKind="billing";
+  await vi.waitFor(()=>expect(anchor.style.getPropertyValue("--bubble-top")).toBe("328px"));
+  bubble.dataset.bubbleKind="notice";
+  await vi.waitFor(()=>expect(anchor.style.getPropertyValue("--bubble-top")).toBe("288px"));
+  expect(send).toHaveBeenCalledOnce();await bridge.destroy();
+});
+
+it("budgets the balance inset within the screen edge and preserves the question budget",async()=>{
+  height=700;bubble.dataset.bubbleKind="billing";
+  const send=vi.fn(async()=>{}),bridge=new ModelViewportBridge(host,anchor,send,vi.fn(),vi.fn(),vi.fn(),bubble);
+  bridge.setScreenSpace(356);await bridge.configure(true);
+  expect(anchor.style.getPropertyValue("--bubble-max-height")).toBe("360px");
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("188px");
+  // On-screen top stays at 12px; the extra budget extends the card down toward
+  // the head rather than pushing its top out of the work area.
+  const modelTop=Number.parseFloat(anchor.style.getPropertyValue("--model-top"));
+  expect(356-modelTop+Number.parseFloat(anchor.style.getPropertyValue("--bubble-top"))).toBe(12);
+  bubble.dataset.bubbleKind="notice";
+  await vi.waitFor(()=>expect(anchor.style.getPropertyValue("--bubble-max-height")).toBe("320px"));
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("188px");
+  bubble.dataset.bubbleKind="billing";bridge.setScreenSpace(100);
+  expect(anchor.style.getPropertyValue("--bubble-max-height")).toBe("128px");
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("444px");
+  expect(anchor.style.getPropertyValue("--model-top")).toBe(`${modelTop}px`);
+  expect(send).toHaveBeenCalledOnce();await bridge.destroy();
 });
 
 it("leaves Inochi2D geometry and bubble layout unchanged",async()=>{

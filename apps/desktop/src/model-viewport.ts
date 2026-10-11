@@ -15,6 +15,9 @@ const MAX_BUBBLE_HEIGHT = 432;
 const BUBBLE_MARGIN = 12;
 const BUBBLE_GAP = 24;
 const MIN_BUBBLE_HEIGHT = 128;
+// The short balance overlay can use some of the portrait's empty headroom.
+// Work and question forms retain their higher anchor for readable controls.
+const BILLING_INSET = 40;
 const RESERVE = MAX_BUBBLE_HEIGHT+BUBBLE_MARGIN+BUBBLE_GAP;
 const PORTRAIT_TOP = VRM_VIEWPORT_PADDING.top+RESERVE;
 const FIXED: ModelViewport = {
@@ -47,7 +50,7 @@ export class ModelViewportBridge {
     this.#bubbleResize = new ResizeObserver(() => this.#layoutBubble());
     this.#bubbleResize.observe(bubble);
     this.#bubbleVisibility = new MutationObserver(() => this.#layoutBubble());
-    this.#bubbleVisibility.observe(bubble, {attributes:true,attributeFilter:["hidden","data-interactive"]});
+    this.#bubbleVisibility.observe(bubble, {attributes:true,attributeFilter:["hidden","data-interactive","data-bubble-kind"]});
   }
 
   get pending(): boolean { return this.#pending > 0; }
@@ -86,8 +89,9 @@ export class ModelViewportBridge {
   #layoutBubble(): void {
     if (!this.#vrm) return;
     const above = this.#screenSpace;
+    const inset = this.bubble.dataset.bubbleKind === "billing" ? BILLING_INSET : 0;
     const maxHeight = above === undefined ? MAX_BUBBLE_HEIGHT
-      : Math.max(MIN_BUBBLE_HEIGHT,Math.min(MAX_BUBBLE_HEIGHT,Math.floor(above-BUBBLE_MARGIN-BUBBLE_GAP)));
+      : Math.max(MIN_BUBBLE_HEIGHT,Math.min(MAX_BUBBLE_HEIGHT,Math.floor(above+inset-BUBBLE_MARGIN-BUBBLE_GAP)));
     const previousHeight = this.anchor.style.getPropertyValue("--bubble-max-height");
     const previousTop = this.anchor.style.getPropertyValue("--bubble-top");
     this.anchor.style.setProperty("--bubble-max-height",`${maxHeight}px`);
@@ -98,7 +102,7 @@ export class ModelViewportBridge {
     // leave a later short balance card stuck at its old position. At the screen
     // edge only the bubble moves; the model keeps its user-chosen screen anchor.
     const workTop = above === undefined ? BUBBLE_MARGIN : PORTRAIT_TOP-above+BUBBLE_MARGIN;
-    const top = Math.max(BUBBLE_MARGIN,PORTRAIT_TOP-BUBBLE_GAP-visibleHeight,workTop);
+    const top = Math.max(BUBBLE_MARGIN,PORTRAIT_TOP+inset-BUBBLE_GAP-visibleHeight,workTop);
     this.anchor.style.setProperty("--bubble-top",`${top}px`);
     if(previousHeight!==`${maxHeight}px`||previousTop!==`${top}px`)this.bubbleChanged();
   }

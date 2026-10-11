@@ -141,6 +141,10 @@ body {
   background: rgb(255 255 255 / 94%);
 }
 
+/* An outside tail becomes scrollable overflow on bounded bubbles. */
+#bubble[data-interactive="true"]::after,
+.vrm-viewport #bubble::after { content: none; }
+
 #empty-model {
   position: absolute;
   inset: auto 20px 24px;

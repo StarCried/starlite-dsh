@@ -10,7 +10,7 @@ beforeEach(()=>{
   host=document.getElementById("model")!;anchor=document.getElementById("pet-view")!;surface=document.getElementById("surface")!;
   bubble=document.getElementById("bubble")!;height=62;
   vi.stubGlobal("ResizeObserver",class{constructor(callback:()=>void){resized=callback;}observe(){}disconnect(){}});
-  vi.spyOn(bubble,"getBoundingClientRect").mockImplementation(()=>({height:Math.min(height,Number.parseFloat(anchor.style.getPropertyValue("--bubble-max-height"))||height)}) as DOMRect);
+  vi.spyOn(bubble,"getBoundingClientRect").mockImplementation(()=>({height:bubble.hidden?0:Math.min(height,Number.parseFloat(anchor.style.getPropertyValue("--bubble-max-height"))||height)}) as DOMRect);
 });
 afterEach(()=>vi.unstubAllGlobals());
 const event=(value:unknown)=>surface.dispatchEvent(new CustomEvent("model-viewport-change",{bubbles:true,detail:value}));
@@ -44,7 +44,7 @@ it("never resizes, moves the anchor or clears hit coverage when actions or bubbl
     expect(bridge.hostPosition({x:300,y:-100},1.25)).toEqual(point);
     const modelTop=Number.parseFloat(anchor.style.getPropertyValue("--model-top"));
     const bubbleTop=Number.parseFloat(anchor.style.getPropertyValue("--bubble-top"));
-    expect(modelTop-64-(bubbleTop+Math.min(height,432)+9)).toBe(15);
+    expect(modelTop-(bubbleTop+Math.min(height,432))).toBe(24);
     expect(bubbleTop).toBeGreaterThanOrEqual(12);
   }
   bubble.hidden=true;await Promise.resolve();bubble.hidden=false;await Promise.resolve();
@@ -83,7 +83,7 @@ it("budgets and scrolls a tall bubble at screen boundaries without requesting an
   const send=vi.fn(async()=>{}),layout=vi.fn();
   const bridge=new ModelViewportBridge(host,anchor,send,vi.fn(),vi.fn(),vi.fn(),bubble,layout);
   bridge.setScreenSpace(356);await bridge.configure(true);
-  expect(anchor.style.getPropertyValue("--bubble-max-height")).toBe("256px");
+  expect(anchor.style.getPropertyValue("--bubble-max-height")).toBe("320px");
   expect(anchor.style.getPropertyValue("--bubble-top")).toBe("188px");
   const anchorTop=anchor.style.getPropertyValue("--model-top");
   // Even the minimum form cannot fit above a manually dragged top-edge model:
@@ -95,7 +95,23 @@ it("budgets and scrolls a tall bubble at screen boundaries without requesting an
   expect(send).toHaveBeenCalledOnce();expect(layout).toHaveBeenCalledTimes(2);
   bridge.setScreenSpace(100);expect(layout).toHaveBeenCalledTimes(2);
   bridge.setScreenSpace(1000);expect(anchor.style.getPropertyValue("--bubble-max-height")).toBe("432px");
-  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("12px");expect(send).toHaveBeenCalledOnce();
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("76px");expect(send).toHaveBeenCalledOnce();
+});
+
+it("bottom-aligns a balance card after hidden content and a previously clipped question",async()=>{
+  bubble.hidden=true;height=700;
+  const send=vi.fn(async()=>{}),bridge=new ModelViewportBridge(host,anchor,send,vi.fn(),vi.fn(),vi.fn(),bubble);
+  bridge.setScreenSpace(100);await bridge.configure(true);
+  bubble.hidden=false;resized();
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("444px");
+  // ResizeObserver sees the restored natural height after the screen budget
+  // grows, then sees the shorter replacement card rather than the old form.
+  bridge.setScreenSpace(1000);
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("76px");
+  height=220;resized();
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("288px");
+  expect(Number.parseFloat(anchor.style.getPropertyValue("--bubble-top"))+height).toBe(508);
+  expect(send).toHaveBeenCalledOnce();
 });
 
 it("leaves Inochi2D geometry and bubble layout unchanged",async()=>{

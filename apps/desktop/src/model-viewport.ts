@@ -16,8 +16,9 @@ const BUBBLE_MARGIN = 12;
 const BUBBLE_GAP = 24;
 const MIN_BUBBLE_HEIGHT = 128;
 const RESERVE = MAX_BUBBLE_HEIGHT+BUBBLE_MARGIN+BUBBLE_GAP;
+const PORTRAIT_TOP = VRM_VIEWPORT_PADDING.top+RESERVE;
 const FIXED: ModelViewport = {
-  ...BASE,left:-VRM_VIEWPORT_PADDING.left,top:-VRM_VIEWPORT_PADDING.top-RESERVE,
+  ...BASE,left:-VRM_VIEWPORT_PADDING.left,top:-PORTRAIT_TOP,
   width:BASE.width+VRM_VIEWPORT_PADDING.left+VRM_VIEWPORT_PADDING.right,
   height:BASE.height+VRM_VIEWPORT_PADDING.top+VRM_VIEWPORT_PADDING.bottom+RESERVE,
 };
@@ -86,17 +87,18 @@ export class ModelViewportBridge {
     if (!this.#vrm) return;
     const above = this.#screenSpace;
     const maxHeight = above === undefined ? MAX_BUBBLE_HEIGHT
-      : Math.max(MIN_BUBBLE_HEIGHT,Math.min(MAX_BUBBLE_HEIGHT,Math.floor(above-VRM_VIEWPORT_PADDING.top-BUBBLE_MARGIN-BUBBLE_GAP)));
+      : Math.max(MIN_BUBBLE_HEIGHT,Math.min(MAX_BUBBLE_HEIGHT,Math.floor(above-BUBBLE_MARGIN-BUBBLE_GAP)));
     const previousHeight = this.anchor.style.getPropertyValue("--bubble-max-height");
     const previousTop = this.anchor.style.getPropertyValue("--bubble-top");
     this.anchor.style.setProperty("--bubble-max-height",`${maxHeight}px`);
     const height = this.bubble.hidden ? 0 : this.bubble.getBoundingClientRect().height;
     const visibleHeight = Number.isFinite(height) && height > 0 ? Math.min(Math.ceil(height),maxHeight) : 0;
-    // Bottom-align short bubbles above the fixed canvas instead of leaving a
-    // large blank gap. At the monitor edge, keep the form reachable by shifting
-    // only the bubble down; dragging the model remains entirely user-controlled.
-    const workTop = above === undefined ? BUBBLE_MARGIN : -FIXED.top-above+BUBBLE_MARGIN;
-    const top = Math.max(BUBBLE_MARGIN,RESERVE-BUBBLE_GAP-visibleHeight,workTop);
+    // Anchor to the portrait, not the transparent gesture margin above it.
+    // Measure after setting max-height so a previously clipped question cannot
+    // leave a later short balance card stuck at its old position. At the screen
+    // edge only the bubble moves; the model keeps its user-chosen screen anchor.
+    const workTop = above === undefined ? BUBBLE_MARGIN : PORTRAIT_TOP-above+BUBBLE_MARGIN;
+    const top = Math.max(BUBBLE_MARGIN,PORTRAIT_TOP-BUBBLE_GAP-visibleHeight,workTop);
     this.anchor.style.setProperty("--bubble-top",`${top}px`);
     if(previousHeight!==`${maxHeight}px`||previousTop!==`${top}px`)this.bubbleChanged();
   }

@@ -10,7 +10,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tempfile::TempDir;
 use zip::{CompressionMethod, ZipArchive};
 
@@ -18,7 +18,7 @@ use crate::{
     model,
     settings::{
         self, AnimationSource, DesktopPreferences, DesktopSettings, ModelBackend,
-        ModelInstallRequest,
+        ModelInstallRequest, ModelLicense,
     },
     vrm,
 };
@@ -40,15 +40,6 @@ pub struct ResourcePackInspection {
     pub animation_count: usize,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StarterPackInspection {
-    pub path: String,
-    pub model_sha256: String,
-    #[serde(flatten)]
-    pub pack: ResourcePackInspection,
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct StarterDescriptor {
@@ -63,99 +54,98 @@ struct StarterDescriptor {
 const STARTER_ERROR: &str =
     "微光资源准备失败。请重启 DSH 重试；也可以手动导入资源包，原模型和设置未改变。";
 
-/// Only the plugin-staged, executable-adjacent pack participates in onboarding.
-/// No webview-supplied path or archive name can redirect this lookup.
-pub fn starter(app: &AppHandle) -> Result<Option<StarterPackInspection>, String> {
-    let exe = std::env::current_exe().map_err(|_| STARTER_ERROR)?;
-    starter_for_model(
-        exe.parent().ok_or(STARTER_ERROR)?,
-        settings::load(app).model.as_ref(),
-    )
-}
-
-pub fn should_offer_starter(app: &AppHandle, current: &DesktopSettings) -> bool {
-    let Ok(marker) = starter_marker(app) else {
-        return false;
-    };
-    should_offer_at(
-        starter_descriptor().ok().flatten().as_ref(),
-        current.model.as_ref(),
-        &marker,
-    )
-}
-
-fn should_offer_at(
-    starter: Option<&StarterDescriptor>,
-    model: Option<&settings::InstalledModel>,
-    marker: &Path,
-) -> bool {
-    let Some(starter) = starter else { return false };
-    if installed_starter(starter, model) {
-        return false;
+pub fn prepare_model(app: &AppHandle) -> Result<DesktopSettings, String> {
+    let current = settings::load(app);
+    if !needs_default(&current) {
+        return Ok(current);
     }
-    read_limited(marker, 64)
-        .ok()
-        .is_none_or(|bytes| bytes != starter.sha256.as_bytes())
+    install_default(app, current.preferences)
 }
 
-pub fn mark_starter_seen(app: &AppHandle, expected_sha256: String) -> Result<(), String> {
-    let starter = starter_descriptor()?.ok_or(STARTER_ERROR)?;
-    let marker = starter_marker(app).map_err(|_| "无法保存微光引导状态。")?;
-    mark_seen_at(&marker, &starter, &expected_sha256)
-        .map_err(|_| "无法保存微光引导状态，下次启动可能再次显示；模型和设置未改变。".into())
+pub fn use_default_model(
+    app: &AppHandle,
+    mut preferences: DesktopPreferences,
+) -> Result<DesktopSettings, String> {
+    preferences.model_enabled = true;
+    settings::validate_preferences(&preferences)?;
+    install_default(app, preferences)
 }
 
-fn starter_marker(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_data_dir()
-        .map(|path| path.join("starter-offered.sha256"))
-        .map_err(|e| e.to_string())
-}
-
-fn mark_seen_at(marker: &Path, starter: &StarterDescriptor, expected: &str) -> Result<(), String> {
-    if !valid_hash(expected) || starter.sha256 != expected {
-        return Err("starter changed before it was shown".into());
+pub fn set_model_enabled(app: &AppHandle, enabled: bool) -> Result<DesktopSettings, String> {
+    let mut current = settings::load(app);
+    current.preferences.model_enabled = enabled;
+    if needs_default(&current) {
+        return install_default(app, current.preferences);
     }
-    fs::create_dir_all(marker.parent().ok_or("missing marker parent")?)
-        .map_err(|e| e.to_string())?;
-    let mut file = atomic_write_file::AtomicWriteFile::open(marker).map_err(|e| e.to_string())?;
-    file.write_all(expected.as_bytes())
-        .map_err(|e| e.to_string())?;
-    file.commit().map_err(|e| e.to_string())
+    settings::store(app, &current)?;
+    Ok(current)
 }
 
-#[cfg(test)]
-fn starter_at(parent: &Path) -> Result<Option<StarterPackInspection>, String> {
-    starter_for_model(parent, None)
+fn needs_default(current: &DesktopSettings) -> bool {
+    current.preferences.model_enabled
+        && current
+            .model
+            .as_ref()
+            .is_none_or(|model| model.backend != ModelBackend::Vrm)
 }
 
-fn starter_for_model(
+fn install_default(
+    app: &AppHandle,
+    preferences: DesktopPreferences,
+) -> Result<DesktopSettings, String> {
+    let parent = starter_parent()?;
+    let pack = prepare_default(&parent, preferences)?.ok_or(STARTER_ERROR)?;
+    install_prepared(app, pack)
+}
+
+/// License viewing is read-only. Existing custom VRM models never acquire the
+/// default character's license, and normal startup never reopens their archive.
+pub fn model_license(app: &AppHandle) -> Result<Option<ModelLicense>, String> {
+    let current = settings::load(app);
+    if let Some(license) = current
+        .model
+        .as_ref()
+        .and_then(|model| model.license.clone())
+    {
+        return Ok(Some(license));
+    }
+    license_for_model(&starter_parent()?, current.model.as_ref())
+}
+
+fn license_for_model(
     parent: &Path,
     model: Option<&settings::InstalledModel>,
-) -> Result<Option<StarterPackInspection>, String> {
+) -> Result<Option<ModelLicense>, String> {
+    let Some(descriptor) = read_starter_descriptor(parent)? else {
+        return Ok(None);
+    };
+    if model.is_some_and(|model| {
+        model.backend != ModelBackend::Vrm || model.source_sha256 != descriptor.model_sha256
+    }) {
+        return Ok(None);
+    }
+    let pack = starter_checked(parent, descriptor, DesktopPreferences::default())
+        .map_err(|_| STARTER_ERROR)?;
+    Ok(Some(license_of(&pack)))
+}
+
+fn starter_parent() -> Result<PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|_| STARTER_ERROR)?;
+    Ok(exe.parent().ok_or(STARTER_ERROR)?.to_owned())
+}
+
+/// Only the plugin-staged, executable-adjacent default can be used. No webview
+/// path or archive name can redirect automatic preparation.
+fn prepare_default(
+    parent: &Path,
+    preferences: DesktopPreferences,
+) -> Result<Option<PreparedPack>, String> {
     read_starter_descriptor(parent)?
-        .filter(|descriptor| !installed_starter(descriptor, model))
-        .map(|descriptor| starter_checked(parent, descriptor))
+        .map(|descriptor| starter_checked(parent, descriptor, preferences))
         .transpose()
         .map_err(|_| STARTER_ERROR.into())
 }
 
-fn installed_starter(
-    descriptor: &StarterDescriptor,
-    model: Option<&settings::InstalledModel>,
-) -> bool {
-    model.is_some_and(|model| {
-        model.backend == ModelBackend::Vrm && model.source_sha256 == descriptor.model_sha256
-    })
-}
-
-fn starter_descriptor() -> Result<Option<StarterDescriptor>, String> {
-    let exe = std::env::current_exe().map_err(|_| STARTER_ERROR)?;
-    read_starter_descriptor(exe.parent().ok_or(STARTER_ERROR)?)
-}
-
-// Introduction readiness uses only this bounded descriptor. It neither opens
-// the ZIP nor claims that the character assets passed validation.
 fn read_starter_descriptor(parent: &Path) -> Result<Option<StarterDescriptor>, String> {
     let descriptor_path = parent.join("starter-character.json");
     match fs::symlink_metadata(&descriptor_path) {
@@ -193,23 +183,20 @@ fn descriptor_checked(parent: &Path, descriptor_path: &Path) -> Result<StarterDe
 fn starter_checked(
     parent: &Path,
     descriptor: StarterDescriptor,
-) -> Result<StarterPackInspection, String> {
+    preferences: DesktopPreferences,
+) -> Result<PreparedPack, String> {
     let path = parent.join("starter-character.zip");
     let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
     if metadata.len() != descriptor.bytes || linked(&metadata) {
         return Err("starter archive size or file type mismatch".into());
     }
-    let prepared = prepare(&path, DesktopPreferences::default())?;
+    let prepared = prepare(&path, preferences)?;
     if prepared.inspection.sha256 != descriptor.sha256
         || prepared.model_sha256 != descriptor.model_sha256
     {
         return Err("starter archive digest mismatch".into());
     }
-    Ok(StarterPackInspection {
-        path: settings::path_string(&path)?,
-        model_sha256: descriptor.model_sha256,
-        pack: prepared.inspection,
-    })
+    Ok(prepared)
 }
 
 fn linked(metadata: &fs::Metadata) -> bool {
@@ -224,6 +211,7 @@ fn linked(metadata: &fs::Metadata) -> bool {
     }
 }
 
+#[derive(Debug)]
 struct PreparedPack {
     _directory: TempDir,
     inspection: ResourcePackInspection,
@@ -248,7 +236,19 @@ pub fn install(
         &expected_sha256,
         accept_license,
     )?;
-    model::install(app, pack.request)
+    install_prepared(app, pack)
+}
+
+fn license_of(pack: &PreparedPack) -> ModelLicense {
+    ModelLicense {
+        title: pack.inspection.title.clone(),
+        text: pack.inspection.license.clone(),
+    }
+}
+
+fn install_prepared(app: &AppHandle, pack: PreparedPack) -> Result<DesktopSettings, String> {
+    let license = license_of(&pack);
+    model::install_with_license(app, pack.request, Some(license))
 }
 
 fn checked_prepare(
@@ -829,23 +829,25 @@ mod tests {
         (folder, descriptor)
     }
 
+    fn starter_at(parent: &Path) -> Result<Option<PreparedPack>, String> {
+        prepare_default(parent, DesktopPreferences::default())
+    }
+
     #[test]
     fn discovers_only_the_fixed_starter_and_validates_model_identity_and_license() {
         let portable = tempfile::tempdir().unwrap();
         assert!(starter_at(portable.path()).unwrap().is_none());
         let (folder, descriptor) = starter_fixture(fixture());
         let result = starter_at(folder.path()).unwrap().unwrap();
-        assert_eq!(result.pack.animation_count, 1);
-        assert_eq!(result.pack.license, "Synthetic test license; no artwork.");
-        assert_eq!(result.model_sha256, descriptor["modelSha256"]);
-        assert_eq!(result.pack.sha256, descriptor["sha256"]);
+        assert_eq!(result.inspection.animation_count, 1);
         assert_eq!(
-            Path::new(&result.path),
-            folder.path().join("starter-character.zip")
+            result.inspection.license,
+            "Synthetic test license; no artwork."
         );
-        let serialized = serde_json::to_value(result).unwrap();
-        assert_eq!(serialized["animationCount"], 1);
-        assert!(serialized.get("pack").is_none());
+        assert_eq!(result.model_sha256, descriptor["modelSha256"]);
+        assert_eq!(result.inspection.sha256, descriptor["sha256"]);
+        assert!(Path::new(&result.request.source_path).is_file());
+        assert!(result.request.preferences.model_enabled);
     }
 
     #[test]
@@ -900,39 +902,37 @@ mod tests {
     }
 
     #[test]
-    fn offers_a_starter_once_per_archive_after_the_ui_acknowledges_it() {
+    fn default_preparation_requires_no_first_launch_marker_or_consent_flag() {
         let (folder, _) = starter_fixture(fixture());
-        let mut starter = read_starter_descriptor(folder.path()).unwrap().unwrap();
-        let state = tempfile::tempdir().unwrap();
-        let marker = state.path().join("starter-offered.sha256");
-        assert!(!should_offer_at(None, None, &marker));
-        assert!(should_offer_at(Some(&starter), None, &marker));
-        // Inspection itself must not count as presenting the introduction.
-        assert!(!marker.exists());
-        assert!(mark_seen_at(&marker, &starter, &"0".repeat(64)).is_err());
-        assert!(!marker.exists());
-        mark_seen_at(&marker, &starter, &starter.sha256).unwrap();
-        assert!(!should_offer_at(Some(&starter), None, &marker));
-        assert_eq!(fs::read_to_string(&marker).unwrap(), starter.sha256);
-        starter.sha256 = "1".repeat(64);
-        assert!(should_offer_at(Some(&starter), None, &marker));
-        fs::write(&marker, b"corrupted").unwrap();
-        assert!(should_offer_at(Some(&starter), None, &marker));
-        fs::write(&marker, vec![b'a'; 65]).unwrap();
-        assert!(should_offer_at(Some(&starter), None, &marker));
+        let preferences = DesktopPreferences {
+            fps: 60,
+            scale: 0.8,
+            privacy_mode: true,
+            ..DesktopPreferences::default()
+        };
+        let prepared = prepare_default(folder.path(), preferences)
+            .unwrap()
+            .unwrap();
+        assert_eq!(prepared.request.preferences.fps, 60);
+        assert_eq!(prepared.request.preferences.scale, 0.8);
+        assert!(prepared.request.preferences.privacy_mode);
+        assert_eq!(
+            license_of(&prepared).text,
+            "Synthetic test license; no artwork."
+        );
+        assert!(!folder.path().join("starter-offered.sha256").exists());
     }
 
     #[test]
-    fn skips_the_intro_for_the_installed_starter_and_never_changes_another_model() {
+    fn existing_vrm_and_disabled_models_are_preserved_without_archive_access() {
         let (folder, _) = starter_fixture(fixture());
         let starter = read_starter_descriptor(folder.path()).unwrap().unwrap();
-        let marker = folder.path().join("starter-offered.sha256");
         let prepared = prepare(
             &folder.path().join("starter-character.zip"),
             DesktopPreferences::default(),
         )
         .unwrap();
-        let mut model = settings::InstalledModel {
+        let model = settings::InstalledModel {
             backend: ModelBackend::Vrm,
             model_path: prepared.request.source_path.clone(),
             source_sha256: starter.model_sha256.clone(),
@@ -943,41 +943,39 @@ mod tests {
                 animations: prepared.request.animation_sources,
                 profile_path: None,
             }),
+            license: None,
         };
-        assert!(!should_offer_at(Some(&starter), Some(&model), &marker));
-        // Already-installed startup must not read or extract the archive.
+        let mut current = DesktopSettings {
+            model: Some(model),
+            ..DesktopSettings::default()
+        };
         fs::remove_file(folder.path().join("starter-character.zip")).unwrap();
-        assert!(starter_for_model(folder.path(), Some(&model))
+        assert!(!needs_default(&current));
+        current.model.as_mut().unwrap().source_sha256 = "f".repeat(64);
+        assert!(!needs_default(&current));
+        assert!(license_for_model(folder.path(), current.model.as_ref())
             .unwrap()
             .is_none());
-        model.source_sha256 = "f".repeat(64);
-        assert_eq!(
-            starter_for_model(folder.path(), Some(&model)).unwrap_err(),
-            STARTER_ERROR
-        );
-        let before = serde_json::to_value(&model).unwrap();
-        assert!(should_offer_at(Some(&starter), Some(&model), &marker));
-        mark_seen_at(&marker, &starter, &starter.sha256).unwrap();
-        assert!(!should_offer_at(Some(&starter), Some(&model), &marker));
-        assert_eq!(serde_json::to_value(model).unwrap(), before);
+        current.model = None;
+        current.preferences.model_enabled = false;
+        assert!(!needs_default(&current));
+        current.preferences.model_enabled = true;
+        assert!(needs_default(&current));
     }
 
     #[test]
-    fn introduction_readiness_does_not_require_or_validate_the_archive() {
-        let portable = tempfile::tempdir().unwrap();
-        assert!(read_starter_descriptor(portable.path()).unwrap().is_none());
+    fn a_failed_default_does_not_change_preferences_or_replace_a_legacy_model() {
         let (folder, _) = starter_fixture(fixture());
+        let old = json!({"schemaVersion":1,"preferences":{"fps":60,"maxDevicePixelRatio":1.25,"scale":0.8,"privacyMode":true},"model":{"modelPath":"local/model.inp","sourceSha256":"source","animations":[{"name":"Idle","timestepMs":100,"length":10,"lanes":[]}],"mappings":{"idle":"Idle","thinking":null,"working":null,"completed":null,"error":null,"blocked":null,"approval":null,"click":null}}});
+        let current = settings::decode_settings(&serde_json::to_vec(&old).unwrap()).unwrap();
+        let before = serde_json::to_value(&current).unwrap();
+        assert!(needs_default(&current));
         fs::remove_file(folder.path().join("starter-character.zip")).unwrap();
-        let descriptor = read_starter_descriptor(folder.path()).unwrap().unwrap();
-        let marker = folder.path().join("starter-offered.sha256");
-        // The UI must still open and explain acquisition failure. Its eventual
-        // acknowledgment marks only the introduction, never asset validity.
-        assert!(should_offer_at(Some(&descriptor), None, &marker));
-        mark_seen_at(&marker, &descriptor, &descriptor.sha256).unwrap();
-        assert!(!should_offer_at(Some(&descriptor), None, &marker));
-        assert_eq!(starter_at(folder.path()).unwrap_err(), STARTER_ERROR);
-        fs::write(folder.path().join("starter-character.json"), b"{corrupt").unwrap();
-        assert!(read_starter_descriptor(folder.path()).is_err());
+        assert_eq!(
+            prepare_default(folder.path(), current.preferences.clone()).unwrap_err(),
+            STARTER_ERROR
+        );
+        assert_eq!(serde_json::to_value(current).unwrap(), before);
     }
 
     #[cfg(unix)]

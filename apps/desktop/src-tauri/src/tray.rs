@@ -123,9 +123,11 @@ fn toggle_visibility(app: &AppHandle) {
 }
 
 fn toggle_privacy(app: &AppHandle) {
-    let mut current = settings::load(app);
-    current.preferences.privacy_mode = !current.preferences.privacy_mode;
-    if settings::store(app, &current).is_ok() {
+    let _ = settings::with_write(app, || {
+        let mut current = settings::load(app);
+        current.preferences.privacy_mode = !current.preferences.privacy_mode;
+        settings::store(app, &current)?;
         let _ = app.emit("settings-changed", current);
-    }
+        Ok(())
+    });
 }

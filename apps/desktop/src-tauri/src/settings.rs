@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use atomic_write_file::AtomicWriteFile;
 use serde::{Deserialize, Serialize};
@@ -10,11 +11,23 @@ use tauri::{AppHandle, Manager};
 
 pub const SETTINGS_SCHEMA_VERSION: u32 = 3;
 
+#[derive(Default)]
+pub struct SettingsWriteState(Mutex<()>);
+
+pub fn with_write<T>(
+    app: &AppHandle,
+    operation: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    let state = app.state::<SettingsWriteState>();
+    let _guard = state.0.lock().map_err(|_| "模型设置忙，请重试。")?;
+    operation()
+}
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ModelBackend {
-    #[default]
     Inochi2d,
+    #[default]
     Vrm,
 }
 
@@ -68,6 +81,8 @@ fn deserialize_animation_pool<'de, D: serde::Deserializer<'de>>(
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopPreferences {
+    #[serde(default = "enabled_by_default")]
+    pub model_enabled: bool,
     pub fps: u16,
     pub max_device_pixel_ratio: f64,
     pub scale: f64,
@@ -87,13 +102,25 @@ pub enum BubbleMode {
 impl Default for DesktopPreferences {
     fn default() -> Self {
         Self {
-            fps: 60,
+            model_enabled: true,
+            fps: 30,
             max_device_pixel_ratio: 1.5,
             scale: 1.0,
             privacy_mode: false,
             bubble_mode: BubbleMode::Compact,
         }
     }
+}
+
+fn enabled_by_default() -> bool {
+    true
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelLicense {
+    pub title: String,
+    pub text: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -108,6 +135,8 @@ pub struct InstalledModel {
     pub inochi2d: Option<InochiModelData>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vrm: Option<VrmModelData>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<ModelLicense>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -234,6 +263,17 @@ pub fn inochi_catalog(animations: &[Value]) -> Result<Vec<Value>, String> {
 }
 
 fn validate_model(model: &InstalledModel) -> Result<(), String> {
+    if let Some(license) = &model.license {
+        if license.title.trim().is_empty()
+            || license.title.chars().count() > 128
+            || license.title.chars().any(char::is_control)
+            || license.text.trim().is_empty()
+            || license.text.len() > 256 * 1024
+            || license.text.contains('\0')
+        {
+            return Err("invalid model license".into());
+        }
+    }
     validate_mappings(&model.mappings, &model.animations)?;
     let names = animation_names(&model.animations)?;
     if names.len() != model.animations.len()
@@ -400,6 +440,7 @@ mod tests {
         assert_eq!(migrated.schema_version, 3);
         assert_eq!(migrated.preferences.fps, 60);
         assert!(migrated.preferences.privacy_mode);
+        assert!(migrated.preferences.model_enabled);
         assert_eq!(migrated.preferences.bubble_mode, BubbleMode::Compact);
         let model = migrated.model.unwrap();
         assert_eq!(model.backend, ModelBackend::Inochi2d);
@@ -492,5 +533,23 @@ mod tests {
         );
         value["preferences"]["bubbleMode"] = "unknown".into();
         assert!(decode_settings(&serde_json::to_vec(&value).unwrap()).is_err());
+    }
+
+    #[test]
+    fn disabling_a_model_survives_reload_without_requiring_an_installed_model() {
+        let mut current = DesktopSettings::default();
+        current.preferences.model_enabled = false;
+        let decoded = decode_settings(&serde_json::to_vec(&current).unwrap()).unwrap();
+        assert!(!decoded.preferences.model_enabled);
+        assert!(decoded.model.is_none());
+        let mut legacy = serde_json::to_value(current).unwrap();
+        legacy["preferences"]
+            .as_object_mut()
+            .unwrap()
+            .remove("modelEnabled");
+        legacy["preferences"]["fps"] = 60.into();
+        let migrated = decode_settings(&serde_json::to_vec(&legacy).unwrap()).unwrap();
+        assert!(migrated.preferences.model_enabled);
+        assert_eq!(migrated.preferences.fps, 60);
     }
 }

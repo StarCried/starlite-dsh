@@ -34,21 +34,60 @@ async fn inspect_resource_pack(
 }
 
 #[tauri::command]
-async fn get_starter_pack(
-    app: AppHandle,
-) -> Result<Option<resource_pack::StarterPackInspection>, String> {
-    tauri::async_runtime::spawn_blocking(move || resource_pack::starter(&app))
-        .await
-        .map_err(|_| "微光资源检查失败，请重启 DSH 重试。".to_string())?
+async fn prepare_model(app: AppHandle) -> Result<settings::DesktopSettings, String> {
+    mutate_model_settings(app, resource_pack::prepare_model).await
 }
 
 #[tauri::command]
-async fn mark_starter_seen(app: AppHandle, expected_sha256: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        resource_pack::mark_starter_seen(&app, expected_sha256)
+async fn use_default_model(
+    app: AppHandle,
+    preferences: settings::DesktopPreferences,
+) -> Result<settings::DesktopSettings, String> {
+    mutate_model_settings(app, move |app| {
+        resource_pack::use_default_model(app, preferences)
     })
     .await
-    .map_err(|_| "无法保存微光引导状态。".to_string())?
+}
+
+#[tauri::command]
+async fn set_model_enabled(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<settings::DesktopSettings, String> {
+    mutate_model_settings(app, move |app| {
+        resource_pack::set_model_enabled(app, enabled)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn get_model_license(app: AppHandle) -> Result<Option<settings::ModelLicense>, String> {
+    tauri::async_runtime::spawn_blocking(move || resource_pack::model_license(&app))
+        .await
+        .map_err(|_| "无法读取模型许可，请重试。".to_string())?
+}
+
+async fn mutate_model_settings(
+    app: AppHandle,
+    operation: impl FnOnce(&AppHandle) -> Result<settings::DesktopSettings, String> + Send + 'static,
+) -> Result<settings::DesktopSettings, String> {
+    let work_app = app.clone();
+    let (next, changed) = tauri::async_runtime::spawn_blocking(move || {
+        settings::with_write(&work_app, || {
+            let before = serde_json::to_value(settings::load(&work_app))
+                .map_err(|error| error.to_string())?;
+            let next = operation(&work_app)?;
+            let changed =
+                before != serde_json::to_value(&next).map_err(|error| error.to_string())?;
+            Ok((next, changed))
+        })
+    })
+    .await
+    .map_err(|_| "模型设置操作失败，请重试。".to_string())??;
+    if changed {
+        let _ = app.emit("settings-changed", next.clone());
+    }
+    Ok(next)
 }
 
 #[tauri::command]
@@ -59,40 +98,26 @@ async fn install_resource_pack(
     preferences: settings::DesktopPreferences,
     accept_license: bool,
 ) -> Result<settings::DesktopSettings, String> {
-    let install_app = app.clone();
-    let next = tauri::async_runtime::spawn_blocking(move || {
-        resource_pack::install(
-            &install_app,
-            path,
-            expected_sha256,
-            preferences,
-            accept_license,
-        )
+    mutate_model_settings(app, move |app| {
+        resource_pack::install(app, path, expected_sha256, preferences, accept_license)
     })
     .await
-    .map_err(|error| error.to_string())??;
-    let _ = app.emit("settings-changed", next.clone());
-    Ok(next)
 }
 
 #[tauri::command]
-fn install_model(
+async fn install_model(
     app: AppHandle,
     request: settings::ModelInstallRequest,
 ) -> Result<settings::DesktopSettings, String> {
-    let next = model::install(&app, request)?;
-    let _ = app.emit("settings-changed", next.clone());
-    Ok(next)
+    mutate_model_settings(app, move |app| model::install(app, request)).await
 }
 
 #[tauri::command]
-fn update_settings(
+async fn update_settings(
     app: AppHandle,
     request: settings::ModelInstallRequest,
 ) -> Result<settings::DesktopSettings, String> {
-    let next = model::update(&app, request)?;
-    let _ = app.emit("settings-changed", next.clone());
-    Ok(next)
+    mutate_model_settings(app, move |app| model::update(app, request)).await
 }
 
 #[tauri::command]
@@ -133,12 +158,15 @@ pub fn run() {
         .manage(tray::UiState::default())
         .manage(hit_test::HitTestState::default())
         .manage(model_viewport::ModelViewportState::default())
+        .manage(settings::SettingsWriteState::default())
         .invoke_handler(tauri::generate_handler![
             get_settings,
             inspect_model,
             inspect_resource_pack,
-            get_starter_pack,
-            mark_starter_seen,
+            prepare_model,
+            use_default_model,
+            set_model_enabled,
+            get_model_license,
             install_resource_pack,
             install_model,
             update_settings,
@@ -155,11 +183,7 @@ pub fn run() {
         .setup(|app| {
             tray::setup(app)?;
             hit_test::setup(app.handle())?;
-            let current = settings::load(app.handle());
-            if !startup::is_connection_launch(std::env::args_os())
-                || current.model.is_none()
-                || resource_pack::should_offer_starter(app.handle(), &current)
-            {
+            if !startup::is_connection_launch(std::env::args_os()) {
                 tray::show_settings(app.handle());
             }
             Ok(())

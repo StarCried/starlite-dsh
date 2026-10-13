@@ -1,15 +1,14 @@
 use std::fs;
 use std::path::PathBuf;
 
-use inochi2d_pipeline::{build, inspect_file, BuildRequest};
 use serde::Serialize;
-use serde_json::{to_value, Value};
+use serde_json::Value;
 use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::settings::{
-    self, path_string, AnimationSource, DesktopSettings, InochiModelData, InstalledModel,
-    ModelBackend, ModelInstallRequest,
+    self, AnimationSource, DesktopSettings, InstalledModel, ModelBackend, ModelInstallRequest,
+    ModelLicense,
 };
 use crate::vrm;
 
@@ -33,106 +32,59 @@ pub fn inspect(
 ) -> Result<ModelInspection, String> {
     let input = PathBuf::from(path);
     let backend = backend_for_path(&input)?;
-    if backend == ModelBackend::Vrm {
-        let prepared = vrm::inspect(
-            &input,
-            &sources,
-            profile.as_deref().map(std::path::Path::new),
-        )?;
-        let animations = prepared.catalog();
-        return Ok(ModelInspection {
-            backend,
-            source_sha256: prepared.source_sha256,
-            source_bytes: prepared.source_bytes,
-            model_name: prepared.model_name,
-            animations,
-            compatibility_supported: true,
-            issues: vec![],
-        });
-    }
-    if !sources.is_empty() || profile.is_some() {
-        return Err("VRMA and character profiles require the VRM backend".into());
-    }
-    let report = inspect_file(&input).map_err(|error| error.to_string())?;
+    let prepared = vrm::inspect(
+        &input,
+        &sources,
+        profile.as_deref().map(std::path::Path::new),
+    )?;
+    let animations = prepared.catalog();
     Ok(ModelInspection {
         backend,
-        source_sha256: report.source.sha256,
-        source_bytes: report.source.bytes,
-        model_name: report.metadata.name,
-        animations: settings::inochi_catalog(&values(report.animations)?)?,
-        compatibility_supported: report.compatibility.supported,
-        issues: values(report.compatibility.issues)?,
+        source_sha256: prepared.source_sha256,
+        source_bytes: prepared.source_bytes,
+        model_name: prepared.model_name,
+        animations,
+        compatibility_supported: true,
+        issues: vec![],
     })
 }
 
 pub fn install(app: &AppHandle, request: ModelInstallRequest) -> Result<DesktopSettings, String> {
+    install_with_license(app, request, None)
+}
+
+pub fn install_with_license(
+    app: &AppHandle,
+    request: ModelInstallRequest,
+    license: Option<ModelLicense>,
+) -> Result<DesktopSettings, String> {
+    require_supported_backend(request.backend)?;
     settings::validate_preferences(&request.preferences)?;
     let input = PathBuf::from(&request.source_path);
     if backend_for_path(&input)? != request.backend {
         return Err("source file does not match selected backend".into());
     }
     // Read and validate every VRM component before creating any installed files.
-    let vrm = if request.backend == ModelBackend::Vrm {
-        Some(vrm::inspect(
-            &input,
-            &request.animation_sources,
-            request.profile_path.as_deref().map(std::path::Path::new),
-        )?)
-    } else {
-        if !request.animation_sources.is_empty() || request.profile_path.is_some() {
-            return Err("VRMA resources require the VRM backend".into());
-        }
-        let inspection = inspect_file(&input).map_err(|error| error.to_string())?;
-        if !inspection.compatibility.supported {
-            return Err("the model contains unsupported or unsafe resources".into());
-        }
-        settings::validate_mappings(
-            &request.mappings,
-            &settings::inochi_catalog(&values(inspection.animations)?)?,
-        )?;
-        None
-    };
-    if let Some(prepared) = &vrm {
-        settings::validate_mappings(&request.mappings, &prepared.catalog())?;
-    }
+    let vrm = vrm::inspect(
+        &input,
+        &request.animation_sources,
+        request.profile_path.as_deref().map(std::path::Path::new),
+    )?;
+    settings::validate_mappings(&request.mappings, &vrm.catalog())?;
     let models_dir = settings::models_dir(app)?;
     fs::create_dir_all(&models_dir).map_err(|error| error.to_string())?;
     let output_dir = models_dir.join(format!("model-{}", Uuid::new_v4()));
     let prepared = (|| {
-        let model = if let Some(prepared) = vrm {
-            let (model_path, data) = prepared.write(&output_dir)?;
-            InstalledModel {
-                backend: ModelBackend::Vrm,
-                model_path,
-                source_sha256: prepared.source_sha256.clone(),
-                animations: prepared.catalog(),
-                mappings: request.mappings,
-                inochi2d: None,
-                vrm: Some(data),
-            }
-        } else {
-            let manifest = build(&BuildRequest {
-                input,
-                output_dir: output_dir.clone(),
-                fallback: None,
-            })
-            .map_err(|error| error.to_string())?;
-            let clips = values(manifest.animations)?;
-            let animations = settings::inochi_catalog(&clips)?;
-            settings::validate_mappings(&request.mappings, &animations)?;
-            let model_path = output_dir.join(&manifest.model.file);
-            if !model_path.is_file() {
-                return Err("prepared model artifact is missing".into());
-            }
-            InstalledModel {
-                backend: ModelBackend::Inochi2d,
-                model_path: path_string(&model_path)?,
-                source_sha256: manifest.model.source_sha256,
-                animations,
-                mappings: request.mappings,
-                inochi2d: Some(InochiModelData { animations: clips }),
-                vrm: None,
-            }
+        let (model_path, data) = vrm.write(&output_dir)?;
+        let model = InstalledModel {
+            backend: ModelBackend::Vrm,
+            model_path,
+            source_sha256: vrm.source_sha256.clone(),
+            animations: vrm.catalog(),
+            mappings: request.mappings,
+            inochi2d: None,
+            vrm: Some(data),
+            license,
         };
         Ok(DesktopSettings {
             schema_version: settings::SETTINGS_SCHEMA_VERSION,
@@ -156,6 +108,7 @@ pub fn install(app: &AppHandle, request: ModelInstallRequest) -> Result<DesktopS
 }
 
 pub fn update(app: &AppHandle, request: ModelInstallRequest) -> Result<DesktopSettings, String> {
+    require_supported_backend(request.backend)?;
     if !request.source_path.is_empty() {
         return Err("updating settings cannot import a new source model".into());
     }
@@ -181,11 +134,11 @@ pub fn update(app: &AppHandle, request: ModelInstallRequest) -> Result<DesktopSe
     Ok(next)
 }
 
-fn values<T: Serialize>(items: Vec<T>) -> Result<Vec<Value>, String> {
-    items
-        .into_iter()
-        .map(|item| to_value(item).map_err(|error| error.to_string()))
-        .collect()
+fn require_supported_backend(backend: ModelBackend) -> Result<(), String> {
+    if backend != ModelBackend::Vrm {
+        return Err("当前版本暂不支持 Inochi2D，请使用 VRM 模型。".into());
+    }
+    Ok(())
 }
 
 fn backend_for_path(path: &std::path::Path) -> Result<ModelBackend, String> {
@@ -195,8 +148,25 @@ fn backend_for_path(path: &std::path::Path) -> Result<ModelBackend, String> {
         .map(str::to_ascii_lowercase)
         .as_deref()
     {
-        Some("inp") => Ok(ModelBackend::Inochi2d),
+        Some("inp") => Err("当前版本暂不支持 Inochi2D，请使用 VRM 模型。".into()),
         Some("vrm") => Ok(ModelBackend::Vrm),
-        _ => Err("select an Inochi2D .inp or VRM .vrm model file".into()),
+        _ => Err("请选择 VRM .vrm 模型文件。".into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inochi_import_is_disabled_before_reading_the_source_file() {
+        let error = inspect("missing.inp".into(), vec![], None).unwrap_err();
+        assert!(error.contains("当前版本暂不支持 Inochi2D"));
+        assert!(require_supported_backend(ModelBackend::Inochi2d).is_err());
+        assert!(require_supported_backend(ModelBackend::Vrm).is_ok());
+        assert_eq!(
+            backend_for_path(std::path::Path::new("model.VRM")).unwrap(),
+            ModelBackend::Vrm
+        );
     }
 }

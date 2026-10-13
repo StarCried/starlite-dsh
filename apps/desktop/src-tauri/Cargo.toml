@@ -1,7 +1,7 @@
 [package]
 name = "dsh-inochi2d-pet"
 version = "0.1.0-alpha.0"
-description = "Windows Inochi2D companion for DeepSeek Harness"
+description = "StarLite for DSH: lightweight VRM and Inochi2D Windows companion"
 authors = ["StarCried"]
 edition = "2021"
 license = "BSD-2-Clause"
@@ -22,7 +22,7 @@ tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
 atomic-write-file = "0.3.1"
-inochi2d-pipeline = { git = "https://github.com/StarCried/inochi2d-web.git", rev = "ab24c2bc627ef5acde6685ee20096cef0128baaa" }
+inochi2d-pipeline = { git = "https://github.com/StarCried/starlite.git", rev = "ab24c2bc627ef5acde6685ee20096cef0128baaa" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 sha2 = "=0.10.9"
@@ -31,10 +31,9 @@ tauri-plugin-deep-link = "2.4.9"
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-single-instance = { version = "2.4.3", features = ["deep-link"] }
 tauri-plugin-window-state = "2.4.1"
+tempfile = "3.23.0"
 uuid = { version = "1.18.1", features = ["v4"] }
+zip = { version = "=4.6.1", default-features = false, features = ["deflate-flate2"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
-
-[dev-dependencies]
-tempfile = "3.23.0"

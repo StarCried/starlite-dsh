@@ -1,6 +1,7 @@
 mod hit_test;
 mod model;
 mod model_viewport;
+mod resource_pack;
 mod settings;
 mod tray;
 mod vrm;
@@ -22,6 +23,39 @@ fn inspect_model(
     profile_path: Option<String>,
 ) -> Result<model::ModelInspection, String> {
     model::inspect(path, animation_sources.unwrap_or_default(), profile_path)
+}
+
+#[tauri::command]
+async fn inspect_resource_pack(
+    path: String,
+) -> Result<resource_pack::ResourcePackInspection, String> {
+    tauri::async_runtime::spawn_blocking(move || resource_pack::inspect(path))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn install_resource_pack(
+    app: AppHandle,
+    path: String,
+    expected_sha256: String,
+    preferences: settings::DesktopPreferences,
+    accept_license: bool,
+) -> Result<settings::DesktopSettings, String> {
+    let install_app = app.clone();
+    let next = tauri::async_runtime::spawn_blocking(move || {
+        resource_pack::install(
+            &install_app,
+            path,
+            expected_sha256,
+            preferences,
+            accept_license,
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    let _ = app.emit("settings-changed", next.clone());
+    Ok(next)
 }
 
 #[tauri::command]
@@ -81,6 +115,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_settings,
             inspect_model,
+            inspect_resource_pack,
+            install_resource_pack,
             install_model,
             update_settings,
             set_connection_state,
@@ -110,5 +146,5 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("DSH Companion failed to start");
+        .expect("StarLite for DSH failed to start");
 }

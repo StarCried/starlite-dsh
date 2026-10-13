@@ -75,14 +75,14 @@ pub fn should_offer_starter(app: &AppHandle, current: &DesktopSettings) -> bool 
         return false;
     };
     should_offer_at(
-        starter().ok().flatten().as_ref(),
+        starter_descriptor().ok().flatten().as_ref(),
         current.model.as_ref(),
         &marker,
     )
 }
 
 fn should_offer_at(
-    starter: Option<&StarterPackInspection>,
+    starter: Option<&StarterDescriptor>,
     model: Option<&settings::InstalledModel>,
     marker: &Path,
 ) -> bool {
@@ -94,11 +94,11 @@ fn should_offer_at(
     }
     read_limited(marker, 64)
         .ok()
-        .is_none_or(|bytes| bytes != starter.pack.sha256.as_bytes())
+        .is_none_or(|bytes| bytes != starter.sha256.as_bytes())
 }
 
 pub fn mark_starter_seen(app: &AppHandle, expected_sha256: String) -> Result<(), String> {
-    let starter = starter()?.ok_or(STARTER_ERROR)?;
+    let starter = starter_descriptor()?.ok_or(STARTER_ERROR)?;
     let marker = starter_marker(app).map_err(|_| "无法保存微光引导状态。")?;
     mark_seen_at(&marker, &starter, &expected_sha256)
         .map_err(|_| "无法保存微光引导状态，下次启动可能再次显示；模型和设置未改变。".into())
@@ -111,12 +111,8 @@ fn starter_marker(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|e| e.to_string())
 }
 
-fn mark_seen_at(
-    marker: &Path,
-    starter: &StarterPackInspection,
-    expected: &str,
-) -> Result<(), String> {
-    if !valid_hash(expected) || starter.pack.sha256 != expected {
+fn mark_seen_at(marker: &Path, starter: &StarterDescriptor, expected: &str) -> Result<(), String> {
+    if !valid_hash(expected) || starter.sha256 != expected {
         return Err("starter changed before it was shown".into());
     }
     fs::create_dir_all(marker.parent().ok_or("missing marker parent")?)
@@ -128,18 +124,32 @@ fn mark_seen_at(
 }
 
 fn starter_at(parent: &Path) -> Result<Option<StarterPackInspection>, String> {
+    read_starter_descriptor(parent)?
+        .map(|descriptor| starter_checked(parent, descriptor))
+        .transpose()
+        .map_err(|_| STARTER_ERROR.into())
+}
+
+fn starter_descriptor() -> Result<Option<StarterDescriptor>, String> {
+    let exe = std::env::current_exe().map_err(|_| STARTER_ERROR)?;
+    read_starter_descriptor(exe.parent().ok_or(STARTER_ERROR)?)
+}
+
+// Introduction readiness uses only this bounded descriptor. It neither opens
+// the ZIP nor claims that the character assets passed validation.
+fn read_starter_descriptor(parent: &Path) -> Result<Option<StarterDescriptor>, String> {
     let descriptor_path = parent.join("starter-character.json");
     match fs::symlink_metadata(&descriptor_path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(_) => return Err(STARTER_ERROR.into()),
         Ok(_) => {}
     }
-    starter_checked(parent, &descriptor_path)
+    descriptor_checked(parent, &descriptor_path)
         .map(Some)
         .map_err(|_| STARTER_ERROR.into())
 }
 
-fn starter_checked(parent: &Path, descriptor_path: &Path) -> Result<StarterPackInspection, String> {
+fn descriptor_checked(parent: &Path, descriptor_path: &Path) -> Result<StarterDescriptor, String> {
     let parent_meta = fs::symlink_metadata(parent).map_err(|e| e.to_string())?;
     if !parent_meta.is_dir() || linked(&parent_meta) {
         return Err("invalid starter directory".into());
@@ -158,6 +168,13 @@ fn starter_checked(parent: &Path, descriptor_path: &Path) -> Result<StarterPackI
     {
         return Err("invalid starter descriptor".into());
     }
+    Ok(descriptor)
+}
+
+fn starter_checked(
+    parent: &Path,
+    descriptor: StarterDescriptor,
+) -> Result<StarterPackInspection, String> {
     let path = parent.join("starter-character.zip");
     let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
     if metadata.len() != descriptor.bytes || linked(&metadata) {
@@ -866,7 +883,7 @@ mod tests {
     #[test]
     fn offers_a_starter_once_per_archive_after_the_ui_acknowledges_it() {
         let (folder, _) = starter_fixture(fixture());
-        let mut starter = starter_at(folder.path()).unwrap().unwrap();
+        let mut starter = read_starter_descriptor(folder.path()).unwrap().unwrap();
         let state = tempfile::tempdir().unwrap();
         let marker = state.path().join("starter-offered.sha256");
         assert!(!should_offer_at(None, None, &marker));
@@ -875,10 +892,10 @@ mod tests {
         assert!(!marker.exists());
         assert!(mark_seen_at(&marker, &starter, &"0".repeat(64)).is_err());
         assert!(!marker.exists());
-        mark_seen_at(&marker, &starter, &starter.pack.sha256).unwrap();
+        mark_seen_at(&marker, &starter, &starter.sha256).unwrap();
         assert!(!should_offer_at(Some(&starter), None, &marker));
-        assert_eq!(fs::read_to_string(&marker).unwrap(), starter.pack.sha256);
-        starter.pack.sha256 = "1".repeat(64);
+        assert_eq!(fs::read_to_string(&marker).unwrap(), starter.sha256);
+        starter.sha256 = "1".repeat(64);
         assert!(should_offer_at(Some(&starter), None, &marker));
         fs::write(&marker, b"corrupted").unwrap();
         assert!(should_offer_at(Some(&starter), None, &marker));
@@ -889,7 +906,7 @@ mod tests {
     #[test]
     fn skips_the_intro_for_the_installed_starter_and_never_changes_another_model() {
         let (folder, _) = starter_fixture(fixture());
-        let starter = starter_at(folder.path()).unwrap().unwrap();
+        let starter = read_starter_descriptor(folder.path()).unwrap().unwrap();
         let marker = folder.path().join("starter-offered.sha256");
         let prepared = prepare(
             &folder.path().join("starter-character.zip"),
@@ -912,9 +929,27 @@ mod tests {
         model.source_sha256 = "f".repeat(64);
         let before = serde_json::to_value(&model).unwrap();
         assert!(should_offer_at(Some(&starter), Some(&model), &marker));
-        mark_seen_at(&marker, &starter, &starter.pack.sha256).unwrap();
+        mark_seen_at(&marker, &starter, &starter.sha256).unwrap();
         assert!(!should_offer_at(Some(&starter), Some(&model), &marker));
         assert_eq!(serde_json::to_value(model).unwrap(), before);
+    }
+
+    #[test]
+    fn introduction_readiness_does_not_require_or_validate_the_archive() {
+        let portable = tempfile::tempdir().unwrap();
+        assert!(read_starter_descriptor(portable.path()).unwrap().is_none());
+        let (folder, _) = starter_fixture(fixture());
+        fs::remove_file(folder.path().join("starter-character.zip")).unwrap();
+        let descriptor = read_starter_descriptor(folder.path()).unwrap().unwrap();
+        let marker = folder.path().join("starter-offered.sha256");
+        // The UI must still open and explain acquisition failure. Its eventual
+        // acknowledgment marks only the introduction, never asset validity.
+        assert!(should_offer_at(Some(&descriptor), None, &marker));
+        mark_seen_at(&marker, &descriptor, &descriptor.sha256).unwrap();
+        assert!(!should_offer_at(Some(&descriptor), None, &marker));
+        assert_eq!(starter_at(folder.path()).unwrap_err(), STARTER_ERROR);
+        fs::write(folder.path().join("starter-character.json"), b"{corrupt").unwrap();
+        assert!(read_starter_descriptor(folder.path()).is_err());
     }
 
     #[cfg(unix)]

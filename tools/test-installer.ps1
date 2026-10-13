@@ -63,6 +63,19 @@ function Get-NsisPayloadHash([byte[]] $BuildBytes) {
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($patched))
 }
 
+function Assert-GuiExecutable([string] $Path) {
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -lt 64 -or [BitConverter]::ToUInt16($bytes, 0) -ne 0x5A4D) {
+        throw 'The desktop executable has an invalid DOS header.'
+    }
+    $peOffset = [BitConverter]::ToInt32($bytes, 60)
+    if ($peOffset -lt 64 -or $peOffset -gt $bytes.Length - 94 -or
+        [BitConverter]::ToUInt32($bytes, $peOffset) -ne 0x4550 -or
+        [BitConverter]::ToUInt16($bytes, $peOffset + 24 + 68) -ne 2) {
+        throw 'The desktop executable must use the Windows GUI subsystem, without a command console.'
+    }
+}
+
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $workspace.Equals([IO.Path]::GetFullPath($env:GITHUB_WORKSPACE), [StringComparison]::OrdinalIgnoreCase)) {
     throw 'The installer acceptance script must belong to the checked-out CI workspace.'
@@ -93,6 +106,7 @@ if ((Get-Item -LiteralPath $installer).VersionInfo.ProductName -ne $productName)
     throw 'The installer does not identify the expected StarLite product.'
 }
 $expectedBuildBinaryHash = (Get-FileHash -LiteralPath $buildBinary -Algorithm SHA256).Hash
+Assert-GuiExecutable $buildBinary
 $expectedBinaryHash = Get-NsisPayloadHash ([IO.File]::ReadAllBytes($buildBinary))
 $expectedInstallerHash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
 $expectedInstallerTime = (Get-Item -LiteralPath $installer).LastWriteTimeUtc
@@ -169,6 +183,7 @@ function Assert-Installed([string] $Version = $config.version, [string] $BinaryH
     if ((Get-Item -LiteralPath $installedBinary).VersionInfo.ProductName -ne $productName) {
         throw 'The installed executable has the wrong product identity.'
     }
+    Assert-GuiExecutable $installedBinary
     $registration = Get-ItemProperty -LiteralPath $uninstallKey
     if ($registration.DisplayName -ne $productName -or $registration.DisplayVersion -ne $Version -or
         $registration.Publisher -ne 'StarCried' -or

@@ -3,6 +3,7 @@ mod model;
 mod model_viewport;
 mod resource_pack;
 mod settings;
+mod startup;
 mod tray;
 mod vrm;
 
@@ -100,7 +101,11 @@ pub fn run() {
         // Deep links on Windows arrive through a second process, so this must
         // remain the first plugin and forward only to the existing instance.
         .plugin(tauri_plugin_single_instance::init(
-            |_app, _arguments, _cwd| {},
+            |app, arguments, _cwd| {
+                if !startup::is_connection_launch(arguments) {
+                    tray::show_settings(app);
+                }
+            },
         ))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
@@ -134,7 +139,9 @@ pub fn run() {
             app.deep_link().register_all()?;
             tray::setup(app)?;
             hit_test::setup(app.handle())?;
-            if settings::load(app.handle()).model.is_none() {
+            if !startup::is_connection_launch(std::env::args_os())
+                || settings::load(app.handle()).model.is_none()
+            {
                 tray::show_settings(app.handle());
             }
             Ok(())

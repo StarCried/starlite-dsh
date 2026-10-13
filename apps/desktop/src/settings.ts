@@ -90,7 +90,7 @@ export async function startSettings(): Promise<void> {
       renderMappings(mappings, settings.model?.animations ?? [], settings.model?.mappings);
       requiredElement<HTMLDetailsElement>("mapping-details").open = false;
       pathLabel.textContent = pack.title;
-      status.textContent = "资源包已自动导入并保存，可以开始使用。";
+      status.textContent = "资源包已自动导入并保存。在 WSL 启动 DSH 后，桌宠会自动出现。";
       save.textContent = "保存设置";
     } catch (reason) {
       status.textContent = "资源包导入失败，原模型和设置未改变。";

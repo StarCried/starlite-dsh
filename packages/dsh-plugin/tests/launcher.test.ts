@@ -84,7 +84,7 @@ describe("Windows launcher contract", () => {
     vi.stubEnv("DSH_INOCHI2D_PET_EXE", undefined);
     execFileMock.mockImplementationOnce((_file, _args, _options, callback) => callback(new Error("interop unavailable"), ""));
     await expect(launchWindowsPet({port: 43123, token: "a".repeat(43)})).rejects.toThrow();
-    expect(execFileMock).toHaveBeenCalledExactlyOnceWith("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); [Environment]::GetFolderPath('LocalApplicationData')"], expect.objectContaining({windowsHide: true}), expect.any(Function));
+    expect(execFileMock).toHaveBeenCalledExactlyOnceWith("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); [Environment]::GetFolderPath('LocalApplicationData'); [Environment]::GetFolderPath('ApplicationData')"], expect.objectContaining({windowsHide: true}), expect.any(Function));
     expect(spawnMock).not.toHaveBeenCalled();
   });
 });

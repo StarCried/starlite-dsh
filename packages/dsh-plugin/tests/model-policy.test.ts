@@ -1,0 +1,38 @@
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+import { afterEach, expect, it } from "vitest";
+import { readModelEnabled } from "../src/launcher.js";
+
+const roots: string[] = [];
+afterEach(async () => {
+  for (const root of roots.splice(0)) {
+    if (dirname(root) !== resolve(tmpdir()) || !basename(root).startsWith("starlite-model-policy-")) throw new Error("unsafe test directory");
+    await rm(root, {recursive:true,force:true});
+  }
+});
+async function fixture() {
+  const root = await mkdtemp(join(tmpdir(), "starlite-model-policy-"));
+  roots.push(root);
+  return join(root, "settings.json");
+}
+
+it("honors the persisted opt-out while enabling fresh and legacy companion settings", async () => {
+  const path = await fixture();
+  expect(await readModelEnabled(path)).toBe(true);
+  for (const preferences of [{fps:60}, {modelEnabled:true}, {modelEnabled:false}]) {
+    await writeFile(path, JSON.stringify({schemaVersion:3,preferences,privateValue:"never returned"}));
+    expect(await readModelEnabled(path)).toBe(preferences.modelEnabled !== false);
+  }
+});
+
+it("does not fetch a character based on malformed, oversized or non-file settings", async () => {
+  const path = await fixture();
+  for (const contents of ["invalid json", "[]", "null", Buffer.alloc(4 * 1024 * 1024 + 1, 65)]) {
+    await writeFile(path, contents);
+    expect(await readModelEnabled(path)).toBe(false);
+  }
+  await rm(path);
+  await mkdir(path);
+  expect(await readModelEnabled(path)).toBe(false);
+});

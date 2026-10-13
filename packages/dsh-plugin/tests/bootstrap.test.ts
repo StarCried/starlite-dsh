@@ -40,6 +40,17 @@ async function fixture() {
 }
 
 describe("embedded Windows companion and separate character bootstrap", () => {
+  it("prepares the program without requesting character assets while the model is disabled", async () => {
+    const f = await fixture();
+    const disabled = await prepareEmbeddedCompanion({...f.options,acquireStarter:false});
+    expect(disabled.starterReady).toBe(false);
+    expect(f.request).not.toHaveBeenCalled();
+    expect(await readdir(join(disabled.executable, ".."))).not.toContain("starter-character.zip");
+    expect((await prepareEmbeddedCompanion(f.options)).starterReady).toBe(true);
+    expect(f.request).toHaveBeenCalledOnce();
+    expect((await prepareEmbeddedCompanion({...f.options,acquireStarter:false})).starterReady).toBe(false);
+    expect(f.request).toHaveBeenCalledOnce();
+  });
   it("atomically stages the program, downloads a hash-pinned archive and reuses both on restart", async () => {
     const f = await fixture();
     const first = await prepareEmbeddedCompanion(f.options), second = await prepareEmbeddedCompanion(f.options);

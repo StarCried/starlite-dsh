@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { release } from "node:os";
 import { basename, join, win32 } from "node:path";
 import { execFile, spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { lstat, open, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { prepareEmbeddedCompanion } from "./bootstrap.js";
 
@@ -31,16 +32,17 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
   if (override !== undefined) {
     executable = (await execFileText("wslpath", ["-u", validateExecutableOverride(override)], options.signal)).trim();
   } else {
-    const windowsCache = (await execFileText("powershell.exe", [
+    const windowsDirectories = (await execFileText("powershell.exe", [
       "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
-      "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); [Environment]::GetFolderPath('LocalApplicationData')",
-    ], options.signal)).trim();
-    if (!/^[a-z]:[\\/]/iu.test(windowsCache) || !win32.isAbsolute(windowsCache)
-      || /[\p{Cc}"<>|]/u.test(windowsCache) || windowsCache.split(/[\\/]/u).some(part => part === "." || part === "..")) {
-      throw new Error("Windows local application cache is unavailable");
-    }
+      "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); [Environment]::GetFolderPath('LocalApplicationData'); [Environment]::GetFolderPath('ApplicationData')",
+    ], options.signal)).trim().split(/\r?\n/u);
+    if (windowsDirectories.length !== 2 || windowsDirectories.some(path => !validWindowsDirectory(path))) throw new Error("Windows application directories are unavailable");
+    const windowsCache = windowsDirectories[0]!;
     const localCache = (await execFileText("wslpath", ["-u", windowsCache], options.signal)).trim();
     if (!localCache.startsWith("/") || /[\p{Cc}]/u.test(localCache)) throw new Error("invalid Windows local application cache");
+    const roaming = (await execFileText("wslpath", ["-u", windowsDirectories[1]!], options.signal)).trim();
+    if (!roaming.startsWith("/") || /[\p{Cc}]/u.test(roaming)) throw new Error("invalid Windows application settings directory");
+    const modelEnabled = await readModelEnabled(join(roaming, "com.starcried.dsh-inochi2d-pet", "settings.json"));
     const metadata: unknown = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
     if (typeof metadata !== "object" || metadata === null || !("version" in metadata) || typeof metadata.version !== "string") {
       throw new Error("invalid StarLite plugin package version");
@@ -49,10 +51,11 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
       assetDirectory: fileURLToPath(new URL("../assets/windows-x64/", import.meta.url)),
       cacheDirectory: join(localCache, "StarCried", "StarLite", "companions"),
       expectedVersion: metadata.version,
+      acquireStarter: modelEnabled,
       ...(options.signal ? {signal: options.signal} : {}),
     });
     executable = prepared.executable;
-    if (!prepared.starterReady) options.onStarterFailure?.();
+    if (modelEnabled && !prepared.starterReady) options.onStarterFailure?.();
   }
   if (!executable.startsWith("/") || basename(executable).toLowerCase() !== "dsh-inochi2d-pet.exe") {
     throw new Error("StarLite for DSH executable is invalid");
@@ -77,6 +80,34 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
     child.once("spawn", () => finish());
     child.unref();
   });
+}
+
+function validWindowsDirectory(path: string): boolean {
+  return /^[a-z]:[\\/]/iu.test(path) && win32.isAbsolute(path) && !/[\p{Cc}"<>|]/u.test(path)
+    && !path.split(/[\\/]/u).some(part => part === "." || part === "..");
+}
+
+/** Read only the model opt-out; never transfer or log the companion settings. */
+export async function readModelEnabled(path: string): Promise<boolean> {
+  const maximum = 4 * 1024 * 1024;
+  try {
+    const info = await lstat(path);
+    if (!info.isFile() || info.isSymbolicLink() || info.size < 1 || info.size > maximum) return false;
+    const file = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    try {
+      const opened = await file.stat();
+      if (!opened.isFile() || opened.size !== info.size) return false;
+      const bytes = Buffer.alloc(info.size + 1);
+      const result = await file.read(bytes, 0, bytes.length, 0);
+      if (result.bytesRead !== info.size) return false;
+      const value: unknown = JSON.parse(bytes.subarray(0, result.bytesRead).toString("utf8"));
+      if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+      const preferences = "preferences" in value ? value.preferences : undefined;
+      return !(typeof preferences === "object" && preferences !== null && "modelEnabled" in preferences && preferences.modelEnabled === false);
+    } finally { await file.close(); }
+  } catch (error) {
+    return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+  }
 }
 
 /** A developer may explicitly select a local build, without changing registrations. */

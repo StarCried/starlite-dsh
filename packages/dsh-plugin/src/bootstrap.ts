@@ -29,6 +29,7 @@ export interface PrepareCompanionOptions {
   readonly expectedVersion: string;
   readonly signal?: AbortSignal;
   readonly fetch?: typeof fetch;
+  readonly acquireStarter?: boolean;
 }
 
 export interface PreparedCompanion {
@@ -76,6 +77,7 @@ export async function prepareEmbeddedCompanion(options: PrepareCompanionOptions)
   for (const [index, name] of NOTICES.entries()) assertEqual(await ordinaryFile(directory, name, NOTICE_LIMIT), notices[index]!);
   assertEqual(await ordinaryFile(directory, "starter-character.json", 16_384), descriptor);
   options.signal?.throwIfAborted();
+  if (options.acquireStarter === false) return {executable: join(directory, EXECUTABLE), starterReady: false};
   let starterReady = false;
   try {
     const archive = join(directory, "starter-character.zip");

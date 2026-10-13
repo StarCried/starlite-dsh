@@ -27,6 +27,7 @@ const idle = () => document.querySelector<HTMLSelectElement>('select[data-state=
 
 beforeEach(() => {
   document.body.innerHTML = page;
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
   // happy-dom lacks the browser's Option convenience constructor.
   vi.stubGlobal("Option", function Option(text: string, value: string) {
     const option = document.createElement("option");
@@ -37,7 +38,7 @@ beforeEach(() => {
   native.invoke.mockReset();
   native.open.mockReset().mockResolvedValue(path);
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 async function launch(current: DesktopSettings = empty, available: StarterPackInspection | Error | null = null) {
   native.invoke.mockImplementation(async (command: string, args?: {preferences: DesktopSettings["preferences"]}) => {
@@ -223,6 +224,27 @@ describe("resource package onboarding", () => {
     expect(document.querySelector<HTMLElement>("#starter-character")!.hidden).toBe(false);
     document.querySelector<HTMLButtonElement>("#use-starter-character")!.click();
     await vi.waitFor(() => expect(document.querySelector("dialog[open]")).not.toBeNull());
+    accept().click();
+    await vi.waitFor(() => expect(idle().value).toBe("RelaxedBreath"));
+  });
+
+  it("defers hidden-window inspection until visible and runs it only once across visibility changes", async () => {
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    await launch(empty, starter);
+    expect(native.invoke.mock.calls.map(([command]) => command)).toEqual(["get_settings"]);
+    expect(document.querySelector("dialog")).toBeNull();
+    let inspected: (pack: StarterPackInspection) => void = () => {};
+    native.invoke.mockImplementationOnce(() => new Promise(resolve => { inspected = resolve; }));
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(native.invoke.mock.calls.filter(([command]) => command === "get_starter_pack")).toHaveLength(1);
+    expect(button().disabled).toBe(true);
+    inspected(starter);
+    await vi.waitFor(() => expect(document.querySelector("dialog[open]")).not.toBeNull());
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(native.invoke.mock.calls.filter(([command]) => command === "get_starter_pack")).toHaveLength(1);
+    expect(native.open).not.toHaveBeenCalled();
     accept().click();
     await vi.waitFor(() => expect(idle().value).toBe("RelaxedBreath"));
   });

@@ -185,29 +185,42 @@ export async function startSettings(): Promise<void> {
 
   // A plugin launch has already acquired this separate licensed resource pack.
   // A standalone/BYOM executable has no descriptor and keeps the manual flow.
-  checking = true; updateSave();
-  for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = true;
-  try {
-    starter = await invoke<StarterPackInspection | null>("get_starter_pack") ?? undefined;
-    const installedStarter = starter && settings.model?.backend === "vrm" && settings.model.sourceSha256 === starter.modelSha256;
-    starterBanner.hidden = !starter || Boolean(installedStarter);
-  } catch (reason) {
-    status.textContent = "微光资源准备失败，请重启 DSH 重试；也可以手动导入资源包。";
-    error.textContent = safeError(reason);
-  } finally {
-    checking = false;
-    for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = false;
-    updateSave();
-  }
-  if (starter && !settings.model) void importResource(starter);
-  if (starter && !starterBanner.hidden) {
-    // Presenting the introduction is separate from accepting the character
-    // license: never record consent until the import dialog is confirmed.
+  // Tauri creates this settings webview even while its window is hidden. Never
+  // inspect a character ZIP until the user actually sees the settings window.
+  let starterRequested = false;
+  const loadStarter = async () => {
+    if (starterRequested || document.visibilityState !== "visible") return;
+    starterRequested = true;
+    document.removeEventListener("visibilitychange", onSettingsVisible);
+    checking = true; updateSave();
+    for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = true;
     try {
-      await invoke("mark_starter_seen", {expectedSha256:starter.sha256});
+      starter = await invoke<StarterPackInspection | null>("get_starter_pack") ?? undefined;
+      const installedStarter = starter && settings.model?.backend === "vrm" && settings.model.sourceSha256 === starter.modelSha256;
+      starterBanner.hidden = !starter || Boolean(installedStarter);
     } catch (reason) {
+      status.textContent = "微光资源准备失败，请重启 DSH 重试；也可以手动导入资源包。";
       error.textContent = safeError(reason);
+    } finally {
+      checking = false;
+      for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = false;
+      updateSave();
     }
+    if (starter && !settings.model) void importResource(starter);
+    if (starter && !starterBanner.hidden) {
+      // Introduction acknowledgment is separate from license consent.
+      try {
+        await invoke("mark_starter_seen", {expectedSha256:starter.sha256});
+      } catch (reason) {
+        error.textContent = safeError(reason);
+      }
+    }
+  };
+  const onSettingsVisible = () => { void loadStarter(); };
+  if (document.visibilityState === "visible") await loadStarter();
+  else {
+    document.addEventListener("visibilitychange", onSettingsVisible);
+    globalThis.addEventListener("pagehide", () => document.removeEventListener("visibilitychange", onSettingsVisible), {once:true});
   }
 }
 

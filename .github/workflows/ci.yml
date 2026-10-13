@@ -132,9 +132,9 @@ jobs:
         run: |
           # CI verifies package structure without downloading or uploading the private character.
           # This deliberately unavailable loopback reference cannot pass the public release gate.
-          $descriptor = @{ title = 'CI artwork-free fixture'; url = 'http://127.0.0.1:1/fixture.zip'; sha256 = ('0' * 64); bytes = 1; modelSha256 = ('0' * 64); localTest = $true }
-          $descriptor | ConvertTo-Json | Set-Content -LiteralPath 'release-output/ci-starter-character.json' -Encoding utf8
-          pnpm stage:plugin -- release-output/ci-starter-character.json
+          $descriptor = @{ title = 'CI artwork-free fixture'; url = 'http://127.0.0.1:1/fixture.vrm'; sha256 = ('0' * 64); bytes = 1; localTest = $true }
+          $descriptor | ConvertTo-Json | Set-Content -LiteralPath 'release-output/ci-default-model.json' -Encoding utf8
+          pnpm stage:plugin -- release-output/ci-default-model.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run: pnpm pack:plugin
       - name: Check local build gates (not a public release)

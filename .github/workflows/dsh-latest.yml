@@ -51,17 +51,17 @@ jobs:
           executable.writeUInt16LE(112, pe + 20);
           executable.writeUInt16LE(0x20b, pe + 24);
           executable.writeUInt16LE(2, pe + 24 + 68);
-          const descriptor = { title: 'CI artwork-free fixture', url: 'http://127.0.0.1:1/fixture.zip', sha256: '0'.repeat(64), bytes: 1, modelSha256: '0'.repeat(64), localTest: true };
+          const descriptor = { title: 'CI artwork-free fixture', url: 'http://127.0.0.1:1/fixture.vrm', sha256: '0'.repeat(64), bytes: 1, localTest: true };
           for (const [path, bytes] of [
             ['apps/desktop/src-tauri/target/release/dsh-inochi2d-pet.exe', executable],
             ['release-output/THIRD_PARTY_LICENSES.txt', 'Artwork-free contract-test fixture; not a public program build.\n'],
-            ['release-output/ci-starter-character.json', JSON.stringify(descriptor)],
+            ['release-output/ci-default-model.json', JSON.stringify(descriptor)],
           ]) {
             await mkdir(dirname(path), { recursive: true });
             await writeFile(path, bytes, { flag: 'wx' });
           }
           NODE
-          pnpm stage:plugin -- release-output/ci-starter-character.json
+          pnpm stage:plugin -- release-output/ci-default-model.json
       - run: pnpm pack:plugin
       - name: Install the packed bundle in an isolated profile
         shell: bash

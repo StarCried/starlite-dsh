@@ -74,7 +74,7 @@ const runtimeLicenses = (await Promise.all(RUNTIMES.map(async name => {
 }))).join("\n");
 await writeFile(
   resolve(output, "THIRD_PARTY_LICENSES.txt"),
-  `${licenses}\n${"=".repeat(78)}\nStarLite embedded runtimes\n${"=".repeat(78)}\n${runtimeLicenses.trim()}\n`,
+  `${licenses}\n${"=".repeat(78)}\nStarLite embedded runtimes\n${"=".repeat(78)}\n${runtimeLicenses.trim()}\n${"=".repeat(78)}\nBundled StarLiteIdle provenance\n${"=".repeat(78)}\n${await readFile(resolve(root, "apps/desktop/src-tauri/assets/default-idle.md"), "utf8")}\n`,
   "utf8",
 );
 console.log(`Generated checksums, CycloneDX SBOM, and license texts in ${output}`);

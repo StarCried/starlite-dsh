@@ -8,8 +8,6 @@ mod tray;
 mod vrm;
 
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
-#[cfg(all(debug_assertions, windows))]
-use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_window_state::StateFlags;
 
 #[tauri::command]
@@ -135,8 +133,6 @@ pub fn run() {
             hit_test::end_model_drag,
         ])
         .setup(|app| {
-            #[cfg(all(debug_assertions, windows))]
-            app.deep_link().register_all()?;
             tray::setup(app)?;
             hit_test::setup(app.handle())?;
             if !startup::is_connection_launch(std::env::args_os())

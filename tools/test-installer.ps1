@@ -47,6 +47,22 @@ function Set-NsisDefinition([string] $Text, [string] $Name, [string] $Value) {
     return [regex]::Replace($Text, $pattern, [Text.RegularExpressions.MatchEvaluator] { param($match) $definition })
 }
 
+function Get-NsisPayloadHash([byte[]] $BuildBytes) {
+    # Tauri CLI 2.11.4 patches the first bundle-type marker before packaging,
+    # then restores the unbundled release executable. Compute the expected full
+    # installed hash from precisely that documented upstream transformation.
+    # https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.4/crates/tauri-bundler/src/bundle.rs
+    $unknown = '__TAURI_BUNDLE_TYPE_VAR_UNK'
+    $nsis = [Text.Encoding]::ASCII.GetBytes('__TAURI_BUNDLE_TYPE_VAR_NSS')
+    $offset = [Text.Encoding]::Latin1.GetString($BuildBytes).IndexOf($unknown, [StringComparison]::Ordinal)
+    if ($offset -lt 0 -or $nsis.Length -ne $unknown.Length) {
+        throw 'The restored release executable lacks the expected Tauri bundle-type marker.'
+    }
+    $patched = [byte[]]$BuildBytes.Clone()
+    [Array]::Copy($nsis, 0, $patched, $offset, $nsis.Length)
+    return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($patched))
+}
+
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $workspace.Equals([IO.Path]::GetFullPath($env:GITHUB_WORKSPACE), [StringComparison]::OrdinalIgnoreCase)) {
     throw 'The installer acceptance script must belong to the checked-out CI workspace.'
@@ -76,7 +92,8 @@ if ($bundleFiles.Count -ne 1 -or $bundleFiles[0].Name -ne $installerName) {
 if ((Get-Item -LiteralPath $installer).VersionInfo.ProductName -ne $productName) {
     throw 'The installer does not identify the expected StarLite product.'
 }
-$expectedBinaryHash = (Get-FileHash -LiteralPath $buildBinary -Algorithm SHA256).Hash
+$expectedBuildBinaryHash = (Get-FileHash -LiteralPath $buildBinary -Algorithm SHA256).Hash
+$expectedBinaryHash = Get-NsisPayloadHash ([IO.File]::ReadAllBytes($buildBinary))
 $expectedInstallerHash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
 $expectedInstallerTime = (Get-Item -LiteralPath $installer).LastWriteTimeUtc
 $generatedNsisDirectory = Join-Path $workspace 'apps/desktop/src-tauri/target/release/nsis/x64'
@@ -247,7 +264,7 @@ function New-SyntheticBaseline {
     } finally { $compiler.Dispose() }
     if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -ne $expectedInstallerHash -or
         (Get-Item -LiteralPath $installer).LastWriteTimeUtc -ne $expectedInstallerTime -or
-        (Get-FileHash -LiteralPath $buildBinary -Algorithm SHA256).Hash -ne $expectedBinaryHash -or
+        (Get-FileHash -LiteralPath $buildBinary -Algorithm SHA256).Hash -ne $expectedBuildBinaryHash -or
         (Get-FileHash -LiteralPath $generatedNsisScript -Algorithm SHA256).Hash -ne $expectedTemplateHash) {
         throw 'Creating the synthetic baseline changed a candidate build input or output.'
     }

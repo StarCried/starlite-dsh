@@ -7,9 +7,10 @@ Set-StrictMode -Version Latest
 
 # This writes Windows application registrations. A different /D directory alone
 # does not isolate them, so never run this against a developer's Windows account.
+# The windows-2025 label serves both the VS 2022 and VS 2026 official images.
 if (-not $IsWindows -or $env:GITHUB_ACTIONS -ne 'true' -or
     $env:RUNNER_ENVIRONMENT -ne 'github-hosted' -or
-    $env:RUNNER_OS -ne 'Windows' -or $env:ImageOS -ne 'win25' -or
+    $env:RUNNER_OS -ne 'Windows' -or $env:ImageOS -notin @('win25', 'win25-vs2026') -or
     $env:GITHUB_REPOSITORY -ne 'StarCried/starlite-dsh') {
     throw 'Installer acceptance only runs in the clean windows-2025 GitHub-hosted StarLite CI job.'
 }

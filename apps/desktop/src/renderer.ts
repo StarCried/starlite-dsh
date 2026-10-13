@@ -2,6 +2,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import type { DesktopSettings } from "./types.js";
 import type { ModelCore, ModelModule, ModelSlot, WidgetController } from "./vendor-types.js";
 import { VRM_VIEWPORT_PADDING } from "./model-viewport.js";
+import { selectedModel } from "./model-selection.js";
 const CORE_URL = "/runtime/core/index.js";
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
 const loadCore = () => import(/* @vite-ignore */ CORE_URL) as Promise<ModelCore>;
@@ -10,8 +11,8 @@ export async function createModelSlot(): Promise<ModelSlot> {
   return new ModelMountSlot();
 }
 export function modelConfig(settings: DesktopSettings): Record<string, unknown> {
-  const model = settings.model;
-  if (settings.preferences.modelEnabled === false) throw new Error("Model is disabled");
+  const model = selectedModel(settings);
+  if (settings.activeModelId === null) throw new Error("Model is disabled");
   if (!model) throw new Error("No installed model");
   if (model.backend !== "vrm") throw new Error("Inochi2D is disabled in this version");
   if (!model.vrm) throw new Error("Model component is incomplete");

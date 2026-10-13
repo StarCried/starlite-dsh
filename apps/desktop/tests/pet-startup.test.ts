@@ -23,12 +23,13 @@ vi.mock("../src/connection.js", () => ({StatusConnection: class {
 
 interface ConnectionCallbacks {onConnected(): void; onDisconnected(): void; onSnapshot(value: unknown): void}
 const settings: DesktopSettings = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   preferences: {fps: 30, maxDevicePixelRatio: 1.5, scale: .67, privacyMode: false, bubbleMode: "compact"},
-  model: {backend: "vrm", modelPath: "C:\\fixture\\model.vrm", sourceSha256: "a".repeat(64),
+  activeModelId: "fixture",
+  models: [{id: "fixture", title: "Fixture", backend: "vrm", modelPath: "C:\\fixture\\model.vrm", sourceSha256: "a".repeat(64),
     animations: [{name: "Idle", durationMs: 1_000}],
     mappings: {idle: "Idle", working: null, completed: null, error: null, blocked: null, approval: null, click: [], ambient: []},
-    vrm: {animations: []}},
+    vrm: {animations: []}}],
 };
 let visibility: DocumentVisibilityState;
 let controller: WidgetController;
@@ -99,7 +100,7 @@ afterEach(async () => {
 
 describe("desktop hidden-window startup", () => {
   it("keeps a disabled model hidden without mounting, bubbles or input interception", async () => {
-    const disabled = {...structuredClone(settings),preferences:{...settings.preferences,modelEnabled:false}};
+    const disabled = {...structuredClone(settings),activeModelId:null};
     native.invoke.mockImplementation(async command => command === "get_settings" || command === "prepare_model" ? disabled : undefined);
     const ready = startPet();
     await vi.waitFor(() => expect(finishDeepLinks).toBeDefined());
@@ -121,7 +122,7 @@ describe("desktop hidden-window startup", () => {
     await vi.waitFor(() => expect(finishTraySubscription).toBeDefined());
     finishTraySubscription!(); await ready;
     vi.mocked(controller.destroy).mockClear();
-    const disabled = {...structuredClone(settings),preferences:{...settings.preferences,modelEnabled:false}};
+    const disabled = {...structuredClone(settings),activeModelId:null};
     settingsListener!({payload:disabled});
     await vi.waitFor(() => expect(controller.destroy).toHaveBeenCalled());
     expect(native.mountModel).toHaveBeenCalledTimes(1);
@@ -133,6 +134,35 @@ describe("desktop hidden-window startup", () => {
     settingsListener!({payload:structuredClone(settings)});
     await vi.waitFor(() => expect(native.mountModel).toHaveBeenCalledTimes(2));
     expect(native.connection).toHaveBeenCalledTimes(1);
+  });
+
+  it("switches the selected model without changing the DSH connection", async () => {
+    const ready = startPet();
+    await vi.waitFor(() => expect(show).toHaveBeenCalledOnce());
+    finishDeepLinks!();
+    await vi.waitFor(() => expect(finishTraySubscription).toBeDefined());
+    finishTraySubscription!(); await ready;
+    const next = structuredClone(settings);
+    next.models.push({...structuredClone(next.models[0]!),id:"second",title:"Second",modelPath:"C:\\fixture\\second.vrm"});
+    next.activeModelId = "second";
+    settingsListener!({payload:next});
+    await vi.waitFor(() => expect(native.mountModel).toHaveBeenCalledTimes(2));
+    expect(native.mountModel.mock.calls[1]![1]).toMatchObject({activeModelId:"second"});
+    expect(native.connection).toHaveBeenCalledTimes(1);
+  });
+
+  it("applies mapping and privacy edits without remounting the renderer", async () => {
+    const ready = startPet();
+    await vi.waitFor(() => expect(show).toHaveBeenCalledOnce());
+    finishDeepLinks!();
+    await vi.waitFor(() => expect(finishTraySubscription).toBeDefined());
+    finishTraySubscription!(); await ready;
+    const next = structuredClone(settings);
+    next.models[0]!.mappings.click = ["Idle"];
+    next.preferences.privacyMode = true;
+    settingsListener!({payload:next});
+    await vi.waitFor(() => expect(native.connection.mock.results[0]!.value.setInputAvailable).toHaveBeenLastCalledWith(false));
+    expect(native.mountModel).toHaveBeenCalledTimes(1);
   });
 
   it("resumes a mounted model when a fast DSH connection shows the window while native subscriptions are still pending", async () => {

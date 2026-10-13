@@ -13,6 +13,7 @@ import type { PetSnapshot, WidgetController } from "./vendor-types.js";
 import type { DesktopSettings } from "./types.js";
 import { StatusConnection } from "./connection.js";
 import { createModelSlot, mountModel } from "./renderer.js";
+import { renderingIdentity, selectedModel } from "./model-selection.js";
 import { StateAnimator } from "./state-animator.js";
 import { InteractionMaskBridge } from "./interaction-mask.js";
 import { ModelViewportBridge } from "./model-viewport.js";
@@ -30,7 +31,7 @@ export async function startPet(): Promise<void> {
   const empty = requiredElement("empty-model");
   const anchor = requiredElement("pet-view");
   let settings = await invoke<DesktopSettings>("get_settings");
-  const modelAvailable = () => settings.preferences.modelEnabled !== false && settings.model?.backend === "vrm";
+  const modelAvailable = () => selectedModel(settings)?.backend === "vrm";
   const slot = await createModelSlot();
   let mountGeneration = 0;
   let controller: WidgetController | undefined;
@@ -153,7 +154,8 @@ export async function startPet(): Promise<void> {
     const generation = ++mountGeneration;
     hostPosition.invalidate();
     const next = settings;
-    const enabled = next.preferences.modelEnabled !== false && next.model?.backend === "vrm";
+    const model = selectedModel(next);
+    const enabled = model?.backend === "vrm";
     fees.cancel(); cancelClick(); workBubble.clear(); bubble.hidden = true;
     animator?.disconnected(); animator = undefined;
     slot.destroy(); controller = undefined;
@@ -161,9 +163,9 @@ export async function startPet(): Promise<void> {
     if (!enabled) void window.hide();
     await viewport.configure(enabled);
     if(generation!==mountGeneration)return;
-    host.replaceChildren(); empty.hidden = !enabled || Boolean(next.model);
+    host.replaceChildren(); empty.hidden = !enabled || Boolean(model);
     syncInputAvailable();
-    if (!enabled || !next.model) return;
+    if (!enabled || !model) return;
     try {
       const mounted = await slot.mount(signal => mountModel(host, next, signal));
       if (!mounted || generation !== mountGeneration) return;
@@ -177,7 +179,7 @@ export async function startPet(): Promise<void> {
         if(viewport.pending || mask && (mask.viewportWidth!==innerWidth || mask.viewportHeight!==innerHeight))return;
         interaction.update(mask);
       });
-      animator = new StateAnimator(mounted, next.model.mappings);
+      animator = new StateAnimator(mounted, model.mappings);
       if (latestSnapshot) animator.apply(latestSnapshot);
       if (latestSnapshot && !fees.visible) workBubble.update(latestSnapshot, next.preferences);
       syncRendering();
@@ -199,7 +201,16 @@ export async function startPet(): Promise<void> {
     else workBubble.clear();
     syncInputAvailable();
     if (preparing) return;
-    if(JSON.stringify([previous.model,previous.preferences.modelEnabled,previous.preferences.fps,previous.preferences.maxDevicePixelRatio,previous.preferences.scale])===JSON.stringify([settings.model,settings.preferences.modelEnabled,settings.preferences.fps,settings.preferences.maxDevicePixelRatio,settings.preferences.scale]))return;
+    if (renderingIdentity(previous) === renderingIdentity(settings)) {
+      const model = selectedModel(settings);
+      if (controller && model && JSON.stringify(selectedModel(previous)?.mappings) !== JSON.stringify(model.mappings)) {
+        animator?.disconnected();
+        animator = new StateAnimator(controller, model.mappings);
+        if (latestSnapshot) animator.apply(latestSnapshot);
+        syncRendering();
+      }
+      return;
+    }
     void remount()
       .then(() => {
         if (connected && modelAvailable() && controller) void window.show();
@@ -234,7 +245,7 @@ export async function startPet(): Promise<void> {
       offlineTimer = undefined;
       void invoke("set_connection_state", { connected: true });
       if (modelAvailable() && controller) void window.show();
-      else if (settings.preferences.modelEnabled !== false) void invoke("open_settings");
+      else if (settings.activeModelId !== null) void invoke("open_settings");
       syncInputAvailable();
     },
     onDisconnected() {

@@ -1,12 +1,15 @@
-# DSH Companion project instructions
+# StarLite for DSH project instructions
 
 ## Product boundary
 
 - The product is a Windows 11 x64 companion for one DeepSeek Harness process
   running in WSL2. It is not a general desktop-pet framework.
 - Keep the Cordis bundle, cross-process protocol, and Tauri desktop app in this
-  repository. Reusable Inochi2D/VRM rendering and model preparation stay in Model Companion Web at
-  `StarCried/inochi2d-web`.
+  repository. Reusable Inochi2D/VRM rendering and model preparation stay in the
+  StarLite component repository (`StarCried/starlite`). Local checkout paths use
+  `starlite` and `starlite-dsh`. The GitHub repositories have been renamed to
+  `StarCried/starlite` and `StarCried/starlite-dsh` with user approval.
+  Pushing source and publishing releases require explicit user approval.
 - Do not add native-Windows DSH, Linux/macOS desktop targets, voice, chat,
   memory, telemetry, or auto-update without an approved
   scope change.
@@ -34,9 +37,8 @@
 
 - Never commit Aka, private StarCried art, Creator projects, or unlicensed
   puppets. Tests use generated artwork-free fixtures.
-- A source-only BYOM preview may omit a bundled model. The MicroLight demo
-  model requires its own explicit redistribution license before it may enter
-  any release artifact.
+- Program releases remain BYOM. Weiguang for StarLite uses its own license and
+  stays in a separately delivered character pack, never in program artifacts.
 - Creating a remote repository, pushing, publishing npm, publishing a Windows
   installer, and releasing a model each require separate approval.
 - Alpha Windows installers remain unsigned and must document SmartScreen.
@@ -46,8 +48,11 @@
 - Run narrow package tests first, then `pnpm check` and Rust checks.
 - Test the packed bundle in an isolated DSH profile and verify fail-open DSH
   behavior when the adapter is incompatible.
-- Preserve exact-name animation validation. Disabled mappings stay neutral;
-  never introduce an implicit Idle or procedural animation fallback.
+- Preserve exact-name animation validation. Disabled mappings stay neutral.
+  Current desktop imports require an explicit authored Idle. A single
+  self-authored generic Idle and model-only VRM onboarding are approved future
+  work, not implemented behavior in the naming/documentation phase. Other
+  missing actions must not silently map to a different animation.
 
 ## Commit discipline
 

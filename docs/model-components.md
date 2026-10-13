@@ -1,137 +1,47 @@
-# Model components
+# StarLite 模型组件边界
 
-The native model service accepts Inochi2D `.inp` or self-contained VRM 0/1
-`.vrm` files. VRM animations are explicitly selected external `.vrma` files;
-expressions alone do not become animation choices. A data-only Weiguang profile
-is optional. Neither model nor profile code is executed during inspection.
+桌宠只依赖统一模型控制器，DSH 状态协议不携带模型类型。复用的渲染、动作播放和资源准备属于独立 StarLite 组件仓库；本仓库保留窗口、安装、状态聚合、气泡与输入交互。
 
-`inspect_model` accepts `path`, optional `animationSources` (`name`, `path`), and
-optional `profilePath`. The response includes `backend` and a common animation
-catalog containing only `name` and `durationMs`. Inochi2D track data and VRM
-resource paths remain in their respective backend payloads.
+## 运行时与导入
 
-The settings format is version 3. Reading version 1 migrates its model to the
-Inochi2D backend, preserves its exact mappings and preferences, and retains the
-authored tracks under `model.inochi2d.animations`. The next successful save writes
-version 3. Version 2 migrates the former Thinking mapping into Working and turns
-click/ambient choices into arrays. Unsupported settings versions fail validation.
+| 组件 | npm 身份 | 桌宠 staging 路径 |
+| --- | --- | --- |
+| 公共控制器／生命周期／对话调度 | `@starcried/starlite-core` | `runtime/core` |
+| VRM 0／1、VRMA、材质与物理 | `@starcried/starlite-vrm` | `runtime/vrm` |
+| 可选 Inochi2D WASM 与参数动画 | `@starcried/starlite-inochi2d` | `runtime/inochi2d` |
 
-VRM import validates bounded GLB containers, buffer/accessor ranges, sparse
-indices, node hierarchies, required humanoid bones, animation timelines and
-profile references. External glTF URIs and unsupported required codecs are
-rejected. Limits are 64 MiB per model, 16 MiB per motion, 64 MiB total motions,
-64 named motions and 1 MiB per profile. The renderer validates again before use.
+`pnpm sync:runtime -- <StarLite packages/inochi2d/dist>` 从同一 checkout staging 三个组件并记录来源 revision、内容哈希与许可证。浏览器只导入所选渲染后端；当前构建依赖仍包含两者。本轮不改变为 VRM 默认安装路径。
 
-All sources are read before installation; exact-name mappings (including an
-explicit Idle) must validate before any settings replacement. Installed assets
-receive generated local filenames inside the existing application model
-directory. An invalid source or failed settings commit leaves the old model
-selected. The DSH status protocol and installation identity are unchanged.
+`release/starlite.rev` 固定 JavaScript 组件；原生 Inochi2D 准备库另有 `release/inochi2d-pipeline.rev`。本地 checkout 与包元数据使用 StarLite；两个 GitHub 仓库已按用户批准完成更名。本轮没有 push 或 release，本地新源码尚未公开；更名不改变已有用户设置身份或深链接。
 
-Run native unit tests with `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`.
-The ignored private-bundle test is opt-in: set `DSH_PET_VRM_ASSETS` to the local
-companion output directory and run `cargo test --manifest-path
-apps/desktop/src-tauri/Cargo.toml private_companion_bundles -- --ignored`.
-No private assets are required or copied into this repository's test fixtures.
+原生 `inspect_model` 接受 `path`、可选 `animationSources`（`name`／`path`）和 `profilePath`。结果包含 `backend` 和仅有 `name`／`durationMs` 的公共动作目录。Inochi2D 轨道、VRM 文件路径与角色数据留在各后端载荷中。表情预设不是动作，当前不把 VRM 内嵌 glTF animation 自动列成可选 VRMA。
 
-## Runtime staging
+作者 ZIP 资源包通过 `inspect_resource_pack` 检查并显示独立许可；用户同意后，`install_resource_pack` 再次核对整包 SHA-256，自动读取 `desktop/manifest.json` 中的模型、动作、角色配置和映射，复用同一事务安装。解包与检查在后台线程执行，临时目录随操作清理；取消或失败保留原模型。ZIP 只作为数据，不执行包内文件。
 
-`pnpm sync:runtime -- <inochi2d-web dist>` stages core, Inochi2D and VRM
-from the same checkout, including hashes and license texts. Build core before
-Inochi2D and VRM upstream. Only the selected renderer is imported.
-`release/model-companion-web.rev` pins all JavaScript components; the unchanged native
-preparation library has its own `release/inochi2d-pipeline.rev` pin. New runtime
-commits remain local until separately approved for publication; CI checkout
-requires that publication before this branch can run remotely.
+VRM 必须自包含；外部 URI、不支持的必需编码、损坏的节点／骨架／accessor／时间轴会拒绝。上限为模型 64 MiB、单动作 16 MiB、动作合计 64 MiB、64 个命名动作、角色配置 1 MiB。角色配置仅数据，检查阶段不执行模型或配置代码。
 
-## Desktop selection
+读取与检查全部成功、精确名称映射有效并成功提交设置后才替换当前模型；失败保留已安装资源。源码仅使用无角色素材的合成测试，微光等私有资源不进入测试夹具。
 
-The default pet window is 320 × 480 CSS pixels, two thirds of its previous
-480 × 720 dimensions. VRM keeps this logical model area fixed while its canvas
-and transparent native window can expand for animation limbs. Canvas viewport
-events are observed before mounting, and native geometry, silhouette masks and
-interactive bubble bounds update in order. The bubble stays anchored to the
-logical model area at its original width; transparent margins do not scale the
-character or induce host-motion physics. Inochi2D retains its window-filling
-layout; the settings window keeps its existing size.
+## 当前能力与下一阶段
 
-Choose `.inp` or `.vrm` in settings. VRM accepts a separate selection of VRMA
-files (exact file stems become action names) and an optional data-only character
-profile. Standard VRM has no Weiguang-specific behavior. Idle must be explicitly
-selected, even when an action named Idle exists. New untouched VRM preferences
-start at 30 FPS / DPR 1.5; existing preferences are preserved. A failed inspection
-or save leaves the installed component intact. Runtime mounts use the shared
-cancellation slot; old requests and late controllers cannot replace a new model.
+当前模型可以在独立播放器中无动作预览；桌宠保存仍要求显式选择作者提供的 Idle。普通 VRM 的眨眼和眼球跟随依赖可用的 blink／lookAt 配置，不套用微光逻辑。
 
-Only the explicitly selected Idle animation loops. Working (including Thinking),
-Blocked, Approval, Completed and Error play once and return to that Idle. An Idle
-snapshot cannot truncate an unfinished gesture. A different non-idle state
-immediately replaces the previous gesture; approval, blocked and outcome
-notifications never wait behind an obsolete work animation. Late completions
-from replaced gestures cannot restore Idle or overwrite the current state.
-Click and occasional idle gestures have lower priority: work states interrupt
-them, and clicks cannot interrupt work, entry or another response. Logical busy
-states continue blocking clicks even after their gesture has returned to Idle.
-Disabled mappings explicitly stop playback and remain neutral. Disconnect and
-mapping changes cancel pending completions and clear ambient timers.
-The VRM component receives the selected Idle as its explicit return clip, so
-completion blends directly into Idle without rendering a neutral frame first.
-Its portrait framing and bounded pointer gaze match the local review page.
+已批准的下一阶段目标是：仅自带一段原创通用 Idle，为没有动作的标准人形 VRM 提供自然基础姿态、轻呼吸、眨眼与限角跟随；用户动作按需映射，气泡可独立工作。此文档整理不实现这些能力，也不以其他动作填补缺失事件。
 
-## Mouse interaction
+## 设置与动作调度
 
-The main pet window accepts bounded `set_model_viewport` geometry from the VRM
-renderer. A 320 × 480 logical model area can acquire transparent canvas margins;
-native resizing offsets the window by the padding difference at its current
-DPI, preserving the character's screen anchor. Resizing clears obsolete model
-and bubble coverage and rebases an active drag instead of cancelling it. A null
-viewport restores the logical window. Settings windows cannot invoke this
-command; no additional window permissions or desktop-input logging are needed.
-Normal tray and offline exits restore the logical window before the existing
-window-state plugin saves it, so transparent margins cannot accumulate across
-restarts. Abrupt process termination does not provide this cleanup hook.
+设置 schema 为版本 3。版本 1 按 Inochi2D 迁移并保留原映射／偏好；版本 2 把 Thinking 合并到 Working，并把 Click／Ambient 转成列表。再次成功保存才写新版，未知 schema 拒绝读取。
 
-The desktop accepts clicks and drag starts only on the rendered model silhouette.
-The native window polls the global cursor and switches transparent background
-areas to mouse passthrough, including transparent gaps inside the model and the
-non-interactive bubble. Masks contain bounded alpha coverage bits, not screenshots.
-CSS-to-physical coordinate conversion handles DPI and window size changes.
-Holding the primary button on a model keeps capture until release; a press on
-the background cannot steal a drag from the application underneath. The tray's
-mouse passthrough toggle overrides silhouette interaction. Cursor coordinates
-stay in memory and are used only for the renderer's bounded gaze tracking.
-The hidden window stops cursor/mask processing until it becomes visible again.
-Drag movement uses a captured physical cursor/window origin and coalesced
-position updates, including the final movement before mouse release. It does
-not rely on an asynchronous system move-loop starting while the button is held.
+只有显式 Idle 循环。工作（含思考）、阻塞、等待确认、完成和错误各播放一次再回 Idle；逻辑任务仍忙碌时不会启动点击或偶发动作。新状态打断旧片段，旧 Promise 迟到完成不能恢复旧状态。禁用映射保持中性，暂停、断线、模型或映射变化取消待完成动作和偶发计时。
 
-## Local validation (2026-10-05)
+Click／Ambient 为最多 20 项的随机池。挂载使用公共取消槽；快速更换模型时，迟到实例销毁，不能覆盖当前模型。
 
-The desktop frontend passes 56 tests and `pnpm check`. Native format, Clippy,
-17 ordinary tests and the isolated release build pass. The ignored private
-companion import check was run separately: 12 desktop and 8 blog motions pass.
-The packed DSH bundle was installed in the separate `vrm-local-validation`
-profile; the installed DSH 0.1.5-rc.1 exposes the existing protocol contracts.
-Invoking the packed plugin with an incompatible event subscription returns a
-no-op disposer and contains the failure. No real session prompt was submitted.
+## 固定画布与输入
 
-The reusable runtime's full workspace validation and browser regression pass.
-VRM Hexo checks cover deferred loading, mobile zero model/runtime requests,
-20 PJAX completions without duplicate instances, and visible static fallback.
-Private character testing covers all 20 selected clips, 20 mounts/destroys and
-15 minutes in both embedded Chromium and standalone WebView2. Silhouette
-coverage, bounded gaze outside the window, pause/resume and destruction checks
-pass at 30 and 60 FPS. The desktop's five interaction unit tests cover alpha
-holes, DPI mapping, drag capture, background presses and physical drag origins.
-Actual native mouse passthrough and dragging remain subject to manual acceptance:
-the automation target precheck rejects a passthrough window before moving its
-cursor. Edge control remains unavailable; the user explicitly waived that test.
-The current native test source emits Idle only and makes no model API requests.
-WebView2 measurements are from the isolated test process tree.
-No model was installed into the user's existing desktop settings.
+桌宠逻辑模型区域为 320 × 480 CSS 像素。VRM 挂载时一次预留固定透明边距和气泡空间；播放动作、气泡大小变化不调整原生窗口或模型屏幕锚点。气泡靠近屏幕边缘时只移动自身。Inochi2D 保留自己的窗口填充布局。
 
-VRM movement-sensitive physics uses the optional public `setHostPosition(x, y)`
-capability. The desktop forwards window positions in CSS pixels; the renderer
-feeds bounded world movement to imported spring bones and removes that movement
-before drawing. Coordinates stay local and are cleared on pause/destruction.
-Inochi2D retains its existing authored physics behavior.
+原生层仅在模型轮廓和可交互问题表单中接收点击；其他透明区域穿透。命中遮罩只含有界 alpha 覆盖位，不是截图；DPI 与坐标转换由本地层处理。拖动使用捕获的物理光标／窗口起点并合并位置更新。光标仅存在于内存，隐藏时停止遮罩与光标处理。
+
+VRM 可接收 `setHostPosition(x,y)`，以有界世界位移驱动物理，再在渲染前移除该位移，保持屏幕锚点。暂停／销毁清除坐标；Inochi2D 保留作者的物理行为。人工验收需覆盖动作边界、耳尾物理、轮廓命中、拖动、工作气泡与表单。
+
+原生单元测试见 [开发说明](development.md)。私有资源导入检查仅按需设置 `DSH_PET_VRM_ASSETS` 并运行忽略测试；不能把本地模型或测试日志提交进仓库。

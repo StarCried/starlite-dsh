@@ -1,0 +1,25 @@
+{
+  "backend": "vrm",
+  "sourcePath": "C:\\StarLiteModels\\MyAvatar\\Avatar.vrm",
+  "animationSources": [
+    { "name": "Idle", "path": "C:\\StarLiteModels\\MyAvatar\\Idle.vrma" },
+    { "name": "Wave", "path": "C:\\StarLiteModels\\MyAvatar\\Wave.vrma" }
+  ],
+  "mappings": {
+    "idle": "Idle",
+    "working": null,
+    "completed": null,
+    "error": null,
+    "blocked": null,
+    "approval": null,
+    "click": ["Wave"],
+    "ambient": []
+  },
+  "preferences": {
+    "fps": 30,
+    "maxDevicePixelRatio": 1.5,
+    "scale": 1,
+    "privacyMode": false,
+    "bubbleMode": "compact"
+  }
+}

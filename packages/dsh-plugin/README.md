@@ -1,99 +1,35 @@
-# dsh-inochi2d-pet
+# dsh-starlite
 
-DeepSeek Harness bundle for the Windows **DSH Companion** companion.
+**StarLite for DSH** 的桥接插件：让 Windows 桌宠跟随 WSL2 中的 DSH 工作状态，显示气泡并接收普通用户问题的回答。
 
-This package runs inside DSH under WSL2. It exposes only a short-lived,
-token-protected status stream on IPv4 loopback and starts the separately
-installed Windows companion through its registered URL protocol.
+## 安装与启动
 
-The alpha supports Windows 11 x64 with one DSH process. It does not send
-prompts, tool arguments/results, error details, session identifiers, or paths
-across the WSL boundary.
+需要 Windows 11 x64、已经可用的 WSL2 DSH，以及同版本的 Windows 桌宠。目前是尚未公开发布的 alpha 候选，已验收 DSH `0.1.5-rc.1`；无需重装已有 DSH。
 
-See the repository README for installation and compatibility details.
-
-In DSH Settings, open Plugins → Plugin list → Global, or search `inochi2d-pet`.
-The default Plugin configuration tab only shows web configuration cards; the
-companion's settings live in its Windows app. Reopen Settings to refresh the list.
-The bridge follows DSH's lifecycle. The separate Windows renderer hides on
-disconnect, then exits after a 60-second reconnect grace (stalled sockets first
-have a 45-second heartbeat timeout). Native Windows DSH is not supported.
-
-The companion can answer ordinary DSH questions (single/multiple selections and
-custom text). It claims a question only while its visible input UI is connected;
-disconnecting or disabling input returns it to DSH's existing answerer. Each
-answer is bounded and bound to one pending request. Tool permission approvals
-remain in DSH. The additive status fields carry the session title, fixed activity
-code and ephemeral references, never the actual session identity.
-
-Double clicking opens the exact displayed session through DSH's authenticated
-local Web UI, or the Web UI home when no session is displayed. Retired or invalid
-session references are rejected rather than silently opening a different target.
-WSL hands the authenticated URL directly to the browser launcher;
-the companion never receives the real identity or browser credentials. The
-included Web client consumes a fragment hint after finding the authoritative
-session/catalog entry; it never creates a session or sends a prompt.
-
-Click the model to query the official DeepSeek account balance and today's DSH
-cost estimate. This supports DSH's default `llm-deepseek` / `deepseek-official`
-route and the optional `llm-pi-ai.providers.deepseek` route, using
-DSH's credential service; no API key is copied to Windows. Custom gateways or
-model-level endpoint/authentication overrides are refused. Requests only query
-`GET https://api.deepseek.com/user/balance`, on demand (balance cache: 60 seconds).
-No paid model request is made by this feature or its tests.
-
-Configure DeepSeek in DSH's Models page first; the default official route needs
-only its API key, with no separate pi-ai profile. The native route honors its
-configured endpoint and trusted `DEEPSEEK_BASE_URL` launch override; gateways
-never trigger a balance request. If both routes have credentials, the native
-route supplies the displayed balance. Missing credentials are reported as
-unconfigured and never trigger a network request. Existing stored API keys or credential references are resolved by DSH,
-not entered in the companion. A negative balance reported by the provider is
-preserved rather than converted to zero.
-
-Today's estimate reads the profile's existing session records through read-only
-persistence handles, including records from before a restart. It excludes
-fork-inherited events, replaces repeated settlements of the same attempt, and
-counts retries separately. Only routes with a verified official endpoint are
-included. No extra history or financial ledger is saved. Dates
-use Asia/Shanghai. Only official Flash/V4 Pro model IDs listed in the pricing
-table are priced; missing usage, unknown models and incomplete reads are shown
-explicitly. Reasoning tokens are already included in output tokens.
-
-Models sharing one official account share its balance; requests are priced by
-their actual recorded model. The card identifies the selected configuration.
-When native and pi-ai routes use different accounts, today's DSH estimate still
-covers both eligible routes in this profile, not a per-account bill. Historical
-usage cannot be reliably assigned to an account after a credential change.
-
-Prices were verified on 2026-10-10 against the official
-[CNY](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) and
-[USD](https://api-docs.deepseek.com/quick_start/pricing/) tables. The displayed
-range covers off-peak/peak prices, rather than guessing each request's provider
-billing time. A separate badge shows the current published tariff period:
-09:00–12:00 and 14:00–18:00 Beijing on Monday–Friday, excluding Chinese public
-holidays. All other times are off-peak at half price. The offline 2026 calendar
-uses the [official holiday schedule](https://www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm);
-an unverified year's weekday daytime period is marked unknown. It is a DSH-only
-estimate, not the account's official daily bill;
-unfinished requests and other apps are not included. Review the table before
-each release. Scans are bounded to 512 sessions, 16 MiB per session and 100,000
-events per session; hitting a limit reports a partial estimate. Unsupported
-credential/persistence services affect only the fee query, never DSH startup.
-
-No prebuilt companion or npm package is published yet. For the current BYOM
-source preview, build and install the Windows companion and packed bundle using
-the repository development guide. After a prebuilt alpha is published, install
-the unsigned Windows companion first, then in WSL2:
+1. 安装 Windows 桌宠。首次打开时选择独立授权的微光 ZIP、确认许可，资源和动作映射会自动导入。
+2. 在 WSL 终端给日常使用的 profile 安装候选插件，然后启动 DSH：
 
 ```bash
-npm install -g --prefix "$HOME/.local" @deepseek-ai/dsh@latest
-export PATH="$HOME/.local/bin:$PATH"
-dsh plugin --profile web add dsh-inochi2d-pet@latest
-dsh --profile web --dump-config
-dsh web
+dsh plugin --profile web add /mnt/c/Downloads/dsh-starlite-0.1.0-alpha.0.tgz
+dsh --profile web
 ```
 
-If the Windows app is missing or a developer-preview DSH update changes the
-required event contract, this bundle disables only the companion and lets DSH
-continue. The bundle has no reverse API for controlling DSH.
+将路径和 `web` 换成自己的资源位置及 profile。公开 alpha 发布后，安装命令可简化为 `dsh plugin --profile web add dsh-starlite@alpha`。以后只需运行 `dsh --profile web`，插件会自动启动 Windows 桌宠。
+
+模型及第三方动作与程序独立分发。导入自己的模型时当前仍需提供真实 Idle 动作；通用默认 Idle 和无动作自动站姿尚未提供。
+
+## 日常使用
+
+单击模型查看回应与官方 DeepSeek 费用信息；双击打开气泡对应的 DSH 会话，无会话时打开 Web UI 首页。拖动模型身体可移动桌宠，右键或托盘打开设置。气泡默认显示标题和状态，也可切换详细模式；普通用户问题可直接在气泡里回答，工具权限审批仍在 DSH 中处理。
+
+在 DSH「设置 → 插件 → 插件列表 → 全局」查找 `dsh-starlite`。桌宠设置位于 Windows 程序；「插件配置」页不显示桌宠设置卡。
+
+若同一 profile 曾安装 `dsh-inochi2d-pet`，先执行 `dsh plugin --profile web remove dsh-inochi2d-pet`。不要同时运行新旧桥接；已有 Windows 用户模型与设置保留。
+
+## 进阶
+
+[安装、升级与卸载](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/user-guide.md) · [换模型与动作](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/model-import.md) · [气泡、费用与隐私边界](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/companion-interactions.md) · [开发与兼容检查](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/development.md)
+
+插件不向 Windows 发送 API Key、用户提示、工具参数／结果或真实会话 ID。不兼容或缺少 Windows 程序时只停用桌宠，DSH 继续运行。桥接随 DSH 停止；Windows 桌宠断连后隐藏，等待重连后退出。当前不支持原生 Windows DSH。
+
+BSD-2-Clause；Windows alpha 安装器未签名，安装前核对来源与哈希。

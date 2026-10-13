@@ -1,85 +1,34 @@
-# DSH Companion
+# StarLite for DSH
 
-通过可替换的 Inochi2D／VRM 组件显示 DSH 工作状态。应用只调度动作名称，模型资源与渲染器由 Model Companion Web 提供。
+让微光陪你使用 DeepSeek Harness：安静待机，用动作和气泡显示工作状态，也能直接回答会话里的选择题。
 
-项目显示名已更新；现有 `dsh-inochi2d-pet` npm 桥接包名、安装标识、deep link 和设置目录保留，以便已有 DSH 配置继续连接同一应用。远程仓库本轮未改名。
+需要 **Windows 11 x64 + WebView2**，DSH 运行在 **WSL2**。当前为本地候选，新名称的公开下载尚未发布。
 
-面向 Windows 11 + WSL2 DeepSeek Harness 的开源 Inochi2D 桌宠。DSH 的聚合状态驱动模型作者制作的动画；可选气泡只显示经过清洗、且 DSH 已经暴露给对话前端的文本。
+## 安装并使用微光
 
-> 当前状态：公开源码 BYOM（Bring Your Own Model）预览版。源码可以构建并导入用户自己的 `.inp`；尚未发布 npm 包、Windows 安装包或任何第三方模型。“微光”演示模型及其可再分发许可完成前，预构建 alpha 的发布检查会强制失败。
+1. 在 Windows 安装 **StarLite for DSH**。首次打开时选择独立授权的 **Weiguang for StarLite** ZIP 并确认许可，模型、动作和状态映射自动导入并保存。
+2. 在 WSL 中，为平时使用的 DSH profile 安装桥接插件：
 
-## 支持范围
+   ```sh
+   dsh plugin --profile web add /path/to/dsh-starlite-0.1.0-alpha.0.tgz
+   ```
 
-- Windows 11 x64、WebView2，以及运行在 WSL2 中的单个 DSH 进程。
-- DSH 状态：Idle、Thinking、Working、Approval、Blocked、Completed、Error；Idle 时可触发 Click。
-- 模型必须精确提供已映射的 Inochi2D 动画。除 Idle 必填外，其余状态可以显式禁用；不会偷偷回退到 Idle 或程序生成动作。
-- alpha 不支持原生 Windows DSH、多个 DSH 进程、Linux/macOS 桌面、聊天/语音/记忆、自动更新和透明像素级命中。
+以后只需启动 DSH，桌宠会自动出现：
 
-## 从源码试用（当前可用）
-
-源码构建会从公开、固定 revision 的
-[`StarCried/inochi2d-web`](https://github.com/StarCried/inochi2d-web)
-生成 WebGL2 运行时，并构建未签名的 Windows 桌宠与 DSH bundle。仓库不包含
-Aka、微光或其他 `.inp`；首次运行会打开设置，由用户选择自己有权使用的模型。
-
-完整命令、Windows/WSL 分工和本地 tarball 安装方式见
-[开发与 BYOM 试用](docs/development.md)。
-
-## 安装预构建 alpha（尚未发布）
-
-先在 Windows 安装未签名的 `DSH Companion` NSIS 安装包。Windows SmartScreen 可能显示“未知发布者”，请先从 Release 校验 SHA-256；本 alpha 不要求购买代码签名证书。
-
-在 WSL2 中执行：
-
-```bash
-mkdir -p "$HOME/.local/bin"
-npm install -g --prefix "$HOME/.local" \
-  pnpm@11.7.0 \
-  @deepseek-ai/dsh@latest
-export PATH="$HOME/.local/bin:$PATH"
-
-dsh plugin --profile web add dsh-inochi2d-pet@latest
-dsh --profile web --dump-config
-dsh web
+```sh
+dsh --profile web
 ```
 
-把 `export PATH="$HOME/.local/bin:$PATH"` 加入 shell 启动文件后即可日常直接运行。更新 DSH 时重新执行上面的 npm 安装命令；程序不会在后台自动更新 DSH。Windows 安装器会注册 `dsh-inochi2d-pet://`，WSL 插件从注册表解析并直接启动该 Windows 程序。
+## 日常操作
 
-安装或插件契约不兼容时，桌宠会停用并输出一次诊断，但不能阻止 DSH 启动。卸载时先执行 `dsh plugin --profile web remove dsh-inochi2d-pet`，再从 Windows“已安装的应用”卸载桌宠。
+- **单击**：互动并显示官方 DeepSeek 余额和今日 DSH 用量估算。
+- **双击**：打开气泡显示的会话；没有会话时打开 Web UI。
+- **拖动身体**：移动桌宠，透明背景允许点击后面的程序。
+- **右键或托盘**：打开设置，切换精简／详细气泡。
+- **等待回答时**：直接在气泡中选择或输入；工具权限审批仍在 DSH 中处理。
 
-## 模型设置
+## 进阶使用
 
-从托盘打开“设置”，选择本地 `.inp`。导入器会先检查模型与资源边界，再准备 Web 版本并以原子方式替换旧模型。请选择模型中真实存在的动画名：
+[自定义模型与动作](docs/model-import.md) · [气泡与互动](docs/companion-interactions.md) · [开发说明](docs/development.md) · [项目结构](docs/model-components.md)
 
-- `Idle`：必填、循环。
-- `Thinking`、`Working`、`Approval`、`Blocked`：可选、持续循环。
-- `Completed`、`Error`、`Click`：可选、单次播放。
-
-模型损坏、格式不兼容、动画不存在或准备失败时不会写入部分结果，旧模型和设置保持不变。详见 [模型导入说明](docs/model-import.md)。
-
-## 隐私与架构
-
-Cordis bundle 在 DSH 内聚合全部会话，在随机 IPv4 回环端口提供带 256 位临时令牌的 SSE。Windows Tauri/WebView2 客户端通过 WSL localhost forwarding 连接：
-
-```text
-DSH / Cordis (WSL2) -> token-authenticated localhost SSE
-                     -> Tauri 2 / WebView2 (Windows)
-                     -> inochi2d-web / WebGL2 / .inp
-```
-
-跨边界协议只有状态、单调序号、时间和短气泡。它不包含用户提示词、工具参数/结果、错误栈、路径、会话 ID 或凭据；文本只按纯文本渲染且不落盘。托盘可随时开启固定文案隐私模式。完整威胁边界见 [安全说明](docs/security.md)。
-
-## 源码布局与开发
-
-- `packages/protocol`：版本化线协议、严格解析和 Unicode 文本清洗。
-- `packages/dsh-plugin`：Cordis bundle、全局状态聚合、SSE 与 Windows 拉起。
-- `apps/desktop`：Tauri 外壳、渲染器、托盘、设置和事务式模型导入。
-- `tools/mock-source`：只用于开发/自动测试的 `PetStateSource` Mock。
-
-构建、测试和 DSH tarball 联调见 [开发说明](docs/development.md)，发布审批门见 [发布说明](docs/release.md)。
-
-提交补丁前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)；安全问题按 [SECURITY.md](SECURITY.md) 报告。
-
-## 许可证
-
-代码使用 BSD-2-Clause。每个模型与美术资产使用独立声明的许可证；仓库许可证不自动授予任何模型权利。
+程序采用 [BSD-2-Clause](LICENSE)。微光资源包单独授权，不包含在程序安装包内。

@@ -1,13 +1,13 @@
 # Contributing
 
-感谢你改进 DSH Companion。项目目前面向 Windows 11 x64 + WSL2 DSH latest；请先在 issue 中讨论超出该范围的平台、通用连接器或大型架构变更。
+感谢你改进 StarLite for DSH。项目目前面向 Windows 11 x64 + WSL2 DSH；CI 跟踪 DSH latest 契约，已验收版本见用户指南。请先在 issue 中讨论超出该范围的平台、通用连接器或大型架构变更。
 
 ## 补丁边界
 
-- 通用 Inochi2D 渲染、动画播放和模型 pipeline 变更应提交到 `StarCried/inochi2d-web`；本仓库只保留 DSH、协议和 Tauri 集成。
+- 通用 VRM／Inochi2D 渲染、动画播放和模型准备属于 StarLite 组件仓库（`StarCried/starlite`）；本仓库只保留 DSH、协议和 Tauri 集成。
 - 不要提交第三方 `.inp`、Creator 工程、私有角色素材、会话内容、令牌、路径或测试日志。
 - 不要为未知 DSH 事件猜测旧语义。先更新 `tools/check-dsh-contract.mjs`、适配器和契约测试。
-- 可选动画缺失时必须保持禁用；不要加入隐式 Idle 或程序动作 fallback。
+- 可选事件动作缺失时保持禁用，不隐式映射到别的动作。当前 Idle 必填；自制通用 Idle 和无动作模型导入属于已批准的下一阶段目标，更名阶段不修改该行为。
 
 ## 本地检查
 

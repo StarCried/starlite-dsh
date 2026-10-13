@@ -1,4 +1,4 @@
-import type {PetSnapshot,PetActivity,PetInteraction,PetAnswer} from "@dsh-inochi2d-pet/protocol";
+import type {PetSnapshot,PetActivity,PetInteraction,PetAnswer} from "@starcried/starlite-dsh-protocol";
 import type {DesktopPreferences} from "./types.js";
 import {createQuestionForm} from "./question-form.js";
 

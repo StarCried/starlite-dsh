@@ -1,7 +1,7 @@
 import {expect,it,vi} from "vitest";
 import {DshStateAggregator} from "../src/aggregator.js";
 import {QuestionBridge} from "../src/questions.js";
-import type {PetSnapshot} from "@dsh-inochi2d-pet/protocol";
+import type {PetSnapshot} from "@starcried/starlite-dsh-protocol";
 async function fixture(){const snapshots:PetSnapshot[]=[];const aggregator=new DshStateAggregator();await aggregator.start(s=>snapshots.push(s));const open=vi.fn(async()=>{}),bridge=new QuestionBridge(aggregator,open);bridge.setConnected(true);bridge.setEnabled(true);return {bridge,aggregator,snapshots,open}}
 const questions=[{id:"q",question:"Pick",options:[{label:"Yes"},{label:"No"}]}];
 it("answers the exact pending request once without forwarding identity or arguments",async()=>{

@@ -29,7 +29,7 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@dsh-inochi2d-pet/protocol':
+      '@starcried/starlite-dsh-protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
       '@tauri-apps/api':
@@ -61,7 +61,7 @@ importers:
         specifier: 11.0.2
         version: 11.0.2
     devDependencies:
-      '@dsh-inochi2d-pet/protocol':
+      '@starcried/starlite-dsh-protocol':
         specifier: workspace:*
         version: link:../protocol
       '@types/node':
@@ -81,7 +81,7 @@ importers:
 
   tools/mock-source:
     devDependencies:
-      '@dsh-inochi2d-pet/protocol':
+      '@starcried/starlite-dsh-protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
       '@types/node':

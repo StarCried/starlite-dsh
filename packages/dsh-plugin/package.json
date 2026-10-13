@@ -1,17 +1,17 @@
 {
-  "name": "dsh-inochi2d-pet",
+  "name": "dsh-starlite",
   "version": "0.1.0-alpha.0",
-  "description": "DeepSeek Harness status bridge for DSH Companion",
+  "description": "StarLite DSH Bridge: a local DeepSeek Harness status bridge",
   "type": "module",
   "license": "BSD-2-Clause",
   "author": "StarCried",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/StarCried/dsh-inochi2d-pet.git",
+    "url": "git+https://github.com/StarCried/starlite-dsh.git",
     "directory": "packages/dsh-plugin"
   },
-  "homepage": "https://github.com/StarCried/dsh-inochi2d-pet#readme",
-  "bugs": "https://github.com/StarCried/dsh-inochi2d-pet/issues",
+  "homepage": "https://github.com/StarCried/starlite-dsh#readme",
+  "bugs": "https://github.com/StarCried/starlite-dsh/issues",
   "main": "./dist/index.js",
   "exports": {".":"./dist/index.js","./client":"./dist/client.js"},
   "files": [
@@ -30,7 +30,7 @@
     "pack:check": "pnpm build && pnpm pack --pack-destination .pack && node ../../tools/check-plugin-package.mjs"
   },
   "devDependencies": {
-    "@dsh-inochi2d-pet/protocol": "workspace:*",
+    "@starcried/starlite-dsh-protocol": "workspace:*",
     "@types/node": "^24.10.0",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
@@ -45,6 +45,8 @@
   "keywords": [
     "deepseek-harness",
     "dsh-plugin",
+    "starlite",
+    "vrm",
     "inochi2d",
     "desktop-pet"
   ],

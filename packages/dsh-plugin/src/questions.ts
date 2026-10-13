@@ -1,5 +1,5 @@
 import {randomUUID} from "node:crypto";
-import {parsePetInteraction,parsePetAnswer,type PetInteraction,type PetAnswer} from "@dsh-inochi2d-pet/protocol";
+import {parsePetInteraction,parsePetAnswer,type PetInteraction,type PetAnswer} from "@starcried/starlite-dsh-protocol";
 import type {DshStateAggregator} from "./aggregator.js";
 
 interface Pending {

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
-import type { BillingSnapshot } from "@dsh-inochi2d-pet/protocol";
+import type { BillingSnapshot } from "@starcried/starlite-dsh-protocol";
 import { BillingBubble, renderBillingBubble } from "../src/billing-bubble.js";
 import { renderPlainBubble } from "../src/work-bubble.js";
 

@@ -2,7 +2,7 @@
 import {describe,it,expect,vi} from "vitest";
 import {createQuestionForm} from "../src/question-form.js";
 import {WorkBubble} from "../src/work-bubble.js";
-import type {PetInteraction,PetSnapshot} from "@dsh-inochi2d-pet/protocol";
+import type {PetInteraction,PetSnapshot} from "@starcried/starlite-dsh-protocol";
 const ref="123e4567-e89b-42d3-a456-426614174000",id="123e4567-e89b-42d3-a456-426614174001";
 const request:PetInteraction={interactionVersion:1,requestId:id,sessionRef:ref,questions:[{id:"single",question:"<img>单选",options:[{label:"A"},{label:"B"}],multiSelect:false},{id:"multi",question:"多选",options:[{label:"X"},{label:"Y"}],multiSelect:true},{id:"text",question:"文字",options:[],multiSelect:false}]};
 const snapshot:PetSnapshot={protocolVersion:1,sequence:1,emittedAt:1,state:"approval",session:{ref,title:"当前会话"},activity:"waiting",inputRequest:id};

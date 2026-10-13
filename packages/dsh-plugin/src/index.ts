@@ -1,4 +1,4 @@
-export const name = "dsh-inochi2d-pet";
+export const name = "dsh-starlite";
 
 interface PluginContext {
   get?(name: string): unknown;
@@ -21,7 +21,7 @@ export async function apply(context: PluginContext): Promise<() => Promise<void>
     };
   } catch {
     context.logger?.warn?.(
-      "DSH Companion is disabled because this DSH build is incompatible or the bridge could not start.",
+      "StarLite for DSH is disabled because this DSH build is incompatible or the bridge could not start.",
     );
     return async () => undefined;
   }

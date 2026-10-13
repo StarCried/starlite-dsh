@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-inochi2d-pet/mock-source",
+  "name": "@starcried/starlite-dsh-mock-source",
   "version": "0.1.0-alpha.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "start": "node dist/index.js"
   },
   "devDependencies": {
-    "@dsh-inochi2d-pet/protocol": "workspace:*",
+    "@starcried/starlite-dsh-protocol": "workspace:*",
     "@types/node": "^24.10.0",
     "esbuild": "0.28.2",
     "typescript": "7.0.2"

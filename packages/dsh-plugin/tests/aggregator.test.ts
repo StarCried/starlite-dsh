@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PetSnapshot } from "@dsh-inochi2d-pet/protocol";
+import type { PetSnapshot } from "@starcried/starlite-dsh-protocol";
 import { DshStateAggregator,toolActivity } from "../src/aggregator.js";
 
 describe("DshStateAggregator", () => {

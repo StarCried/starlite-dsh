@@ -7,7 +7,7 @@ import {
   type PetSnapshot,
   type PetStateSource,
   MAX_INTERACTION_BYTES, isOpaqueRef, parsePetInteraction,
-} from "@dsh-inochi2d-pet/protocol";
+} from "@starcried/starlite-dsh-protocol";
 import type { BillingSource } from "./billing.js";
 import type {QuestionBridge} from "./questions.js";
 

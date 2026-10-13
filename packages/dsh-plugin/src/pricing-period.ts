@@ -1,4 +1,4 @@
-import type {BillingSnapshot} from "@dsh-inochi2d-pet/protocol";
+import type {BillingSnapshot} from "@starcried/starlite-dsh-protocol";
 
 // Public DeepSeek rule, verified 2026-10-10:
 // https://api-docs.deepseek.com/zh-cn/quick_start/pricing/

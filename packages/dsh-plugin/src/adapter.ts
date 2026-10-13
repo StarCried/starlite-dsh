@@ -125,10 +125,10 @@ export async function startDshAdapter(
     instanceId: randomUUID(),
   }).catch(() => {
     context.logger?.warn?.(
-      "DSH Companion could not start the Windows companion; DSH will continue without it.",
+      "StarLite for DSH could not start the Windows companion; DSH will continue without it.",
     );
   });
-  context.logger?.info?.("DSH Companion status bridge is ready.");
+  context.logger?.info?.("StarLite for DSH status bridge is ready.");
 
   let closed = false;
   return async () => {

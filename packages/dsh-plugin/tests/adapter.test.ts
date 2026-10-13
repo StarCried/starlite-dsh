@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { PetSnapshot, PetStateSource } from "@dsh-inochi2d-pet/protocol";
+import type { PetSnapshot, PetStateSource } from "@starcried/starlite-dsh-protocol";
 import { startDshAdapter, type CordisContextLike } from "../src/adapter.js";
 import type { BillingSource } from "../src/billing.js";
 

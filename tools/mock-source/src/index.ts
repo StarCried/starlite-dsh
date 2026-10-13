@@ -5,7 +5,7 @@ import {
   type PetSnapshot,
   type PetState,
   type PetStateSource,
-} from "@dsh-inochi2d-pet/protocol";
+} from "@starcried/starlite-dsh-protocol";
 import { buildConnectionUrl } from "../../../packages/dsh-plugin/src/launcher.js";
 import { startStatusServer } from "../../../packages/dsh-plugin/src/server.js";
 

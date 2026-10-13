@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-inochi2d-pet/protocol",
+  "name": "@starcried/starlite-dsh-protocol",
   "version": "0.1.0-alpha.0",
   "private": true,
   "type": "module",

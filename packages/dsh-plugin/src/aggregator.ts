@@ -8,7 +8,7 @@ import {
   type PetStateSource,
   type PetSession,
   type PetActivity,
-} from "@dsh-inochi2d-pet/protocol";
+} from "@starcried/starlite-dsh-protocol";
 import {randomUUID} from "node:crypto";
 
 const COMPLETED_LATCH_MS = 6_000;

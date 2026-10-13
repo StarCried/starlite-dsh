@@ -9,7 +9,7 @@ const packageJson = JSON.parse(
 );
 const archive = resolve(
   root,
-  `packages/dsh-plugin/.pack/dsh-inochi2d-pet-${packageJson.version}.tgz`,
+  `packages/dsh-plugin/.pack/dsh-starlite-${packageJson.version}.tgz`,
 );
 const info = await stat(archive).catch(() => undefined);
 if (!info?.isFile() || info.size === 0 || info.size > 512 * 1024) {

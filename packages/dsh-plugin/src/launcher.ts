@@ -26,7 +26,7 @@ export async function launchWindowsPet(connection: PetConnection): Promise<void>
   );
   const executable = (await execFileText("wslpath", ["-u", windowsExecutable])).trim();
   if (!executable.startsWith("/") || basename(executable).toLowerCase() !== "dsh-inochi2d-pet.exe") {
-    throw new Error("registered DSH Companion executable is invalid");
+    throw new Error("registered StarLite for DSH executable is invalid");
   }
 
   return new Promise((resolve, reject) => {
@@ -88,7 +88,7 @@ export function parseRegisteredExecutable(output: string): string {
   const value = output.match(/\bREG_SZ\s+(.+)$/imu)?.[1]?.trim();
   const executable = value?.match(/^"([^"]+)"\s+"%1"$/u)?.[1];
   if (!executable || !executable.toLowerCase().endsWith("\\dsh-inochi2d-pet.exe")) {
-    throw new Error("DSH Companion protocol registration is missing or invalid");
+    throw new Error("StarLite for DSH protocol registration is missing or invalid");
   }
   return executable;
 }

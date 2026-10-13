@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-inochi2d-pet/desktop",
+  "name": "@starcried/starlite-dsh-desktop",
   "version": "0.1.0-alpha.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@dsh-inochi2d-pet/protocol": "workspace:*",
+    "@starcried/starlite-dsh-protocol": "workspace:*",
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-deep-link": "2.4.9",
     "@tauri-apps/plugin-dialog": "2.7.2"

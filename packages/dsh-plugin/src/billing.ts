@@ -1,4 +1,4 @@
-import { parseBillingSnapshot, type BillingSnapshot } from "@dsh-inochi2d-pet/protocol";
+import { parseBillingSnapshot, type BillingSnapshot } from "@starcried/starlite-dsh-protocol";
 import {deepSeekPricingPeriod} from "./pricing-period.js";
 
 const PRICING_DATE = "2026-10-10";

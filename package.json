@@ -1,5 +1,5 @@
 {
-  "name": "dsh-companion-workspace",
+  "name": "starlite-dsh-workspace",
   "version": "0.1.0-alpha.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,7 @@
   "author": "StarCried",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/StarCried/dsh-inochi2d-pet.git"
+    "url": "git+https://github.com/StarCried/starlite-dsh.git"
   },
   "packageManager": "pnpm@11.7.0",
   "engines": {

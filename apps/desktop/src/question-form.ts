@@ -1,4 +1,4 @@
-import {parsePetAnswer,type PetAnswer,type PetInteraction} from "@dsh-inochi2d-pet/protocol";
+import {parsePetAnswer,type PetAnswer,type PetInteraction} from "@starcried/starlite-dsh-protocol";
 
 /** Drafts exist only in this DOM instance, never storage or logs. */
 export function createQuestionForm(request:PetInteraction,submit:(answer:PetAnswer)=>Promise<void>):HTMLFormElement{

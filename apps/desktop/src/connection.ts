@@ -8,7 +8,7 @@ import {
   type PetSnapshot,
   MAX_INTERACTION_BYTES,parsePetInteraction,parsePetAnswer,isOpaqueRef,
   type PetInteraction,type PetAnswer,
-} from "@dsh-inochi2d-pet/protocol";
+} from "@starcried/starlite-dsh-protocol";
 
 const HEARTBEAT_TIMEOUT_MS = 45_000;
 const MAX_RECONNECT_DELAY_MS = 5_000;

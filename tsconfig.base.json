@@ -5,7 +5,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "paths": {
-      "@dsh-inochi2d-pet/protocol": ["./packages/protocol/src/index.ts"]
+      "@starcried/starlite-dsh-protocol": ["./packages/protocol/src/index.ts"]
     },
     "strict": true,
     "noUncheckedIndexedAccess": true,

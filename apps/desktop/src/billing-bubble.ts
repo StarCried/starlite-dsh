@@ -1,4 +1,4 @@
-import type { BillingCurrency, BillingSnapshot } from "@dsh-inochi2d-pet/protocol";
+import type { BillingCurrency, BillingSnapshot } from "@starcried/starlite-dsh-protocol";
 
 export type BillingBubbleView = {status: "loading" | "error"} | {status: "ready"; snapshot: BillingSnapshot};
 

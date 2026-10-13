@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { PET_PROTOCOL_VERSION, type PetStateSource } from "@dsh-inochi2d-pet/protocol";
+import { PET_PROTOCOL_VERSION, type PetStateSource } from "@starcried/starlite-dsh-protocol";
 import { isBrowserSafePort, startStatusServer } from "../src/server.js";
 import {DshStateAggregator} from "../src/aggregator.js";
 import {QuestionBridge} from "../src/questions.js";

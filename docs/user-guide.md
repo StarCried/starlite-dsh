@@ -17,12 +17,14 @@ Get-FileHash -Algorithm SHA256 "C:\Downloads\dsh-starlite-0.1.0-alpha.0.tgz"
 
 ## 2. 给已有 DSH 安装插件
 
-在 **WSL 终端**执行。已有 DSH 时先检查 `dsh --version`；本项目已有契约验收记录对应 `0.1.5-rc.1`，升级 DSH 后仍需重新核对兼容性。没有 DSH 时可安装该版本：
+在 **WSL 终端**执行。已有 DSH 时先检查 `dsh --version`；首发的完整契约验收基线为 `0.1.5-rc.1`，无需重装或自动升级已有 DSH。没有 DSH 时可安装该版本：
 
 ```bash
 npm install -g --prefix "$HOME/.local" @deepseek-ai/dsh@0.1.5-rc.1
 export PATH="$HOME/.local/bin:$PATH"
 ```
+
+`0.2.0-rc.2` 的新会话导航已通过官方包声明检查、双版本回归及实际 Cordis 注入生命周期检查；费用配置契约仍待适配，也尚未完成真实新版 Web UI 的视觉验收，因此不代表已支持其全部功能。后续升级 DSH 仍需核对兼容性。
 
 使用自己日常启动的 profile；本例为 `web`。本地候选安装：
 

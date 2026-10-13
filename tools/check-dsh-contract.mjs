@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
+import { navigationContract } from "./dsh-navigation-contract.mjs";
 
 const dshRoot = resolve(
   process.argv[2]
@@ -29,6 +30,13 @@ const llmMessages = await source("dsh-llm/lib/types/message.d.ts");
 const questions = await source("dsh-user-questions/lib/types/types.d.ts");
 const titles = await source("dsh-session-title/lib/types/index.d.ts");
 const clientSessions = await source("dsh-api-session-controller/lib/types/client/contract/sessions.d.ts");
+const navigation = navigationContract({
+  sessions: clientSessions,
+  list: await source("dsh-api-session-controller/lib/types/client/sessions/service.d.ts"),
+  projections: await source("dsh-api-session-controller/lib/types/client/sessions/manager.d.ts"),
+  workspace: await optionalSource("dsh-client-ui-workspace/lib/types/client/navigation.d.ts"),
+  catalog: await optionalSource("dsh-subagent/lib/types/projection-types.d.ts"),
+});
 const webServer = await source("dsh-host-webserver/lib/types/index.d.ts");
 const connection = await source("dsh-client-connection/lib/types/rpc.d.ts");
 
@@ -49,8 +57,6 @@ const requirements = [
   ["question choices and multiple selection", questions, /options\?: AskUserQuestionOption\[\];[\s\S]{0,200}multiSelect\?: boolean;/u],
   ["question answer shape", questions, /selected: string\[\];[\s\S]{0,160}custom\?: string;/u],
   ["session title read", titles, /get\(session: Session\): SessionTitleSnapshot \| undefined;/u],
-  ["exact web session selection", clientSessions, /open\(id: SessionId\): void;/u],
-  ["catalog navigation", clientSessions, /openSubagent\(address: SubagentAddress\): void;/u],
   ["loopback web server port", webServer, /get port\(\): number;/u],
   ["loopback web server host", webServer, /get host\(\): Config\['host'\];/u],
   ["browser authentication URL", connection, /authenticatedUrl\(baseUrl: string\): string;/u],
@@ -81,7 +87,7 @@ const requirements = [
 
 const missing = requirements
   .filter(([, contents, pattern]) => !pattern.test(contents))
-  .map(([name]) => name);
+  .map(([name]) => name).concat(navigation.missing);
 
 if (missing.length > 0) {
   throw new Error(
@@ -90,6 +96,7 @@ if (missing.length > 0) {
 }
 
 console.log(`DSH ${String(packageJson.version)} exposes every required desktop-pet contract.`);
+console.log(`DSH client navigation: ${navigation.kind}.`);
 
 // Fees are optional at runtime, but a release advertising them must verify
 // the public read/credential seams and durable usage vocabulary as well.
@@ -125,6 +132,14 @@ if (billingMissing.length) throw new Error(`DSH billing contract changed; review
 console.log(`DSH ${String(packageJson.version)} exposes the read-only billing contracts.`);
 
 async function source(relativePath) {
+  const contents = await optionalSource(relativePath);
+  if (contents !== undefined) return contents;
+  throw new Error(
+    `Required DSH declaration is unavailable: ${relativePath} (searched ${dependencyRoots.join(", ")})`,
+  );
+}
+
+async function optionalSource(relativePath) {
   for (const root of dependencyRoots) {
     const path = resolve(root, relativePath);
     try {
@@ -133,9 +148,7 @@ async function source(relativePath) {
       if (error?.code !== "ENOENT") throw error;
     }
   }
-  throw new Error(
-    `Required DSH declaration is unavailable: ${relativePath} (searched ${dependencyRoots.join(", ")})`,
-  );
+  return undefined;
 }
 
 async function readJson(path) {

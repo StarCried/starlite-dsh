@@ -72,22 +72,23 @@ async fn mutate_model_settings(
     operation: impl FnOnce(&AppHandle) -> Result<settings::DesktopSettings, String> + Send + 'static,
 ) -> Result<settings::DesktopSettings, String> {
     let work_app = app.clone();
-    let (next, changed) = tauri::async_runtime::spawn_blocking(move || {
+    tauri::async_runtime::spawn_blocking(move || {
         settings::with_write(&work_app, || {
             let before = serde_json::to_value(settings::load(&work_app))
                 .map_err(|error| error.to_string())?;
             let next = operation(&work_app)?;
             let changed =
                 before != serde_json::to_value(&next).map_err(|error| error.to_string())?;
-            Ok((next, changed))
+            // Enqueue events while holding the same mutation lock. A later
+            // disable must never be followed by a stale prepared-model event.
+            if changed {
+                let _ = work_app.emit("settings-changed", next.clone());
+            }
+            Ok(next)
         })
     })
     .await
-    .map_err(|_| "模型设置操作失败，请重试。".to_string())??;
-    if changed {
-        let _ = app.emit("settings-changed", next.clone());
-    }
-    Ok(next)
+    .map_err(|_| "模型设置操作失败，请重试。".to_string())?
 }
 
 #[tauri::command]

@@ -30,15 +30,18 @@
   agent control or intercept tool permission approvals.
 - Render bubble content as plain text. Do not persist or log bubble text or the
   bearer token.
-- Treat model archives, deep links, manifests, and status frames as untrusted.
+- Treat VRM files, deep links, manifests, and status frames as untrusted.
   Invalid inputs fail closed without preventing DSH itself from starting.
 
 ## Assets and releases
 
 - Never commit Aka, private StarCried art, Creator projects, or unlicensed
   puppets. Tests use generated artwork-free fixtures.
-- Program releases remain BYOM. Weiguang for StarLite uses its own license and
-  stays in a separately delivered character pack, never in program artifacts.
+- Program releases include only the approved default humanoid Idle motion.
+  Preserve its recorded provenance; its breathing layer comes from Warudo,
+  so do not describe the motion as wholly original. Weiguang uses its own
+  license and stays in a separately delivered, self-contained VRM, never in
+  program artifacts. Other model artwork and motions stay out of the program.
 - Creating a remote repository, pushing, publishing npm, publishing a Windows
   installer, and releasing a model each require separate approval.
 - Alpha Windows installers remain unsigned and must document SmartScreen.
@@ -49,10 +52,11 @@
 - Test the packed bundle in an isolated DSH profile and verify fail-open DSH
   behavior when the adapter is incompatible.
 - Preserve exact-name animation validation. Disabled mappings stay neutral.
-  Current desktop imports require an explicit authored Idle. A single
-  self-authored generic Idle and model-only VRM onboarding are approved future
-  work, not implemented behavior in the naming/documentation phase. Other
-  missing actions must not silently map to a different animation.
+  Model-only onboarding directly imports standard humanoid VRM 0/1 files with
+  usable blink morph bindings. The bundled StarLiteIdle provides baseline
+  standing and breathing when the model has no Idle. List embedded standard
+  glTF motions for optional mappings; never invent missing event actions.
+  Do not restore the retired custom ZIP resource-pack format or import UI.
 
 ## Commit discipline
 

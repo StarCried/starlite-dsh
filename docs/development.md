@@ -48,17 +48,17 @@ pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/Star
 
 ### 准备统一插件和本地下载服务
 
-程序包只带 `assets/windows-x64/` 中的 EXE、两份程序许可和固定清单。微光始终是独立 ZIP，不进入 npm tarball、桌宠资源或源码。
+程序包只带 `assets/windows-x64/` 中的 EXE、两份程序许可和固定清单。EXE 内嵌已批准的基础待机，来源见 [default-idle.md](../apps/desktop/src-tauri/assets/default-idle.md)。微光角色和其他动作保存在独立、自包含 VRM 中，不进入 npm tarball、桌宠资源或源码。
 
-维护者本地验收时，在 **WSL 的另一个终端**启动只监听 `127.0.0.1` 的资源服务，保持运行。将三个参数分别换为私有 ZIP、包内桌面模型的 SHA-256，以及本仓库 `release-output` 中一个尚不存在的描述文件路径：
+维护者本地验收时，在 **WSL 的另一个终端**启动只监听 `127.0.0.1` 的资源服务，保持运行。两个参数分别是私有 VRM，以及本仓库 `release-output` 中一个尚不存在的描述文件路径：
 
 ```bash
 node /mnt/e/path/to/starlite-dsh/tools/local-character-server.mjs \
-  /mnt/e/path/to/Weiguang.zip DESKTOP_MODEL_SHA256 \
+  /mnt/e/path/to/Weiguang-StarLite.vrm \
   /mnt/e/path/to/starlite-dsh/release-output/local-character.json
 ```
 
-服务只向本机提供该 ZIP 的不可变快照，不开放目录或 CORS。描述文件包含本机 URL、ZIP 长度／SHA-256、模型 SHA-256 和 `localTest: true`。使用显式模型哈希是因为资源导入由 Windows 原生 ZIP 检查完成，资源服务不重复实现导入器。不要把私有 ZIP 放进项目目录。
+服务只向本机提供该 VRM 的不可变快照，不开放目录或 CORS。描述文件包含 `title`、本机 `url`、文件 `sha256`／`bytes` 和 `localTest: true`。程序 manifest 使用 schema 2 的 `defaultModel` 字段引用这些信息；没有第二个模型摘要或解包步骤。不要把私有模型放进项目目录。
 
 回到 **Windows PowerShell**，显式 staging 并打包：
 
@@ -86,7 +86,7 @@ dsh --profile starlite-test --dump-config
 
 契约检查验证实际事件和 settings／credentials／sessionPersistence 的公开只读接口。费用服务不可用只使费用卡不可用，不阻止状态桥接或 DSH 启动。不要向普通会话发送测试提示来满足安装检查，不需要调用付费模型 API。
 
-随后运行 `dsh --profile starlite-test` 检查自动准备程序、默认微光、持续许可提示、禁用后重启不下载／显示，以及原偏好保留。手动 ZIP 导入继续检查许可确认。测试下载流程不需要填写模型 API Key 或发送任何会话请求。新旧名桥接不能同时加入一个 profile。
+随后运行 `dsh --profile starlite-test` 检查自动准备程序、默认微光、许可查看、不显示后重启不下载／显示，以及原偏好保留。另用合成 VRM 验证「添加模型」直接导入、无动作自动待机、眨眼、人形与损坏文件检查；私有模型只在本机按需验证。测试不需要填写模型 API Key 或发送任何会话请求。新旧名桥接不能同时加入一个 profile。
 
 ## 自动检查
 

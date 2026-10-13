@@ -1,18 +1,15 @@
 {
   "backend": "vrm",
   "sourcePath": "C:\\StarLiteModels\\MyAvatar\\Avatar.vrm",
-  "animationSources": [
-    { "name": "Idle", "path": "C:\\StarLiteModels\\MyAvatar\\Idle.vrma" },
-    { "name": "Wave", "path": "C:\\StarLiteModels\\MyAvatar\\Wave.vrma" }
-  ],
+  "animationSources": [],
   "mappings": {
-    "idle": "Idle",
+    "idle": "StarLiteIdle",
     "working": null,
     "completed": null,
     "error": null,
     "blocked": null,
     "approval": null,
-    "click": ["Wave"],
+    "click": [],
     "ambient": []
   },
   "preferences": {

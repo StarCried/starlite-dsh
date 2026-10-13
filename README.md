@@ -31,4 +31,6 @@ dsh --profile web
 
 [安装、升级与卸载](docs/user-guide.md) · [自定义模型与动作](docs/model-import.md) · [气泡与互动](docs/companion-interactions.md) · [开发说明](docs/development.md)
 
-程序采用 [BSD-2-Clause](LICENSE)。微光资源包单独授权、单独下载，不包含在 npm 程序包内。
+添加自己的模型只需选择一个 VRM：无动作时使用自带的基础待机，有动作时自动列出供映射。
+
+程序采用 [BSD-2-Clause](LICENSE)。微光是独立授权、单独下载的 VRM，不包含在 npm 程序包内。

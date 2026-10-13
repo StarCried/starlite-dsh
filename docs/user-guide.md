@@ -15,6 +15,21 @@ Get-FileHash -Algorithm SHA256 "C:\Downloads\dsh-starlite-0.1.0-alpha.0.tgz"
 
 将示例路径换成实际文件。Alpha 安装包未签名，Windows 可能显示 SmartScreen；核对来源和哈希后按系统提示处理，不关闭系统防护。安装为当前用户。首次打开时选择独立授权的微光 ZIP，确认许可后自动导入模型、动作和状态映射，无需解压或逐项配置。程序不内置微光或第三方动作。
 
+### 免安装版（可选）
+
+不想运行安装器，可以取得同版本的 `StarLite-for-DSH_0.1.0-alpha.0_x64-portable.zip`，核对 SHA-256 后解压到固定目录，例如 `D:\Apps\StarLite`，双击其中的 `dsh-inochi2d-pet.exe` 导入模型。仍需要 Windows WebView2。
+
+免安装版不注册启动协议，因此在启动 DSH 的 **WSL 终端**指定 Windows EXE 的盘符绝对路径：
+
+```bash
+export DSH_INOCHI2D_PET_EXE='D:\Apps\StarLite\dsh-inochi2d-pet.exe'
+dsh --profile web
+```
+
+第一次仍须按下一节安装桥接插件。将路径及 `web` 换成实际目录和 profile；可以将 `export` 放进自己的 shell 配置，或和 `dsh` 命令一起保存为启动脚本，以后无需重复输入。移动 EXE 后同步修改路径，不要改 EXE 文件名。这个显式路径优先于安装器的协议注册。
+
+安装器和免安装版使用相同程序和 Windows AppData 中的模型、设置、窗口偏好；免安装不代表用户数据保存在程序目录。升级前退出桌宠，再解压新版本。两种方式不需要同时运行，也不需要管理员权限。
+
 ## 2. 给已有 DSH 安装插件
 
 在 **WSL 终端**执行。已有 DSH 时先检查 `dsh --version`；首发的完整契约验收基线为 `0.1.5-rc.1`，无需重装或自动升级已有 DSH。没有 DSH 时可安装该版本：
@@ -64,7 +79,9 @@ dsh plugin --profile web remove dsh-inochi2d-pet
 dsh --profile web
 ```
 
-把 `export PATH="$HOME/.local/bin:$PATH"` 加入自己的 shell 启动文件后即可直接运行。插件会通过 Windows 互操作与已注册启动协议拉起桌宠；没有导入模型时显示设置。缺少 Windows 程序或契约不兼容时只停用桌宠，不阻止 DSH 运行。
+把 `export PATH="$HOME/.local/bin:$PATH"` 加入自己的 shell 启动文件后即可直接运行。插件会通过 Windows 互操作拉起已注册的桌宠，或使用免安装版配置的 EXE 路径；没有导入模型时显示设置。缺少 Windows 程序或契约不兼容时只停用桌宠，不阻止 DSH 运行。
+
+单独打开 Windows 程序不会启动 DSH。模型只在连接 DSH 后显示；未连接时从托盘打开设置可以导入和配置模型。
 
 - **拖动／设置**：拖动模型身体；周围透明区域点击穿透。右键身体或托盘打开设置；手动全窗口穿透开启后，用托盘恢复操作。
 - **单击**：待机时随机回应并显示官方 DeepSeek 余额与今日 DSH 费用估算；工作时只查费用。等待答题时费用不会覆盖表单。
@@ -73,7 +90,7 @@ dsh --profile web
 - **动作**：只有待机循环。其余状态动作各播放一次再回待机；逻辑任务仍忙碌时不会触发点击或偶发动作。思考和输出共用工作动作，新状态可打断旧动作。
 - **隐私**：隐私模式显示固定状态，隐藏会话内容与输入题目；不把用户提示、工具参数／结果、真实会话 ID 或 API Key 发送给 Windows。
 
-桥接随 DSH 销毁；Windows 桌宠是独立进程，断连后隐藏，等待 60 秒重连后退出。失去心跳时先经过最多 45 秒检测。当前只支持 WSL2 DSH；关闭 WSL 互操作或缺少启动协议会影响自动启动。
+桥接随 DSH 销毁；Windows 桌宠是独立进程，断连后隐藏，等待 60 秒重连后退出。失去心跳时先经过最多 45 秒检测。当前只支持 WSL2 DSH；关闭 WSL 互操作，或安装器协议注册／免安装 EXE 路径不可用，都会影响自动启动。
 
 ## 费用信息
 
@@ -96,6 +113,8 @@ dsh plugin --profile web remove dsh-starlite
 ```
 
 然后在 Windows「已安装的应用」中卸载 StarLite for DSH。用户模型与设置是否删除是独立选择，删除前确认是否要保留。模型资源包另有许可，程序卸载不改变其使用约定。
+
+免安装版退出后删除解压的程序目录，并从自己的 shell 配置或启动脚本移除 `DSH_INOCHI2D_PET_EXE` 即可；AppData 中的用户模型与设置仍保留。
 
 ## 常见情况
 

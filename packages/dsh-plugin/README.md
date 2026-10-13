@@ -16,6 +16,8 @@ dsh --profile web
 
 将路径和 `web` 换成自己的资源位置及 profile。公开 alpha 发布后，安装命令可简化为 `dsh plugin --profile web add dsh-starlite@alpha`。以后只需运行 `dsh --profile web`，插件会自动启动 Windows 桌宠。
 
+Windows 桌宠也有免安装 ZIP：解压后，在启动 DSH 的 WSL 环境设置 `export DSH_INOCHI2D_PET_EXE='D:\Apps\StarLite\dsh-inochi2d-pet.exe'`，路径换成实际位置。安装器可自动发现路径，免安装版须自行保留该配置；两者均需要 WebView2，模型与设置仍在 Windows AppData。详见[免安装说明](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/user-guide.md#免安装版可选)。
+
 模型及第三方动作与程序独立分发。导入自己的模型时当前仍需提供真实 Idle 动作；通用默认 Idle 和无动作自动站姿尚未提供。
 
 ## 日常使用

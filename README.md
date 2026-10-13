@@ -13,11 +13,15 @@
    dsh plugin --profile web add /path/to/dsh-starlite-0.1.0-alpha.0.tgz
    ```
 
+不想运行安装器时，可使用[免安装 ZIP](docs/user-guide.md#免安装版可选)：解压后指定一次 Windows EXE 路径。安装器会自动完成路径发现，操作更少；两种方式使用同一个桌宠程序。
+
 以后只需启动 DSH，桌宠会自动出现：
 
 ```sh
 dsh --profile web
 ```
+
+桌宠在 DSH 连接后出现；单独打开 Windows 程序用于导入模型和调整设置，不会自动启动 DSH。程序不打包浏览器，使用 Windows 的 WebView2。
 
 ## 日常操作
 

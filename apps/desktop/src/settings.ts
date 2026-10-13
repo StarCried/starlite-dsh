@@ -200,6 +200,15 @@ export async function startSettings(): Promise<void> {
     updateSave();
   }
   if (starter && !settings.model) void importResource(starter);
+  if (starter && !starterBanner.hidden) {
+    // Presenting the introduction is separate from accepting the character
+    // license: never record consent until the import dialog is confirmed.
+    try {
+      await invoke("mark_starter_seen", {expectedSha256:starter.sha256});
+    } catch (reason) {
+      error.textContent = safeError(reason);
+    }
+  }
 }
 
 function renderMappings(

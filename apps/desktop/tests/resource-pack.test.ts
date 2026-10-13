@@ -46,6 +46,11 @@ async function launch(current: DesktopSettings = empty, available: StarterPackIn
       if (available instanceof Error) throw available;
       return available;
     }
+    if (command === "mark_starter_seen") {
+      // Native acknowledgment is allowed only after the UI exposes the CTA.
+      expect(document.querySelector<HTMLElement>("#starter-character")!.hidden).toBe(false);
+      return undefined;
+    }
     if (command === "inspect_resource_pack") return pack;
     if (command === "install_resource_pack") return {...structuredClone(installed),preferences:args!.preferences};
     throw new Error(`unexpected command: ${command}`);
@@ -155,7 +160,7 @@ describe("resource package onboarding", () => {
       preferences:{...preferences,fps:30,maxDevicePixelRatio:1.5},
     });
     expect(document.querySelector<HTMLElement>("#starter-character")!.hidden).toBe(true);
-    expect(native.invoke.mock.calls.map(([command]) => command)).toEqual(["get_settings","get_starter_pack","install_resource_pack"]);
+    expect(native.invoke.mock.calls.map(([command]) => command)).toEqual(["get_settings","get_starter_pack","mark_starter_seen","install_resource_pack"]);
   });
 
   it("can decline automatic onboarding and still manually import a different pack", async () => {
@@ -163,6 +168,7 @@ describe("resource package onboarding", () => {
     document.querySelector("dialog")!.dispatchEvent(new Event("cancel", {cancelable:true}));
     await vi.waitFor(() => expect(button().disabled).toBe(false));
     expect(native.invoke).not.toHaveBeenCalledWith("install_resource_pack", expect.anything());
+    expect(native.invoke).toHaveBeenCalledWith("mark_starter_seen", {expectedSha256:starter.sha256});
     expect(document.querySelector<HTMLElement>("#starter-character")!.hidden).toBe(false);
     await inspect();
     accept().click();
@@ -177,6 +183,7 @@ describe("resource package onboarding", () => {
     await launch(other, starter);
     expect(document.querySelector("dialog")).toBeNull();
     expect(idle().value).toBe("RelaxedBreath");
+    expect(native.invoke).toHaveBeenCalledWith("mark_starter_seen", {expectedSha256:starter.sha256});
     document.querySelector<HTMLButtonElement>("#use-starter-character")!.click();
     await vi.waitFor(() => expect(document.querySelector("dialog[open]")).not.toBeNull());
     accept().click();
@@ -189,6 +196,7 @@ describe("resource package onboarding", () => {
     expect(document.querySelector("dialog")).toBeNull();
     expect(document.querySelector<HTMLElement>("#starter-character")!.hidden).toBe(true);
     expect(native.open).not.toHaveBeenCalled();
+    expect(native.invoke).not.toHaveBeenCalledWith("mark_starter_seen", expect.anything());
     expect(native.invoke.mock.calls.map(([command]) => command)).toEqual(["get_settings","get_starter_pack"]);
   });
 

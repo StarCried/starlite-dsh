@@ -50,25 +50,7 @@
         </section>
       </form>
       </div>
-      <dialog id="add-model-dialog" class="model-import">
-        <div class="dialog-heading"><h2>添加模型</h2><button id="close-model-import" type="button" aria-label="关闭添加模型">关闭</button></div>
-        <p><button id="import-resource-pack" type="button" class="primary">导入资源包 ZIP</button></p>
-        <p class="import-help">资源包会自动配置模型、动作和映射。</p>
-        <details class="manual-model">
-          <summary>导入 VRM 与独立动作</summary>
-          <p><button id="choose-model" type="button">选择 .vrm 模型</button> <span id="model-path">尚未选择</span></p>
-          <div id="vrm-resources" hidden>
-            <p><button id="choose-animations" type="button">选择 VRMA 动作</button> <span id="animation-files">尚未选择动作</span></p>
-            <p><button id="choose-profile" type="button">选择角色配置</button> <button id="clear-profile" type="button">使用标准 VRM</button> <span id="profile-file">标准 VRM</span></p>
-            <p><button id="view-import-license" type="button" hidden>查看模型许可</button></p>
-            <p id="import-pool-help" class="import-help">必须选择已有的待机动作。其余映射可以留空。</p>
-            <div id="import-mappings"></div>
-          </div>
-          <div class="import-actions"><button id="import-model" type="button" class="primary" disabled>导入模型</button></div>
-        </details>
-        <p id="inspection-status" role="status"></p>
-        <p id="import-error" role="alert"></p>
-      </dialog>
+
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

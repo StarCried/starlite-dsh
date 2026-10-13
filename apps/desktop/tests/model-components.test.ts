@@ -4,83 +4,90 @@ import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import {modelConfig} from "../src/renderer.js";
 import {startSettings} from "../src/settings.js";
-import type {DesktopSettings, LibraryModel} from "../src/types.js";
+import type {DesktopSettings, LibraryModel, ModelInspection, ModelInstallRequest} from "../src/types.js";
 const {invoke, open} = vi.hoisted(() => ({invoke:vi.fn(),open:vi.fn()}));
 vi.mock("@tauri-apps/api/core", () => ({invoke,convertFileSrc:(path:string) => "asset:" + path}));
 vi.mock("@tauri-apps/plugin-dialog", () => ({open}));
 vi.mock("@tauri-apps/api/event", () => ({listen:vi.fn(async () => () => {})}));
 const preferences = {fps:60 as const,maxDevicePixelRatio:1.5,scale:1,privacyMode:false,bubbleMode:"compact" as const};
-const mappings = {idle:"Idle",working:null,blocked:null,approval:null,completed:null,error:null,click:[],ambient:[]};
-const catalog = [{name:"Idle",durationMs:1000}];
+const mappings = {idle:"StarLiteIdle",working:null,blocked:null,approval:null,completed:null,error:null,click:[],ambient:[]};
+const catalog = [{name:"StarLiteIdle",durationMs:6000}];
 const initial:DesktopSettings = {schemaVersion:4,preferences,models:[],activeModelId:null};
-const model:LibraryModel = {id:"model-one",title:"One",backend:"vrm",modelPath:"m.vrm",sourceSha256:"hash",mappings,animations:catalog,vrm:{animations:[{name:"Idle",path:"a.vrma"}],profilePath:"p.json"}};
+const model:LibraryModel = {id:"model-one",title:"One",backend:"vrm",modelPath:"m.vrm",sourceSha256:"hash",mappings,animations:catalog,vrm:{animations:[{name:"StarLiteIdle",path:"a.vrma"}],embeddedAnimations:[],profilePath:"p.json"}};
 const installed:DesktopSettings = {...initial,models:[model],activeModelId:model.id};
-const tick = () => new Promise(resolve => setTimeout(resolve,0));
-const choose = (path:string) => {open.mockResolvedValueOnce(path);document.getElementById("choose-model")!.click();return tick();};
-const importButton = () => document.getElementById("import-model") as HTMLButtonElement;
-const importIdle = () => document.querySelector('#import-mappings select[data-state="idle"]') as HTMLSelectElement;
-const inspected = {backend:"vrm",compatibilitySupported:true,animations:catalog,issues:[]};
+const inspected:ModelInspection = {backend:"vrm",sourceSha256:"hash",sourceBytes:32,compatibilitySupported:true,animations:catalog,defaultMappings:mappings,issues:[]};
+const add = () => document.getElementById("add-model") as HTMLButtonElement;
+
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   vi.stubGlobal("Option",function(text:string,value:string){const option=document.createElement("option");option.textContent=text;option.value=value;return option;});
   document.body.innerHTML=readFileSync(resolve(import.meta.dirname,"../index.html"),"utf8").replace(/<script[\s\S]*?<\/script>/gu,"");
-  invoke.mockResolvedValue(initial);
+  invoke.mockImplementation(async (command:string) => {
+    if(command === "get_settings" || command === "prepare_model") return initial;
+    if(command === "inspect_model") return inspected;
+    if(command === "install_model") return installed;
+    throw Error(command);
+  });
 });
-it("maps local VRM assets and rejects missing or disabled model backends before mounting", () => {
-  expect(modelConfig(installed)).toMatchObject({backend:"vrm",model:"asset:m.vrm",animations:[{name:"Idle",url:"asset:a.vrma"}],profile:"asset:p.json",ambient:{animations:["Idle"]},render:{viewportPadding:{left:128,top:64,right:128,bottom:192}},camera:{pitchDegrees:5,targetHeight:.54},gaze:{maxYawDegrees:25,maxPitchDegrees:15}});
-  const tracks=[{name:"Idle",timestepMs:10,length:10,leadIn:0,leadOut:0,weight:1,lanes:[]}];
-  expect(() => modelConfig({...installed,models:[{...model,backend:"inochi2d",inochi2d:{animations:tracks}}]})).toThrow("Inochi2D is disabled");
+
+it("maps both embedded and external actions without a resource package", () => {
+  expect(modelConfig(installed)).toMatchObject({backend:"vrm",model:"asset:m.vrm",embeddedAnimations:[],animations:[{name:"StarLiteIdle",url:"asset:a.vrma"}],profile:"asset:p.json",ambient:{animations:["StarLiteIdle"]},render:{viewportPadding:{left:128,top:64,right:128,bottom:192}},camera:{pitchDegrees:5,targetHeight:.54}});
+  expect(modelConfig({...installed,models:[{...model,vrm:{...model.vrm!,embeddedAnimations:["Wave"]}}]}).embeddedAnimations).toEqual(["Wave"]);
   expect(() => modelConfig({...installed,activeModelId:null})).toThrow();
-  expect(modelConfig({...installed,models:[{...model,mappings:{...mappings,idle:"Rest"}}]}).ambient).toEqual({animations:["Rest"]});
+  expect(() => modelConfig({...installed,models:[{...model,backend:"inochi2d"}]})).toThrow("Inochi2D is disabled");
 });
-it("keeps explicit manual import separate from saved preferences and requires Idle", async () => {
-  await startSettings();
-  document.getElementById("add-model")!.click();
-  invoke.mockResolvedValue(inspected);
-  await choose("C:/models/pet.vrm");
-  expect(importButton().disabled).toBe(true);
-  open.mockResolvedValueOnce(["C:/motions/Idle.vrma"]);document.getElementById("choose-animations")!.click();await tick();
-  open.mockResolvedValueOnce("C:/profile.json");document.getElementById("choose-profile")!.click();await tick();
-  importIdle().value="Idle";importIdle().dispatchEvent(new Event("change",{bubbles:true}));
-  expect(importButton().disabled).toBe(false);
-  expect(invoke.mock.calls.some(([command]) => command==="install_model")).toBe(false);
-  invoke.mockResolvedValue(installed);
-  importButton().click();await tick();
-  expect(invoke).toHaveBeenCalledWith("install_model",{request:expect.objectContaining({backend:"vrm",sourcePath:"C:/models/pet.vrm",animationSources:[{name:"Idle",path:"C:/motions/Idle.vrma"}],profilePath:"C:/profile.json",mappings:expect.objectContaining({idle:"Idle"}),preferences})});
-  expect((document.getElementById("add-model-dialog") as HTMLDialogElement).open).toBe(false);
+
+it("selects and imports one VRM with bundled Idle without extra dialogs or mappings", async () => {
+  await startSettings();open.mockResolvedValue("C:/models/pet.vrm");add().click();
+  await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("install_model",{request:{backend:"vrm",sourcePath:"C:/models/pet.vrm",animationSources:[],mappings,preferences}}));
+  expect(open).toHaveBeenCalledOnce();
+  expect(open).toHaveBeenCalledWith(expect.objectContaining({filters:[{name:"VRM",extensions:["vrm"]}]}));
+  expect(document.querySelector("dialog")).toBeNull();
   expect(document.querySelector('[data-model-id="model-one"]')).not.toBeNull();
   expect(document.getElementById("save-settings")).toBeNull();
+  expect(document.body.textContent).not.toContain("ZIP");
 });
-it("ignores stale inspection responses after selecting another file", async () => {
-  await startSettings();let resolveOld!:(v:unknown)=>void;
-  invoke.mockImplementationOnce(() => new Promise(resolve => {resolveOld=resolve;}));await choose("old.vrm");
-  invoke.mockResolvedValueOnce({...inspected,animations:[]});await choose("new.vrm");
-  resolveOld({backend:"inochi2d",compatibilitySupported:true,animations:catalog,issues:[]});await tick();
-  expect(document.getElementById("model-path")!.textContent).toBe("new.vrm");
-  expect(document.querySelectorAll('#import-mappings select[data-state="idle"] option')).toHaveLength(1);
-  expect(importButton().disabled).toBe(true);
-});
-it("leaves existing models and preferences intact after failed inspection", async () => {
-  invoke.mockResolvedValue(installed);await startSettings();
-  invoke.mockRejectedValueOnce(new Error("invalid model"));await choose("new.vrm");
-  importButton().click();await tick();
-  expect((document.getElementById("fps") as HTMLSelectElement).value).toBe("60");
-  expect(document.querySelector('[data-model-id="model-one"]')).not.toBeNull();
-  expect(invoke.mock.calls.some(([command]) => command==="install_model")).toBe(false);
-  expect(document.getElementById("import-error")!.textContent).toContain("invalid model");
-});
-it("rejects Inochi2D even when returned by the file picker", async () => {
-  await startSettings();await choose("old.inp");
-  expect(document.getElementById("import-error")!.textContent).toContain("本版本暂不支持 Inochi2D");
-  expect(invoke.mock.calls.some(([command]) => command==="inspect_model")).toBe(false);
-  expect(open).toHaveBeenCalledWith(expect.objectContaining({filters:[{name:"VRM",extensions:["vrm"]}]}));
-});
-it("previews embedded model license before manual import", async () => {
+
+it("uses inspected action defaults and leaves unmapped events disabled", async () => {
   await startSettings();
-  invoke.mockResolvedValue({...inspected,license:{title:"Model terms",text:"# Terms\n\nPersonal use."}});
-  await choose("pet.vrm");
-  const license=document.getElementById("view-import-license") as HTMLButtonElement;
-  expect(license.hidden).toBe(false);license.click();
-  expect(document.querySelector(".license-content h3")!.textContent).toBe("Terms");
-  expect(invoke.mock.calls.some(([command]) => command==="install_model")).toBe(false);
+  invoke.mockImplementation(async (command:string,args?:{request:ModelInstallRequest}) => {
+    if(command === "inspect_model") return {...inspected,animations:[...catalog,{name:"Wave",durationMs:1000}],defaultMappings:{...mappings,click:["Wave"]}};
+    if(command === "install_model") return {...installed,models:[{...model,mappings:args!.request.mappings}]};
+    throw Error(command);
+  });
+  open.mockResolvedValue("pet.vrm");add().click();
+  await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("install_model",{request:expect.objectContaining({mappings:{...mappings,click:["Wave"]}})}));
+});
+
+it("cancelling the picker performs no inspection or installation", async () => {
+  await startSettings();open.mockResolvedValue(null);add().click();
+  await vi.waitFor(() => expect(add().disabled).toBe(false));
+  expect(invoke.mock.calls.some(([command]) => command === "inspect_model" || command === "install_model")).toBe(false);
+});
+
+it("preserves the current model after invalid VRM inspection", async () => {
+  invoke.mockResolvedValue(installed);await startSettings();
+  invoke.mockRejectedValueOnce(new Error("invalid model"));open.mockResolvedValue("new.vrm");add().click();
+  await vi.waitFor(() => expect(document.getElementById("settings-error")!.textContent).toContain("invalid model"));
+  expect(add().disabled).toBe(false);
+  expect(document.querySelector('[data-model-id="model-one"]')).not.toBeNull();
+  expect(invoke.mock.calls.some(([command]) => command === "install_model")).toBe(false);
+});
+
+it("rejects ZIP and Inochi2D even when returned by the picker", async () => {
+  await startSettings();
+  for(const path of ["old.inp","retired.zip"]) {
+    open.mockResolvedValueOnce(path);add().click();
+    await vi.waitFor(() => expect(add().disabled).toBe(false));
+    expect(document.getElementById("settings-error")!.textContent).toContain(".vrm");
+  }
+  expect(invoke.mock.calls.some(([command]) => command === "inspect_model")).toBe(false);
+});
+
+it("blocks duplicate imports and explains actual VRM mappings", async () => {
+  await startSettings();let finish!:(value:null)=>void;
+  open.mockImplementation(() => new Promise(resolve => {finish=resolve;}));add().click();add().click();
+  expect(open).toHaveBeenCalledOnce();
+  expect(add().textContent).toContain("Humanoid");expect(add().textContent).toContain("Blink");expect(add().textContent).toContain("lookAt");
+  finish(null);await vi.waitFor(() => expect(add().disabled).toBe(false));
 });

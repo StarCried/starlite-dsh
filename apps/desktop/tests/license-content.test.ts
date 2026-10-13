@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
 import { renderLicenseContent } from "../src/license-content.js";
-import { confirmResourceLicense, showResourceLicense } from "../src/resource-pack-dialog.js";
+import { showModelLicense } from "../src/model-license-dialog.js";
 
 afterEach(() => document.body.replaceChildren());
 
@@ -52,16 +52,11 @@ describe("model license display", () => {
     expect(content.querySelectorAll("p")[1]!.textContent).toBe(punctuation);
   });
 
-  it("uses the same formatted document in read-only and consent dialogs", async () => {
-    showResourceLicense({title: "角色 A", text: "# 许可\n\n仅供 **个人** 使用。"});
+  it("displays a formatted model license and closes cleanly", () => {
+    showModelLicense({title: "角色 A", text: "# 许可\n\n仅供 **个人** 使用。"});
     expect(document.querySelector("dialog .license-content h3")!.textContent).toBe("许可");
     expect(document.querySelector("dialog pre")).toBeNull();
     document.querySelector<HTMLButtonElement>("dialog button")!.click();
-    expect(document.querySelector("dialog")).toBeNull();
-    const confirmed = confirmResourceLicense({title: "角色 B", license: "# 条款\n\n1. 署名。", animationCount: 2, sha256: "a".repeat(64)});
-    expect(document.querySelector("dialog .license-content ol li")!.textContent).toBe("署名。");
-    document.querySelector<HTMLButtonElement>("dialog .primary")!.click();
-    await expect(confirmed).resolves.toBe(true);
     expect(document.querySelector("dialog")).toBeNull();
   });
 });

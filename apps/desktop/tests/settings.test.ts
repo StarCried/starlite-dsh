@@ -9,8 +9,8 @@ vi.mock("@tauri-apps/api/core",() => ({invoke:native.invoke}));
 vi.mock("@tauri-apps/plugin-dialog",() => ({open:native.open}));
 vi.mock("@tauri-apps/api/event",() => ({listen:native.listen}));
 const page=readFileSync(resolve(import.meta.dirname,"../index.html"),"utf8").match(/<main id="settings-view"[\s\S]+?<\/main>/u)![0];
-const path="C:\\Downloads\\character.zip";
-const pack={title:"测试角色",license:"# 模型许可\n\n仅供本地使用。<img src=x>",sha256:"a".repeat(64),animationCount:3};
+const path="C:\\Downloads\\character.vrm";
+const terms={title:"测试角色",text:"# 模型许可\n\n仅供本地使用。<img src=x>"};
 const preferences:DesktopPreferences={fps:60,maxDevicePixelRatio:1.2,scale:0.67,privacyMode:true,bubbleMode:"detailed"};
 const model:LibraryModel={id:"weiguang-default",title:"微光",backend:"vrm",modelPath:"C:\\models\\model.vrm",sourceSha256:"b".repeat(64),
  animations:[{name:"RelaxedBreath",durationMs:4000},{name:"Typing",durationMs:2000},{name:"HighWave",durationMs:3000}],
@@ -18,8 +18,7 @@ const model:LibraryModel={id:"weiguang-default",title:"微光",backend:"vrm",mod
 const empty:DesktopSettings={schemaVersion:4,preferences,models:[],activeModelId:"weiguang-default"};
 const installed:DesktopSettings={...empty,models:[model]};
 const custom:LibraryModel={...model,id:"custom",title:"自定义角色"};
-const button=() => document.querySelector<HTMLButtonElement>("#import-resource-pack")!;
-const accept=() => document.querySelector<HTMLButtonElement>(".resource-license .primary")!;
+const button=() => document.querySelector<HTMLButtonElement>("#add-model")!;
 const activeIdle=() => document.querySelector<HTMLSelectElement>('#animation-mappings select[data-state="idle"]')!;
 const tick=() => new Promise(resolve => setTimeout(resolve,0));
 type NativeArgs={preferences?:DesktopPreferences;modelId?:string|null;mappings?:AnimationMappings};
@@ -37,9 +36,7 @@ async function launch(initial:DesktopSettings=installed,prepared:DesktopSettings
  native.invoke.mockImplementation(async (command:string,args?:NativeArgs) => {
   if(command==="get_settings")return structuredClone(current);
   if(command==="prepare_model"){if(prepared instanceof Error)throw prepared;current=structuredClone(prepared);}
-  else if(command==="get_model_license")return {title:pack.title,text:pack.license};
-  else if(command==="inspect_resource_pack")return pack;
-  else if(command==="install_resource_pack")current={...current,preferences:args!.preferences!,models:[...current.models,custom],activeModelId:custom.id};
+  else if(command==="get_model_license")return terms;
   else if(command==="select_model")current={...current,activeModelId:args!.modelId!};
   else if(command==="update_preferences")current={...current,preferences:args!.preferences!};
   else if(command==="update_model_mappings")current={...current,models:current.models.map(item => item.id===args!.modelId?{...item,mappings:args!.mappings!}:item)};
@@ -49,10 +46,6 @@ async function launch(initial:DesktopSettings=installed,prepared:DesktopSettings
  await startSettings();
 }
 
-async function inspect() {
- document.getElementById("add-model")!.click();button().click();
- await vi.waitFor(() => expect(document.querySelector(".resource-license[open]")).not.toBeNull());
-}
 function edit(id:string,value:string) {
  const field=document.getElementById(id) as HTMLInputElement;field.value=value;field.dispatchEvent(new Event("change",{bubbles:true}));return field;
 }
@@ -78,16 +71,16 @@ describe("settings model library",() => {
  it("opens the selected card's formatted license without selecting or importing it",async () => {
   await launch({...installed,models:[model,custom]});
   document.querySelector<HTMLButtonElement>('[aria-label="自定义角色的许可"]')!.click();
-  await vi.waitFor(() => expect(document.querySelector(".resource-license[open]")).not.toBeNull());
+  await vi.waitFor(() => expect(document.querySelector(".model-license-dialog[open]")).not.toBeNull());
   expect(native.invoke).toHaveBeenCalledWith("get_model_license",{modelId:"custom"});
   expect(document.querySelector(".license-content h3")!.textContent).toBe("模型许可");
   expect(document.querySelector(".license-content")!.textContent).toContain("<img src=x>");
-  expect(document.querySelector(".resource-license img")).toBeNull();
-  expect(native.invoke.mock.calls.some(([command]) => command==="select_model"||command==="install_resource_pack")).toBe(false);
+  expect(document.querySelector(".model-license-dialog img")).toBeNull();
+  expect(native.invoke.mock.calls.some(([command]) => command==="select_model"||command==="install_model")).toBe(false);
  });
  it("prepares the default without an import picker or consent dialog",async () => {
   await launch(empty,installed);
-  expect(native.open).not.toHaveBeenCalled();expect(document.querySelector(".resource-license")).toBeNull();
+  expect(native.open).not.toHaveBeenCalled();expect(document.querySelector(".model-license-dialog")).toBeNull();
   expect(activeIdle().value).toBe("RelaxedBreath");
   expect(native.invoke.mock.calls.map(([command])=>command)).toEqual(["get_settings","prepare_model"]);
   expect(document.body.textContent).not.toContain("（进阶）");
@@ -207,40 +200,3 @@ it("restores an invalid Idle instead of leaving an unsaved blank field",async ()
  expect(document.getElementById("settings-error")!.textContent).toContain("待机动画必须选择");
 });
 
-describe("resource package import",() => {
- it("requires formatted license consent, appends the model and activates authored mappings",async () => {
-  await launch();await inspect();
-  expect(native.invoke.mock.calls.some(([command]) => command==="install_resource_pack")).toBe(false);
-  accept().click();
-  await vi.waitFor(() => expect(document.getElementById("settings-status")!.textContent).toBe("模型已添加并启用"));
-  expect(native.invoke).toHaveBeenCalledWith("install_resource_pack",{path,expectedSha256:pack.sha256,acceptLicense:true,preferences});
-  expect(current.models).toHaveLength(2);expect(current.activeModelId).toBe("custom");
-  expect(activeIdle().value).toBe("RelaxedBreath");
-  expect(document.querySelector(".resource-license")).toBeNull();
-  expect((document.getElementById("add-model-dialog") as HTMLDialogElement).open).toBe(false);
- });
- it("cancelling the picker or license preserves the library",async () => {
-  await launch();native.open.mockResolvedValueOnce(null);button().click();
-  await vi.waitFor(() => expect(button().disabled).toBe(false));
-  await inspect();document.querySelector(".resource-license")!.dispatchEvent(new Event("cancel",{cancelable:true}));
-  await vi.waitFor(() => expect(button().disabled).toBe(false));
-  expect(current.models).toHaveLength(1);expect(activeIdle().value).toBe("RelaxedBreath");
-  expect(native.invoke.mock.calls.some(([command]) => command==="install_resource_pack")).toBe(false);
- });
- it("retains the library after a damaged package and restores import controls",async () => {
-  await launch();native.invoke.mockRejectedValueOnce(new Error("SHA-256 mismatch"));button().click();
-  await vi.waitFor(() => expect(document.getElementById("import-error")!.textContent).toContain("SHA-256 mismatch"));
-  expect(current.models).toHaveLength(1);expect(button().disabled).toBe(false);
-  await inspect();native.invoke.mockRejectedValueOnce(new Error("package changed"));accept().click();
-  await vi.waitFor(() => expect(document.getElementById("import-error")!.textContent).toContain("package changed"));
-  expect(current.models).toHaveLength(1);expect(button().disabled).toBe(false);
- });
- it("blocks duplicate pickers and Escape while an import is in flight",async () => {
-  await launch();document.getElementById("add-model")!.click();let choose!:(value:null)=>void;
-  native.open.mockImplementationOnce(() => new Promise(resolve=>{choose=resolve;}));
-  button().click();button().click();expect(native.open).toHaveBeenCalledOnce();
-  const event=new Event("cancel",{cancelable:true});document.getElementById("add-model-dialog")!.dispatchEvent(event);
-  expect(event.defaultPrevented).toBe(true);choose(null);
-  await vi.waitFor(() => expect(button().disabled).toBe(false));
- });
-});

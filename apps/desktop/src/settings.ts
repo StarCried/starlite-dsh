@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { confirmResourceLicense, showResourceLicense, type ResourcePackInspection } from "./resource-pack-dialog.js";
-import type { AnimationSource, AnimationMappings, AnimationState, DesktopPreferences, DesktopSettings, LibraryModel, ModelInspection, ModelInstallRequest } from "./types.js";
+import { showModelLicense } from "./model-license-dialog.js";
+import type { AnimationMappings, AnimationState, DesktopPreferences, DesktopSettings, LibraryModel, ModelInspection, ModelInstallRequest } from "./types.js";
 
 const STATES: ReadonlyArray<{ key: AnimationState; label: string; required: boolean }> = [
   { key: "idle", label: "待机（必填）", required: true },
@@ -26,12 +26,6 @@ const PREFERENCE_FIELDS = {
 
 export async function startSettings(): Promise<void> {
   let settings = await invoke<DesktopSettings>("get_settings");
-  let inspection: ModelInspection | undefined;
-  let sourcePath: string | undefined;
-  let animationSources: AnimationSource[] = [];
-  let profilePath: string | undefined;
-  let generation = 0;
-  let checking = false;
   let importing = false;
   let writing = false;
   let preferenceRevision = 0;
@@ -40,23 +34,10 @@ export async function startSettings(): Promise<void> {
   const failedWrites = new Map<string, string>();
   const pendingWrites: SettingsWrite[] = [];
   const library = requiredElement("model-library");
-  const choose = requiredElement<HTMLButtonElement>("choose-model");
-  const importPack = requiredElement<HTMLButtonElement>("import-resource-pack");
-  const chooseAnimations = requiredElement<HTMLButtonElement>("choose-animations");
-  const chooseProfile = requiredElement<HTMLButtonElement>("choose-profile");
-  const clearProfile = requiredElement<HTMLButtonElement>("clear-profile");
-  const importButton = requiredElement<HTMLButtonElement>("import-model");
-  const importLicense = requiredElement<HTMLButtonElement>("view-import-license");
-  const importDialog = requiredElement<HTMLDialogElement>("add-model-dialog");
-  const importError = requiredElement("import-error");
-  const resources = requiredElement("vrm-resources");
-  const pathLabel = requiredElement("model-path");
-  const status = requiredElement("inspection-status");
   const error = requiredElement("settings-error");
   const saveStatus = requiredElement("settings-status");
   const form = requiredElement<HTMLFormElement>("settings-form");
   const mappings = requiredElement("animation-mappings");
-  const importMappings = requiredElement("import-mappings");
 
   populatePreferences(settings.preferences);
   const activeModel = () => settings.models.find(model => model.id === settings.activeModelId);
@@ -67,14 +48,6 @@ export async function startSettings(): Promise<void> {
   let displayedMapping = "";
   let displayedLibrary = "";
 
-  const updateImport = () => {
-    const idle = importMappings.querySelector<HTMLSelectElement>('select[data-state="idle"]')?.value;
-    importButton.disabled = importing || checking || !sourcePath || inspection?.backend !== "vrm" || !inspection.compatibilitySupported || !idle;
-    importPack.disabled = importing || checking;
-    choose.disabled = importing;
-    for (const button of [chooseAnimations, chooseProfile, clearProfile]) button.disabled = importing || checking;
-    requiredElement<HTMLButtonElement>("close-model-import").disabled = importing;
-  };
   const render = () => {
     const model = activeModel();
     const signature = JSON.stringify([settings.activeModelId, settings.models.map(({ id, title, backend, animations }) => ({ id, title, backend, count: animations.length }))]);
@@ -138,10 +111,10 @@ export async function startSettings(): Promise<void> {
     try {
       const license = await invoke<{title: string; text: string} | null>("get_model_license", {modelId});
       if (!license) throw new Error("模型未提供许可信息，请向模型作者确认使用范围。");
-      showResourceLicense(license);
+      showModelLicense(license);
     } catch (reason) { reportFailure(reason); }
   }
-  function openImport(): void { if (!importDialog.open) importDialog.showModal(); }
+  function openImport(): void { void importModel(); }
 
   form.addEventListener("submit", event => event.preventDefault());
   form.addEventListener("change", event => {
@@ -176,116 +149,32 @@ export async function startSettings(): Promise<void> {
       reportFailure(reason); saveStatus.textContent = "更改未保存";
     }
   });
-  requiredElement("close-model-import").addEventListener("click", () => importDialog.close());
-  importDialog.addEventListener("cancel", event => { if (importing) event.preventDefault(); });
-  importMappings.addEventListener("change", updateImport);
-  importLicense.addEventListener("click", () => { if (inspection?.license) showResourceLicense(inspection.license); });
-
-  const clearImport = () => {
-    generation++;
-    sourcePath = undefined; inspection = undefined; animationSources = []; profilePath = undefined;
-    resources.hidden = true; importLicense.hidden = true;
-    pathLabel.textContent = "尚未选择";
-    importMappings.replaceChildren(); status.textContent = ""; importError.textContent = "";
-    updateImport();
-  };
-  const importResource = async () => {
-    if (importing || checking) return;
-    importing = true; importError.textContent = ""; updateImport();
+  const importModel = async () => {
+    if (importing) return;
+    importing = true;
+    const add = requiredElement<HTMLButtonElement>("add-model");
+    add.disabled = true;
+    error.textContent = "";
     try {
-      const path = await open({title:"选择独立授权的资源包",multiple:false,directory:false,filters:[{name:"StarLite 资源包",extensions:["zip"]}]});
+      const path = await open({title:"添加 VRM 模型",multiple:false,directory:false,filters:[{name:"VRM",extensions:["vrm"]}]});
       if (typeof path !== "string") return;
-      status.textContent = "正在检查资源包…";
-      const pack = await invoke<ResourcePackInspection>("inspect_resource_pack", {path});
-      if (!await confirmResourceLicense(pack)) { status.textContent = "已取消导入。"; return; }
-      status.textContent = "正在导入…";
-      await enqueueWrite("import", () => invoke<DesktopSettings>("install_resource_pack", {
-        path, expectedSha256:pack.sha256, preferences:mergedPreferences(), acceptLicense:true,
-      }));
-      clearImport(); importDialog.close(); saveStatus.textContent = "模型已添加并启用";
-    } catch (reason) {
-      status.textContent = "导入失败，原有模型未改变。";
-      importError.textContent = safeError(reason);
-    } finally { importing = false; updateImport(); }
-  };
-  importPack.addEventListener("click", () => { void importResource(); });
-  const inspect = async () => {
-    if (!sourcePath) return;
-    const ticket = ++generation;
-    inspection = undefined; checking = true; importError.textContent = ""; importLicense.hidden = true;
-    status.textContent = "正在检查模型和动作…"; updateImport();
-    try {
-      const result = await invoke<ModelInspection>("inspect_model", {path:sourcePath, animationSources, profilePath});
-      if (ticket !== generation) return;
-      inspection = result;
-      if (!result.compatibilitySupported || result.backend !== "vrm") {
-        status.textContent = "模型或资源不兼容。";
-        importError.textContent = result.backend !== "vrm" ? "本版本暂不支持 Inochi2D，请使用 VRM。" : result.issues.map(({message}) => message).join("；");
-        return;
-      }
-      let previous: AnimationMappings | undefined;
-      try { previous = readMappings(importMappings); } catch { /* No complete mapping yet. */ }
-      const suggested = suggestMappings(result);
-      if (previous) {
-        for (const key of ["idle","working","completed","error","blocked","approval"] as const) {
-          const value = previous[key];
-          if (value && result.animations.some(animation => animation.name === value)) suggested[key] = value;
-        }
-        for (const key of ["click","ambient"] as const) suggested[key] = previous[key].filter(name => result.animations.some(animation => animation.name === name));
-      }
-      renderMappings(importMappings, result.animations, suggested, "import-pool-help");
-      importLicense.hidden = !result.license;
-      status.textContent = result.animations.length ? "检查通过：" + result.animations.length + " 个动画。请选择待机动作。" : "请添加 VRMA 动作，并选择待机动作。";
-    } catch (reason) {
-      if (ticket !== generation) return;
-      status.textContent = "模型检查失败。"; importError.textContent = safeError(reason);
-    } finally { if (ticket === generation) { checking = false; updateImport(); } }
-  };
-  choose.addEventListener("click", async () => {
-    try {
-      const selected = await open({title:"选择 VRM 模型",multiple:false,directory:false,filters:[{name:"VRM",extensions:["vrm"]}]});
-      if (typeof selected !== "string" || importing) return;
-      if (!selected.toLowerCase().endsWith(".vrm")) throw new Error("本版本暂不支持 Inochi2D，请选择 .vrm 模型。");
-      sourcePath = selected; animationSources = []; profilePath = undefined;
-      importMappings.replaceChildren(); resources.hidden = false;
-      requiredElement("animation-files").textContent = "尚未选择动作";
-      requiredElement("profile-file").textContent = "标准 VRM";
-      pathLabel.textContent = selected.split(/[\\/]/u).at(-1) ?? "已选择模型";
-      await inspect();
-    } catch (reason) { importError.textContent = safeError(reason); }
-  });
-  chooseAnimations.addEventListener("click", async () => {
-    const ticket = generation;
-    try {
-      const selected = await open({title:"选择 VRMA 动作",multiple:true,directory:false,filters:[{name:"VRM Animation",extensions:["vrma"]}]});
-      if (!selected || importing || ticket !== generation) return;
-      animationSources = (Array.isArray(selected) ? selected : [selected]).map(path => ({path,name:path.split(/[\\/]/u).at(-1)!.replace(/\.vrma$/iu,"")}));
-      requiredElement("animation-files").textContent = animationSources.length + " 个动作";
-      await inspect();
-    } catch (reason) { importError.textContent = safeError(reason); }
-  });
-  chooseProfile.addEventListener("click", async () => {
-    const ticket = generation;
-    try {
-      const selected = await open({title:"选择角色配置",multiple:false,directory:false,filters:[{name:"角色配置",extensions:["json"]}]});
-      if (typeof selected !== "string" || importing || ticket !== generation) return;
-      profilePath = selected; requiredElement("profile-file").textContent = selected.split(/[\\/]/u).at(-1) ?? "角色配置";
-      await inspect();
-    } catch (reason) { importError.textContent = safeError(reason); }
-  });
-  clearProfile.addEventListener("click", () => { profilePath = undefined; requiredElement("profile-file").textContent = "标准 VRM"; void inspect(); });
-  importButton.addEventListener("click", async () => {
-    if (importing || checking || importButton.disabled || !sourcePath) return;
-    importing = true; importError.textContent = ""; updateImport();
-    try {
-      const request: ModelInstallRequest = {backend:"vrm",sourcePath,animationSources,...(profilePath ? {profilePath} : {}),mappings:readMappings(importMappings),preferences:readPreferences()};
+      if (!path.toLowerCase().endsWith(".vrm")) throw new Error("请选择 .vrm 模型文件。本版本不支持 Inochi2D。");
+      saveStatus.textContent = "正在检查模型…";
+      const result = await invoke<ModelInspection>("inspect_model", {path});
+      if (!result.compatibilitySupported || result.backend !== "vrm") throw new Error(result.issues.map(({message}) => message).join("；") || "模型不兼容。");
+      const request: ModelInstallRequest = {backend:"vrm",sourcePath:path,animationSources:[],mappings:result.defaultMappings,preferences:mergedPreferences()};
       await enqueueWrite("import", () => invoke<DesktopSettings>("install_model", {request:{...request,preferences:mergedPreferences()}}));
-      clearImport(); importDialog.close(); saveStatus.textContent = "模型已添加并启用";
-    } catch (reason) { importError.textContent = safeError(reason); }
-    finally { importing = false; updateImport(); }
-  });
+      saveStatus.textContent = "模型已添加";
+    } catch (reason) {
+      reportFailure(reason);
+      saveStatus.textContent = "添加失败，原有模型未改变";
+    } finally {
+      importing = false;
+      requiredElement<HTMLButtonElement>("add-model").disabled = false;
+    }
+  };
 
-  render(); updateImport();
+  render();
   const unlisten = await listen<DesktopSettings>("settings-changed", ({payload}) => { settingsRevision++; adoptSettings(payload); });
   globalThis.addEventListener("pagehide", unlisten, {once:true});
   try {
@@ -326,7 +215,12 @@ function renderLibrary(host: HTMLElement, models: LibraryModel[], activeModelId:
   none.setAttribute("aria-pressed", String(activeModelId === null)); none.dataset.active = String(activeModelId === null);
   none.textContent = "不显示模型"; none.addEventListener("click", () => select(null)); host.append(none);
   const addButton = document.createElement("button");
-  addButton.type = "button"; addButton.className = "model-card model-add"; addButton.id = "add-model"; addButton.textContent = "＋ 添加模型"; addButton.addEventListener("click", add); host.append(addButton);
+  addButton.type = "button"; addButton.className = "model-card model-add"; addButton.id = "add-model"; addButton.setAttribute("aria-label", "添加 VRM 模型");
+  const addTitle = document.createElement("strong"); addTitle.textContent = "＋ 添加 VRM 模型";
+  const requirements = document.createElement("span"); requirements.id = "vrm-import-requirements";
+  requirements.textContent = "VRM 0 / 1 · 按 Humanoid 映射识别骨骼，无需改骨骼对象名。\n必需：髋、脊柱、头、双臂和手、双腿和脚；手指、颈、胸、眼骨可选。\n眨眼：在 VRM 中注册 Blink（0）或 blink（1）表达，仅重命名形态键不够。\n眼球跟随：配置 VRM lookAt，并绑定眼骨或视线表达。\n自动列出内嵌动作；无动作时使用自带待机和轻呼吸。";
+  addButton.setAttribute("aria-describedby", requirements.id); addButton.append(addTitle, requirements);
+  addButton.addEventListener("click", add); host.append(addButton);
 }
 
 function renderMappings(host: HTMLElement, animations: ReadonlyArray<{ name: string }>, current: AnimationMappings | undefined, helpId: string): void {
@@ -353,11 +247,6 @@ function renderMappings(host: HTMLElement, animations: ReadonlyArray<{ name: str
     const selected = current?.[state.key]; for (const option of select.options) option.selected = option.value === selected;
     label.append(select); row.append(label); host.append(row);
   }
-}
-
-function suggestMappings(inspection: ModelInspection): AnimationMappings {
-  const names = inspection.animations.map(({ name }) => name); const exact = (key: string) => names.find(name => name.toLowerCase() === key) ?? null;
-  return {idle:"",working:exact("working"),completed:exact("completed"),error:exact("error"),blocked:exact("blocked"),approval:exact("approval"),click:exact("click") ? [exact("click")!] : [],ambient:[]};
 }
 
 function readMappings(host: HTMLElement): AnimationMappings {

@@ -177,11 +177,10 @@ body {
 #settings-view #settings-error:empty { display: none; }
 #settings-view button:hover { border-color: #92b3e9; }
 #settings-view :is(button, select, input):focus-visible { outline: 2px solid #92b3e9; outline-offset: 2px; }
-#settings-view .primary, .resource-license .primary { color: #152137; background: #a9c7f5; border-color: #a9c7f5; }
+#settings-view .primary, .model-license-dialog .primary { color: #152137; background: #a9c7f5; border-color: #a9c7f5; }
 #settings-view summary { cursor: pointer; color: #c6d7f2; }
 #mapping-details > summary { font-size: 17px; font-weight: 600; }
 #settings-view details[open] > summary { margin-bottom: 18px; }
-.manual-model { margin-top: 20px; padding-top: 20px; border-top: 1px solid #364259; }
 .model-library { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .model-card { min-width: 0; min-height: 142px; border: 1px solid #45536c; border-radius: 12px; background: #242e40; overflow: hidden; }
 .model-card[data-active="true"] { border-color: #a9c7f5; box-shadow: inset 0 0 0 1px #a9c7f5; background: #293b56; }
@@ -191,25 +190,16 @@ body {
 .model-choice > .model-selection { color: #c6d7f2; font-size: 11px; }
 #settings-view .model-license { margin: 0 10px 10px; padding: 5px 7px; font-size: 12px; color: #b8d8ff; border-color: transparent; background: transparent; }
 .model-none, .model-add, .model-preparing { display: flex; align-items: center; justify-content: center; padding: 18px; color: #c6d7f2; font-size: 14px; }
-.model-add { border-style: dashed; }
-.model-import { width: min(680px, calc(100vw - 40px)); max-height: calc(100vh - 40px); margin: auto; padding: 24px; color: #e7ebf3; background: #1d2432; border: 1px solid #45536c; border-radius: 16px; overflow: auto; }
-.model-import::backdrop { background: rgb(7 11 20 / 72%); }
-.dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.dialog-heading h2 { margin: 0; }
-.model-import p, .import-help { line-height: 1.7; }
-.model-import .import-help { color: #a7b1c4; font-size: 13px; }
-.model-import :is(button, select, input):focus-visible { outline: 2px solid #92b3e9; outline-offset: 2px; }
-.import-actions { display: flex; justify-content: flex-end; margin-top: 20px; }
-#import-error { color: #ffaaa4; font-size: 13px; overflow-wrap: anywhere; }
-#import-error:empty { display: none; }
-.resource-license { width: min(620px, calc(100vw - 48px)); max-height: calc(100vh - 48px); padding: 24px; border: 1px solid #45536c; border-radius: 16px; background: #1d2432; color: #edf2fa; overflow: auto; }
-.resource-license::backdrop { background: rgb(7 11 20 / 72%); }
-.resource-license p { color: #a7b1c4; line-height: 1.7; }
+.model-add { grid-column: 1 / -1; min-height: 0; align-items: flex-start; flex-direction: column; gap: 10px; border-style: dashed; text-align: left; }
+.model-add > span { font-size: 12px; line-height: 1.8; white-space: pre-line; color: #a7b1c4; }
+.model-license-dialog { width: min(620px, calc(100vw - 48px)); max-height: calc(100vh - 48px); padding: 24px; border: 1px solid #45536c; border-radius: 16px; background: #1d2432; color: #edf2fa; overflow: auto; }
+.model-license-dialog::backdrop { background: rgb(7 11 20 / 72%); }
+.model-license-dialog p { color: #a7b1c4; line-height: 1.7; }
 .license-content { max-height: 55vh; overflow: auto; padding: 18px; background: #171c27; border: 1px solid #354158; border-radius: 10px; overflow-wrap: anywhere; font: 14px/1.8 system-ui, sans-serif; }
 .license-content :is(h3, h4, h5, h6) { margin: 24px 0 10px; color: #edf2fa; font-size: 16px; line-height: 1.5; }
 .license-content > :first-child { margin-top: 0; }
 .license-content > :last-child { margin-bottom: 0; }
-.resource-license .license-content p { margin: 10px 0; color: #c4cddd; white-space: pre-line; }
+.model-license-dialog .license-content p { margin: 10px 0; color: #c4cddd; white-space: pre-line; }
 .license-content :is(ol, ul) { padding-left: 24px; margin: 10px 0; }
 .license-content li + li { margin-top: 10px; }
 .license-content a { color: #b1ceff; text-underline-offset: 3px; }
@@ -217,7 +207,7 @@ body {
 .license-content pre { overflow: auto; white-space: pre-wrap; }
 .license-content code { font-size: 0.92em; }
 .license-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 20px; }
-.resource-license :focus-visible { outline: 2px solid #92b3e9; outline-offset: 2px; }
+.model-license-dialog :focus-visible { outline: 2px solid #92b3e9; outline-offset: 2px; }
 
 h1, h2 { margin-top: 0; }
 h1 { font-size: 24px; }
@@ -297,7 +287,6 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .mapping-row label, .preferences label { grid-template-columns: 1fr; gap: 7px; }
   .animation-choices { grid-template-columns: 1fr; }
   .model-library { grid-template-columns: 1fr; }
-  .model-import { padding: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

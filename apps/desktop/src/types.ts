@@ -19,7 +19,7 @@ export interface InstalledModel {
   license?: { title: string; text: string };
   backend: ModelBackend;
   inochi2d?: { animations: AnimationClip[] };
-  vrm?: { animations: AnimationSource[]; profilePath?: string };
+  vrm?: { animations: AnimationSource[]; embeddedAnimations?: string[]; profilePath?: string };
   modelPath: string;
   sourceSha256: string;
   animations: Array<{name: string; durationMs: number}>;
@@ -53,6 +53,7 @@ export interface ModelInspection {
   modelName?: string;
   license?: { title: string; text: string };
   animations: Array<{name: string; durationMs: number}>;
+  defaultMappings: AnimationMappings;
   compatibilitySupported: boolean;
   issues: Array<{ code: string; severity: "error" | "warning"; message: string }>;
 }

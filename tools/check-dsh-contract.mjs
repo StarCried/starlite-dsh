@@ -100,23 +100,48 @@ console.log(`DSH client navigation: ${navigation.kind}.`);
 
 // Fees are optional at runtime, but a release advertising them must verify
 // the public read/credential seams and durable usage vocabulary as well.
-const [settings, credentials, persistence, handle, nativeDeepSeek, launchEnvironment] = await Promise.all([
+const [settings, credentials, persistence, handle, nativeDeepSeek, launchEnvironment, llmService, nativeApiKey, nativeApiKeyConfig, nativeApiKeyImplementation, deepSeekConfig, settingsEvents] = await Promise.all([
   source("dsh-settings/lib/types/index.d.ts"),
   source("dsh-credentials/lib/types/index.d.ts"),
   source("dsh-session-persistence/lib/types/index.d.ts"),
   source("dsh-session-persistence/lib/types/handle.d.ts"),
   source("dsh-llm-deepseek/lib/types/index.d.ts"),
   source("dsh-launch-environment/lib/types/index.d.ts"),
+  source("dsh-llm/lib/types/index.d.ts"),
+  optionalSource("dsh-llm-deepseek-api-key/lib/types/index.d.ts"),
+  optionalSource("dsh-llm-deepseek-api-key/lib/types/config.d.ts"),
+  optionalSource("dsh-llm-deepseek-api-key/lib/index.js"),
+  optionalSource("dsh-llm-deepseek/lib/types/config.d.ts"),
+  optionalSource("dsh-settings/lib/types/types.d.ts"),
 ]);
-const billingRequirements = [
+const namespaceSettings = /get<const Namespace extends string>\([^\n]+\): unknown;/u.test(settings);
+const providerRequirements = namespaceSettings ? [
   ["settings resolved read", settings, /get<const Namespace extends string>\([^\n]+\): unknown;/u],
-  ["credential reference read", credentials, /abstract resolve\(ref: CredentialRef\): Promise<ResolvedCredential \| undefined>;/u],
-  ["credential record read", credentials, /abstract readRecord\(key: CredentialKey\): Promise<CredentialRecord \| undefined>;/u],
   ["native DeepSeek route", nativeDeepSeek, /`deepseek-official`/u],
   ["native DeepSeek settings namespace", nativeDeepSeek, /export declare const name = "llm-deepseek";/u],
   ["native DeepSeek credential reference", nativeDeepSeek, /apiKeyEnv\?: string;/u],
   ["native DeepSeek endpoint", nativeDeepSeek, /baseURL\?: string;/u],
   ["native DeepSeek official default", nativeDeepSeek, /PUBLIC_BASE_URL = "https:\/\/api\.deepseek\.com"/u],
+] : [
+  ["redacted live settings read", settings, /describe\(options\?: SettingsDescribeOptions\): SettingsDescriptor\[\];/u],
+  ["settings secret redaction option", settings, /redactSecrets\?: boolean;/u],
+  ["settings descriptor namespace", settings, /ns: SettingsNamespace;/u],
+  ["settings descriptor plain value", settings, /value: unknown;/u],
+  ["live settings change notification", settingsEvents ?? "", /'settings\/document-updated'\(ns: SettingsNamespace, revision: number\): void;/u],
+  ["configurable provider directory", llmService, /listConfigurableProviders\(\): LlmConfigurableProvider\[\];/u],
+  ["provider settings namespace", llmTypes, /settingsNs: string;/u],
+  ["provider settings path", llmTypes, /settingsPath: readonly string\[\];/u],
+  ["native DeepSeek API-key owner", nativeApiKey ?? "", /export declare const name = "llm-deepseek-api-key";/u],
+  ["native DeepSeek API-key route registration", nativeApiKeyImplementation ?? "", /const PROVIDER = "deepseek-official";/u],
+  ["native DeepSeek API-key settings directory", nativeApiKeyImplementation ?? "", /ctx\.llm\.registerConfigurableProviders\(/u],
+  ["native DeepSeek credential reference", nativeApiKeyConfig ?? "", /apiKeyEnv\?: string;/u],
+  ["native DeepSeek live endpoint", deepSeekConfig ?? "", /baseURL: Volatile<string \| undefined>;/u],
+  ["native DeepSeek official default", deepSeekConfig ?? "", /PUBLIC_BASE_URL = "https:\/\/api\.deepseek\.com\/anthropic"/u],
+];
+const billingRequirements = [
+  ...providerRequirements,
+  ["credential reference read", credentials, /abstract resolve\(ref: CredentialRef\): Promise<ResolvedCredential \| undefined>;/u],
+  ["credential record read", credentials, /abstract readRecord\(key: CredentialKey\): Promise<CredentialRecord \| undefined>;/u],
   ["trusted launch environment", launchEnvironment, /DSH_LAUNCH_ENVIRONMENT_KEY = "launchEnvironment"/u],
   ["launch environment value read", launchEnvironment, /get\(name: string\): LaunchEnvironmentEntry \| undefined;/u],
   ["stored session list", persistence, /abstract list\(options\?: SessionPersistenceListOptions\): Promise<readonly SessionPersistenceSnapshot\[\]>;/u],
@@ -130,6 +155,7 @@ const billingRequirements = [
 const billingMissing = billingRequirements.filter(([, contents, pattern]) => !pattern.test(contents)).map(([label]) => label);
 if (billingMissing.length) throw new Error(`DSH billing contract changed; review before release:\n- ${billingMissing.join("\n- ")}`);
 console.log(`DSH ${String(packageJson.version)} exposes the read-only billing contracts.`);
+console.log(`DSH billing settings: ${namespaceSettings ? "namespace" : "provider directory + redacted descriptors"}.`);
 
 async function source(relativePath) {
   const contents = await optionalSource(relativePath);

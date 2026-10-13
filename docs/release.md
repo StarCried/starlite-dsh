@@ -12,6 +12,8 @@
 
 ## 程序候选
 
+2026-10-13 的本地兼容复验通过 `pnpm check`（28 个测试文件、202 项测试）、插件 tarball 白名单检查，以及 DSH `0.1.5-rc.1`／`0.2.0-rc.2` 的实际官方包契约检查。重新打包并在全新目录 npm 安装后，两版官方 Cordis Context 均通过桥接启动、模拟余额查询、实时配置刷新及重复销毁检查。没有调用真实余额或付费模型 API，也不替代下述 Windows 与 Web UI 人工验收。
+
 1. 完成共享运行时验证，并把干净 Git revision 写入 `release/starlite.rev`；同步 core、Inochi2D、VRM 的同一 revision 及内容哈希。正式发布前该 revision 必须已公开。
 2. 通过 `pnpm check`、Rust fmt/clippy/test、浏览器检查、DSH 契约检查，以及隔离 profile 的实际 tarball 安装与 fail-open 检查。测试不调用付费模型或余额 API。
 3. `pnpm desktop:build` 生成当前产品名、版本、x64 的未签名 NSIS；`pnpm pack:plugin` 生成插件。程序资源检查拒绝角色文件，即使它们被 Git 忽略。

@@ -20,7 +20,10 @@ const MAX_BALANCE_BYTES = 16_384;
 export interface BillingContext {
   get?(name: string): unknown;
 }
-interface Settings { get(namespace: string): unknown; }
+interface Settings {
+  get?(namespace: string): unknown;
+  describe?(options: {redactSecrets: true}): unknown;
+}
 interface Credentials {
   resolve(reference: string): Promise<{value: string} | undefined>;
   readRecord(key: string): Promise<unknown>;
@@ -65,18 +68,20 @@ export class DeepSeekBilling implements BillingSource {
     const now = this.#now();
     if (this.#snapshot && this.#snapshot.today.date === billingDate(now) && now - this.#snapshot.checkedAt < 5000) return Promise.resolve(this.#snapshot);
     if (this.#pending) return this.#pending;
+    // describe() can announce its first live snapshot. Read it before opening
+    // this request so its own settings notification cannot abort the query.
+    const routes = officialRoutes(this.#context);
     const generation = this.#generation;
     const abort = new AbortController(); this.#abort = abort;
     const timer = setTimeout(() => abort.abort(), 8000); timer.unref();
-    this.#pending = this.#query(now, abort.signal).then(snapshot => {
+    this.#pending = this.#query(now, abort.signal, routes).then(snapshot => {
       if (!this.#closed && generation === this.#generation) this.#snapshot = snapshot;
       return snapshot;
     }).finally(() => {clearTimeout(timer); this.#pending = undefined; this.#abort = undefined;});
     return this.#pending;
   }
-  async #query(now: number, signal: AbortSignal): Promise<BillingSnapshot> {
+  async #query(now: number, signal: AbortSignal, routes: readonly OfficialRoute[]): Promise<BillingSnapshot> {
     const date = billingDate(now);
-    const routes = officialRoutes(this.#context);
     const official = routes.length > 0;
     const balancePromise = official ? this.#readBalance(routes, now, signal) : Promise.resolve({status: "unconfigured" as const, balances: []});
     const today: BillingSnapshot["today"] = {
@@ -185,18 +190,45 @@ function officialEndpoint(value: unknown): boolean {
 }
 function officialRoutes(context: BillingContext): OfficialRoute[] {
   const settings = context.get?.("settings") as Settings | undefined;
-  const routes: OfficialRoute[] = [];
-  const native = record(settings?.get("llm-deepseek"));
-  if (native) {
-    const environment = context.get?.("launchEnvironment") as {get(name: string): {value: string} | undefined} | undefined;
-    // Match the native adapter's trusted launch environment; credentials are
-    // deliberately not an endpoint configuration source.
-    const baseURL = native.baseURL ?? (environment ? environment.get("DEEPSEEK_BASE_URL")?.value : process.env.DEEPSEEK_BASE_URL) ?? "https://api.deepseek.com";
-    if (officialProfile({...native, baseURL})) routes.push({provider: "deepseek-official", profile: native});
+  if (!settings) return [];
+  try {
+    let candidates: OfficialRoute[];
+    if (typeof settings.get === "function") {
+      const native = record(settings.get("llm-deepseek"));
+      const pi = record(record(record(settings.get("llm-pi-ai"))?.providers)?.deepseek);
+      candidates = [...(native ? [{provider: "deepseek-official" as const, profile: native}] : []), ...(pi ? [{provider: "deepseek" as const, profile: pi}] : [])];
+    } else {
+      const llm = context.get?.("llm") as {listConfigurableProviders?(): unknown} | undefined;
+      if (typeof settings.describe !== "function" || typeof llm?.listConfigurableProviders !== "function") return [];
+      const directory = llm.listConfigurableProviders();
+      const descriptors = settings.describe({redactSecrets: true});
+      if (!Array.isArray(directory) || !Array.isArray(descriptors)) return [];
+      candidates = [];
+      // Account login is a different credential type, never an API-key route.
+      for (const provider of ["deepseek-official", "deepseek"] as const) {
+        const entries = directory.map(record).filter(entry => entry?.provider === provider);
+        if (entries.length !== 1) continue;
+        const entry = entries[0]!;
+        if (typeof entry.settingsNs !== "string" || !entry.settingsNs || !Array.isArray(entry.settingsPath) || entry.settingsPath.length > 8
+          || entry.settingsPath.some(segment => typeof segment !== "string" || !segment || ["__proto__", "prototype", "constructor"].includes(segment))) continue;
+        const rows = descriptors.map(record).filter(row => row?.ns === entry.settingsNs);
+        if (rows.length !== 1) continue;
+        let profile = record(rows[0]?.value);
+        for (const segment of entry.settingsPath as string[]) profile = profile && Object.hasOwn(profile, segment) ? record(profile[segment]) : undefined;
+        if (profile) candidates.push({provider, profile});
+      }
+    }
+    return candidates.filter(route => {
+      if (route.provider === "deepseek") return officialProfile(route.profile);
+      const environment = context.get?.("launchEnvironment") as {get(name: string): {value: string} | undefined} | undefined;
+      // Use the same trusted endpoint precedence as the native API-key adapter.
+      const baseURL = route.profile.baseURL ?? (environment ? environment.get("DEEPSEEK_BASE_URL")?.value : process.env.DEEPSEEK_BASE_URL)
+        ?? (typeof settings.get === "function" ? "https://api.deepseek.com" : "https://api.deepseek.com/anthropic");
+      return officialProfile({...route.profile, baseURL});
+    });
+  } catch {
+    return [];
   }
-  const pi = record(record(record(settings?.get("llm-pi-ai"))?.providers)?.deepseek);
-  if (pi && officialProfile(pi)) routes.push({provider: "deepseek", profile: pi});
-  return routes;
 }
 async function resolveKey(context: BillingContext, route: OfficialRoute): Promise<string | undefined> {
   const credentials = context.get?.("credentials") as Credentials | undefined;

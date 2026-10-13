@@ -4,6 +4,30 @@ import { startDshAdapter, type CordisContextLike } from "../src/adapter.js";
 import type { BillingSource } from "../src/billing.js";
 
 describe("DSH compatibility adapter", () => {
+  it("refreshes 0.2 billing on live settings changes without aborting describe's initial notification", async () => {
+    const listeners = new Map<string, (...arguments_: unknown[]) => unknown>();
+    let reference = "FIRST_DEEPSEEK_KEY", announced = false;
+    let billing: BillingSource | undefined;
+    const request = vi.fn(async () => new Response(JSON.stringify({is_available:true,balance_infos:[{currency:"CNY",total_balance:"12.34"}]}),{headers:{"Content-Type":"application/json"}}));
+    const credentials = {resolve:vi.fn(async (ref:string) => ({value:ref === "FIRST_DEEPSEEK_KEY" ? "PRIVATE-first" : "PRIVATE-second"}))};
+    const services: Record<string,unknown> = {
+      settings:{describe:(options:unknown) => {expect(options).toEqual({redactSecrets:true});if (!announced) {announced = true;listeners.get("settings/document-updated")?.("native",0);}return [{ns:"native",value:{apiKeyEnv:reference}}];}},
+      llm:{listConfigurableProviders:() => [{provider:"deepseek-official",settingsNs:"native",settingsPath:[]}]},credentials,
+    };
+    vi.stubGlobal("fetch",request);
+    let stop: (() => void | Promise<void>) | undefined;
+    try {
+      stop = await startDshAdapter({get:name => services[name],on(event,listener){listeners.set(event,listener);return () => listeners.delete(event);}}, {
+        isWsl:() => true,
+        startServer:async (_source,options) => {billing = options?.billing;return {port:41234,token:"a".repeat(43),close:async()=>undefined};},launch:async()=>undefined,
+      });
+      expect((await billing!.read()).balance.status).toBe("ready");
+      reference = "SECOND_DEEPSEEK_KEY";listeners.get("settings/document-updated")?.("native",1);
+      expect((await billing!.read()).balance.status).toBe("ready");
+      expect(credentials.resolve).toHaveBeenNthCalledWith(2,"SECOND_DEEPSEEK_KEY");
+      expect(request).toHaveBeenNthCalledWith(2,"https://api.deepseek.com/user/balance",expect.objectContaining({headers:{Authorization:"Bearer PRIVATE-second"}}));
+    } finally {await stop?.();vi.unstubAllGlobals();}
+  });
   it("enables native billing immediately when DSH saves a credential after startup", async () => {
     const listeners = new Map<string, (...arguments_: unknown[]) => unknown>();
     let configured = false;

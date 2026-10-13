@@ -23,7 +23,56 @@ function fixture(events: readonly unknown[] = [header(), message()], inherited =
     next: () => {now += 6000;}, revise: () => {revision++;}};
 }
 
+function directoryFixture(descriptors: unknown[], entries: unknown[]) {
+  const f = fixture([]); f.source.close();
+  const describe = vi.fn(() => descriptors), listConfigurableProviders = vi.fn(() => entries);
+  const context = {get:(name:string) => name === "settings" ? {describe} : name === "llm" ? {listConfigurableProviders} : f.context.get(name)};
+  return {...f, describe, listConfigurableProviders, source:new DeepSeekBilling(context,f.request,()=>NOW)};
+}
+
 describe("official DeepSeek billing", () => {
+  it("reads the 0.2 API-key provider's redacted live descriptor through its declared custom namespace", async () => {
+    const f = directoryFixture([{ns:"custom-native",value:{apiKeyEnv:"CUSTOM_DEEPSEEK_KEY",baseURL:"https://api.deepseek.com/anthropic"}}],
+      [{provider:"deepseek-official",settingsNs:"custom-native",settingsPath:[]}]);
+    const result = await f.source.read();
+    expect(result.balance.status).toBe("ready");expect(result.balance.source).toBe("deepseek-official");
+    expect(f.describe).toHaveBeenCalledExactlyOnceWith({redactSecrets:true});
+    expect(f.credentials.resolve).toHaveBeenCalledExactlyOnceWith("CUSTOM_DEEPSEEK_KEY");
+    expect(f.credentials.readRecord).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("PRIVATE");f.source.close();
+  });
+  it("keeps native API-key priority and the stored pi-ai route when 0.2 uses custom entry ids", async () => {
+    const f = directoryFixture([{ns:"native",value:{}},{ns:"third-party",value:{providers:{deepseek:{}}}}], [
+      {provider:"deepseek",settingsNs:"third-party",settingsPath:["providers","deepseek"]},
+      {provider:"deepseek-official",settingsNs:"native",settingsPath:[]},
+    ]);
+    expect((await f.source.read()).balance.source).toBe("deepseek-official");
+    f.credentials.resolve.mockResolvedValue(undefined);f.credentials.readRecord.mockResolvedValue({kind:"api-key",key:"PRIVATE-stored-key"});
+    f.source.invalidate(true);
+    expect((await f.source.read()).balance.source).toBe("deepseek");
+    expect(f.credentials.readRecord).toHaveBeenCalledExactlyOnceWith("llm-pi-ai/deepseek");f.source.close();
+  });
+  it("does not read or reuse a DeepSeek account-login credential as an API key", async () => {
+    const f = directoryFixture([{ns:"account",value:{apiKeyEnv:"ACCOUNT_LOGIN_TOKEN",baseURL:"https://api.deepseek.com/anthropic"}}],
+      [{provider:"deepseek-account",settingsNs:"account",settingsPath:[]}]);
+    expect((await f.source.read()).balance.status).toBe("unconfigured");
+    expect(f.credentials.resolve).not.toHaveBeenCalled();expect(f.credentials.readRecord).not.toHaveBeenCalled();expect(f.request).not.toHaveBeenCalled();f.source.close();
+  });
+  it.each([
+    {descriptors:[{ns:"native",value:{}}],entries:[{provider:"deepseek-official",settingsNs:"native",settingsPath:[]},{provider:"deepseek-official",settingsNs:"other",settingsPath:[]}]},
+    {descriptors:[{ns:"native",value:{}},{ns:"native",value:{}}],entries:[{provider:"deepseek-official",settingsNs:"native",settingsPath:[]}]},
+    {descriptors:[{ns:"native",value:{}}],entries:[{provider:"deepseek-official",settingsNs:"native",settingsPath:["__proto__"]}]},
+    {descriptors:[{ns:"native",value:{}}],entries:[{provider:"deepseek-official",settingsNs:"missing",settingsPath:[]}]},
+    {descriptors:[{ns:"native",value:{baseURL:"https://gateway.invalid"}}],entries:[{provider:"deepseek-official",settingsNs:"native",settingsPath:[]}]},
+  ])("rejects ambiguous, unsafe or unofficial 0.2 profile locations before reading a secret: %j", async ({descriptors,entries}) => {
+    const f = directoryFixture(descriptors,entries);
+    expect((await f.source.read()).balance.status).toBe("unconfigured");
+    expect(f.credentials.resolve).not.toHaveBeenCalled();expect(f.request).not.toHaveBeenCalled();f.source.close();
+  });
+  it("contains an unavailable 0.2 settings descriptor service", async () => {
+    const f = directoryFixture([],[]);f.describe.mockImplementation(()=>{throw new Error("PRIVATE settings failure")});
+    expect((await f.source.read()).balance.status).toBe("unconfigured");expect(f.credentials.resolve).not.toHaveBeenCalled();f.source.close();
+  });
   it("uses the shipped native route and its credential without a pi-ai provider profile", async () => {
     const nativeMessage = {...message(),data:{...message().data,message:{source:{provider:"deepseek-official",model:"deepseek-flash"}}}};
     const f = fixture([header("deepseek-official"),nativeMessage]);

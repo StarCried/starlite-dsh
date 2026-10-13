@@ -110,7 +110,7 @@ export async function startDshAdapter(
       const payload = asRecord(arguments_[0]);
       if (payload?.agent) {const key=subjectKey(payload.agent);questions.cancelSession(key);aggregator.disposeSession(key);}
     });
-    for (const event of ["settings/updated", "credentials/reference-updated", "credentials/record-updated"]) {
+    for (const event of ["settings/updated", "settings/document-updated", "credentials/reference-updated", "credentials/record-updated"]) {
       subscribeOptional(context, disposers, event, () => billing.invalidate(true));
     }
   } catch (error) {

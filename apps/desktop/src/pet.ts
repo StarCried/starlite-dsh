@@ -130,6 +130,9 @@ export async function startPet(): Promise<void> {
     else controller?.resume();
     syncInputAvailable();updateRegion();
   };
+  // A fast initial connection can show the hidden window before later native
+  // subscriptions resolve. Observe that first visibility change before mount.
+  document.addEventListener("visibilitychange", syncRendering);
 
   const beginOfflineCountdown = () => {
     connected = false;
@@ -178,7 +181,7 @@ export async function startPet(): Promise<void> {
       empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-  globalThis.addEventListener("pagehide", () => { closing=true; ++mountGeneration; hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { closing=true; ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
   await listen<DesktopSettings>("settings-changed", ({ payload }) => {
     ++settingsRevision;
@@ -252,8 +255,6 @@ export async function startPet(): Promise<void> {
     if (payload === "pause" || payload === "resume") syncRendering();
     if (payload === "reset") controller?.resetCamera();
   });
-  document.addEventListener("visibilitychange", syncRendering);
-
   cancelClick=installPointerBehavior(host, {
     begin: (x, y) => invoke("begin_model_drag",{x,y}),
     move: () => invoke("move_model_drag"),

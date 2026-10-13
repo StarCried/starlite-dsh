@@ -77,7 +77,7 @@ function listItem(line: string): {ordered: boolean; number: number; text: string
 }
 
 function appendInline(parent: HTMLElement, text: string): void {
-  const tokens = /\\([\\`*_[\]()#])|`([^`\n]+)`|\[([^\]\n]+)\]\(([^)\s]+)\)|\*\*([^*\n]+)\*\*|__([^_\n]+)__|\*([^*\n]+)\*|_([^_\n]+)_/gu;
+  const tokens = /\\([\u0021-\u002f\u003a-\u0040\u005b-\u0060\u007b-\u007e])|`([^`\n]+)`|\[([^\]\n]+)\]\(([^)\s]+)\)|\*\*([^*\n]+)\*\*|__([^_\n]+)__|\*([^*\n]+)\*|_([^_\n]+)_/gu;
   let offset = 0;
   for (const match of text.matchAll(tokens)) {
     parent.append(document.createTextNode(text.slice(offset, match.index)));

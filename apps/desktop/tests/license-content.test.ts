@@ -44,6 +44,14 @@ describe("model license display", () => {
     expect(content.querySelectorAll("p")).toHaveLength(2);
   });
 
+  it("unescapes CommonMark ASCII punctuation in model metadata", () => {
+    const punctuation = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~';
+    const source = [...punctuation].map(character => `\\${character}`).join("");
+    const content = renderLicenseContent(`作者 \\#1\n\n${source}`);
+    expect(content.querySelector("p")!.textContent).toBe("作者 #1");
+    expect(content.querySelectorAll("p")[1]!.textContent).toBe(punctuation);
+  });
+
   it("uses the same formatted document in read-only and consent dialogs", async () => {
     showResourceLicense({title: "角色 A", text: "# 许可\n\n仅供 **个人** 使用。"});
     expect(document.querySelector("dialog .license-content h3")!.textContent).toBe("许可");

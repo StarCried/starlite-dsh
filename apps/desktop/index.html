@@ -18,11 +18,15 @@
       <header>
         <p class="eyebrow">本地桌面伙伴</p>
         <h1>StarLite for DSH</h1>
-        <p>先导入资源包，再启动已安装插件的 DSH。连接成功后，桌宠会自动出现。</p>
+        <p>启动已安装 StarLite 插件的 DSH，即可自动准备微光。首次使用时确认角色许可，桌宠随后出现。</p>
         <p>模型保存在本机。关闭 DSH 后，桌宠会隐藏并退出。</p>
       </header>
       <section>
         <h2>模型</h2>
+        <div id="starter-character" hidden>
+          <p>微光已准备好。确认独立角色许可后，自动导入模型、动作和映射；保留你的显示与隐私偏好。</p>
+          <p><button id="use-starter-character" type="button" class="primary">使用微光</button></p>
+        </div>
         <p>选择一次资源包，自动导入模型、动作、角色配置和状态映射。</p>
         <p><button id="import-resource-pack" type="button" class="primary">导入资源包 ZIP · 自动配置</button></p>
         <p id="model-path">尚未选择</p>

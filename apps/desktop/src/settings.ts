@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { confirmResourceLicense, type ResourcePackInspection } from "./resource-pack-dialog.js";
+import { confirmResourceLicense, type ResourcePackInspection, type StarterPackInspection } from "./resource-pack-dialog.js";
 import type {
   AnimationSource,
   AnimationMappings,
@@ -32,9 +32,12 @@ export async function startSettings(): Promise<void> {
   let checking = false;
   let saving = false;
   let importing = false;
+  let starter: StarterPackInspection | undefined;
   let preferencesEdited = false;
   const choose = requiredElement<HTMLButtonElement>("choose-model");
   const importPack = requiredElement<HTMLButtonElement>("import-resource-pack");
+  const starterBanner = requiredElement("starter-character");
+  const useStarter = requiredElement<HTMLButtonElement>("use-starter-character");
   const chooseAnimations = requiredElement<HTMLButtonElement>("choose-animations");
   const chooseProfile = requiredElement<HTMLButtonElement>("choose-profile");
   const clearProfile = requiredElement<HTMLButtonElement>("clear-profile");
@@ -54,23 +57,24 @@ export async function startSettings(): Promise<void> {
     const idle = mappings.querySelector<HTMLSelectElement>('select[data-state="idle"]')?.value;
     save.disabled = saving || importing || checking || !valid || !idle;
     importPack.disabled = saving || importing || checking;
+    useStarter.disabled = saving || importing || checking;
   };
   form.addEventListener("change", event => {
     if ((event.target as HTMLElement).closest(".preferences")) preferencesEdited = true;
     updateSave();
   });
   updateSave();
-  importPack.addEventListener("click", async () => {
+  const importResource = async (available?: StarterPackInspection) => {
     if (importing || saving || checking) return;
     importing = true;
     error.textContent = "";
     updateSave();
     for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = true;
     try {
-      const path = await open({title:"选择独立授权的资源包",multiple:false,directory:false,filters:[{name:"StarLite 资源包",extensions:["zip"]}]});
+      const path = available?.path ?? await open({title:"选择独立授权的资源包",multiple:false,directory:false,filters:[{name:"StarLite 资源包",extensions:["zip"]}]});
       if (typeof path !== "string") return;
       status.textContent = "正在检查资源包…";
-      const pack = await invoke<ResourcePackInspection>("inspect_resource_pack", {path});
+      const pack = available ?? await invoke<ResourcePackInspection>("inspect_resource_pack", {path});
       if (!await confirmResourceLicense(pack)) {
         status.textContent = "已取消导入。";
         return;
@@ -92,6 +96,7 @@ export async function startSettings(): Promise<void> {
       pathLabel.textContent = pack.title;
       status.textContent = "资源包已自动导入并保存。在 WSL 启动 DSH 后，桌宠会自动出现。";
       save.textContent = "保存设置";
+      starterBanner.hidden = !starter || settings.model?.backend === "vrm" && settings.model.sourceSha256 === starter.modelSha256;
     } catch (reason) {
       status.textContent = "资源包导入失败，原模型和设置未改变。";
       error.textContent = safeError(reason);
@@ -100,7 +105,9 @@ export async function startSettings(): Promise<void> {
       for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = false;
       updateSave();
     }
-  });
+  };
+  importPack.addEventListener("click", () => { void importResource(); });
+  useStarter.addEventListener("click", () => { if (starter) void importResource(starter); });
   const inspect = async () => {
     if (!sourcePath) return;
     const ticket = ++generation;
@@ -175,6 +182,24 @@ export async function startSettings(): Promise<void> {
     } catch (reason) { error.textContent = safeError(reason); }
     finally { saving = false; for (const button of [choose,chooseAnimations,chooseProfile,clearProfile]) button.disabled = false; updateSave(); }
   });
+
+  // A plugin launch has already acquired this separate licensed resource pack.
+  // A standalone/BYOM executable has no descriptor and keeps the manual flow.
+  checking = true; updateSave();
+  for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = true;
+  try {
+    starter = await invoke<StarterPackInspection | null>("get_starter_pack") ?? undefined;
+    const installedStarter = starter && settings.model?.backend === "vrm" && settings.model.sourceSha256 === starter.modelSha256;
+    starterBanner.hidden = !starter || Boolean(installedStarter);
+  } catch (reason) {
+    status.textContent = "微光资源准备失败，请重启 DSH 重试；也可以手动导入资源包。";
+    error.textContent = safeError(reason);
+  } finally {
+    checking = false;
+    for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = false;
+    updateSave();
+  }
+  if (starter && !settings.model) void importResource(starter);
 }
 
 function renderMappings(

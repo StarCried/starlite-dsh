@@ -5,6 +5,11 @@ export interface ResourcePackInspection {
   animationCount: number;
 }
 
+export interface StarterPackInspection extends ResourcePackInspection {
+  path: string;
+  modelSha256: string;
+}
+
 export function confirmResourceLicense(pack: ResourcePackInspection): Promise<boolean> {
   const dialog = document.createElement("dialog");
   dialog.className = "resource-license";

@@ -40,9 +40,9 @@ jobs:
         shell: bash
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          package="$(find packages/dsh-plugin/.pack -maxdepth 1 -type f -name 'dsh-inochi2d-pet-*.tgz' -print -quit)"
+          package="$(find packages/dsh-plugin/.pack -maxdepth 1 -type f -name 'dsh-starlite-*.tgz' -print -quit)"
           test -n "$package"
           package="$(realpath "$package")"
-          dsh plugin --profile inochi2d-ci add "$package"
-          dsh --profile inochi2d-ci --dump-config > "$RUNNER_TEMP/dsh-config.txt"
-          grep -F "dsh-inochi2d-pet" "$RUNNER_TEMP/dsh-config.txt"
+          dsh plugin --profile starlite-ci add "$package"
+          dsh --profile starlite-ci --dump-config > "$RUNNER_TEMP/dsh-config.txt"
+          grep -F "dsh-starlite" "$RUNNER_TEMP/dsh-config.txt"

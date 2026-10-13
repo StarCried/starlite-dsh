@@ -1,5 +1,5 @@
 //! Self-contained VRM/VRMA import. No model-supplied URI is ever resolved.
-use crate::settings::{path_string, AnimationSource, VrmModelData};
+use crate::settings::{path_string, AnimationSource, ModelLicense, VrmModelData};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
@@ -17,6 +17,7 @@ pub struct Prepared {
     pub source_sha256: String,
     pub source_bytes: u64,
     pub model_name: Option<String>,
+    pub license: Option<ModelLicense>,
     model: Vec<u8>,
     animations: Vec<(String, f64, Vec<u8>)>,
     profile: Option<Vec<u8>>,
@@ -79,6 +80,7 @@ pub fn inspect(
         .as_str()
         .or_else(|| meta["name"].as_str())
         .map(str::to_owned);
+    let license = metadata_license(meta)?;
     let mut names = HashSet::new();
     let mut animations = Vec::new();
     let mut total = 0;
@@ -111,10 +113,157 @@ pub fn inspect(
         source_sha256,
         source_bytes: model.len() as u64,
         model_name,
+        license,
         model,
         animations,
         profile,
     })
+}
+
+// The VRM metadata records author-supplied permissions, not a grant made by this
+// application. Never resolve license URLs or infer permission from missing fields.
+fn metadata_license(meta: &Value) -> Result<Option<ModelLicense>, String> {
+    if !meta.is_object() {
+        return Ok(None);
+    }
+    let mut entries = Vec::new();
+    for (field, label) in [
+        ("title", "模型"),
+        ("name", "模型"),
+        ("version", "版本"),
+        ("author", "作者"),
+        ("copyrightInformation", "版权信息"),
+        ("contactInformation", "作者联系方式"),
+        ("reference", "来源"),
+        ("licenseName", "许可标识"),
+        ("licenseUrl", "许可文件"),
+        ("otherLicenseUrl", "补充许可文件"),
+        ("otherPermissionUrl", "补充使用条件"),
+    ] {
+        if let Some(text) = metadata_text(&meta[field])? {
+            entries.push(format!("- {label}：{}", markdown_literal(text)));
+        }
+    }
+    for (field, label) in [("authors", "作者"), ("references", "来源")] {
+        if let Some(values) = meta[field].as_array() {
+            if values.len() > 64 {
+                return Err("too many VRM metadata entries".into());
+            }
+            let text = values
+                .iter()
+                .map(metadata_text)
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .flatten()
+                .map(markdown_literal)
+                .collect::<Vec<_>>()
+                .join("、");
+            if !text.is_empty() {
+                entries.push(format!("- {label}：{text}"));
+            }
+        }
+    }
+    for (field, label) in [
+        ("allowedUserName", "角色扮演使用者"),
+        ("avatarPermission", "角色扮演使用者"),
+        ("violentUssageName", "暴力内容"),
+        ("sexualUssageName", "成人内容"),
+        ("commercialUssageName", "商业使用"),
+        ("commercialUsage", "商业使用"),
+        ("creditNotation", "署名"),
+        ("modification", "修改模型"),
+    ] {
+        if let Some(text) = metadata_text(&meta[field])? {
+            let description = match text {
+                "OnlyAuthor" | "onlyAuthor" => "仅作者",
+                "ExplicitlyLicensedPerson" | "onlySeparatelyLicensedPerson" => "另获授权者",
+                "Everyone" | "everyone" => "所有人",
+                "Disallow" | "prohibited" => "禁止",
+                "Allow" => "允许",
+                "personalNonProfit" => "个人非商业使用",
+                "personalProfit" => "个人营利使用",
+                "corporation" => "企业商业使用",
+                "required" => "必须署名",
+                "unnecessary" => "无需署名",
+                "allowModification" => "允许修改",
+                "allowModificationRedistribution" => "允许修改并再分发",
+                other => other,
+            };
+            entries.push(format!("- {label}：{}", markdown_literal(description)));
+        }
+    }
+    for (field, label) in [
+        ("allowExcessivelyViolentUsage", "过激暴力内容"),
+        ("allowExcessivelySexualUsage", "过激成人内容"),
+        ("allowPoliticalOrReligiousUsage", "政治或宗教内容"),
+        ("allowAntisocialOrHateUsage", "反社会或仇恨内容"),
+        ("allowRedistribution", "再分发"),
+    ] {
+        if let Some(allowed) = meta[field].as_bool() {
+            entries.push(format!(
+                "- {label}：{}",
+                if allowed { "允许" } else { "禁止" }
+            ));
+        }
+    }
+    if let Some(text) = metadata_text(&meta["thirdPartyLicenses"])? {
+        entries.push(format!("\n## 第三方许可\n\n{text}"));
+    }
+    if entries.is_empty() {
+        return Ok(None);
+    }
+    let text = format!(
+        "# 模型许可信息\n\n以下为模型文件内记录的信息。完整许可以作者提供的条款为准；未列出的权限不代表授权。\n\n{}",
+        entries.join("\n")
+    );
+    if text.len() > 256 * 1024 {
+        return Err("VRM license metadata exceeds size limit".into());
+    }
+    let title = meta["title"]
+        .as_str()
+        .or_else(|| meta["name"].as_str())
+        .unwrap_or("VRM 模型")
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(128)
+        .collect::<String>();
+    Ok(Some(ModelLicense {
+        title: if title.trim().is_empty() {
+            "VRM 模型".into()
+        } else {
+            title
+        },
+        text,
+    }))
+}
+
+fn metadata_text(value: &Value) -> Result<Option<&str>, String> {
+    let Some(text) = value.as_str().filter(|value| !value.trim().is_empty()) else {
+        return Ok(None);
+    };
+    if text.len() > 64 * 1024
+        || text
+            .chars()
+            .any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
+    {
+        return Err("invalid VRM license metadata".into());
+    }
+    Ok(Some(text))
+}
+
+fn markdown_literal(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for c in text.chars() {
+        if matches!(c, '\\' | '`' | '*' | '_' | '[' | ']' | '(' | ')' | '#') {
+            escaped.push('\\');
+        }
+        escaped.push(if matches!(c, '\n' | '\r' | '\t') {
+            ' '
+        } else {
+            c
+        });
+    }
+    escaped
 }
 
 fn read_limited(path: &Path, limit: usize) -> Result<Vec<u8>, String> {
@@ -879,6 +1028,80 @@ mod tests {
         let prepared = inspect(&source, &[], None).unwrap();
         assert!(prepared.catalog().is_empty());
         assert_eq!(prepared.source_sha256.len(), 64);
+        assert!(prepared.license.is_none());
+    }
+    #[test]
+    fn reads_vrm0_author_and_license_metadata_without_resolving_urls() {
+        let mut value = model();
+        value["extensions"]["VRM"]["meta"] = json!({
+            "title":"测试角色", "author":"作者 #1", "version":"1.2",
+            "licenseName":"Other", "allowedUserName":"ExplicitlyLicensedPerson",
+            "commercialUssageName":"Disallow",
+            "otherLicenseUrl":"https://example.invalid/model-license",
+            "otherPermissionUrl":"file:///not-opened"
+        });
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("model.vrm");
+        fs::write(&source, glb(value, vec![])).unwrap();
+        let prepared = inspect(&source, &[], None).unwrap();
+        assert_eq!(prepared.model_name.as_deref(), Some("测试角色"));
+        let license = prepared.license.unwrap();
+        assert_eq!(license.title, "测试角色");
+        assert!(license.text.contains("作者 \\#1"));
+        assert!(license.text.contains("许可标识：Other"));
+        assert!(license.text.contains("角色扮演使用者：另获授权者"));
+        assert!(license.text.contains("商业使用：禁止"));
+        assert!(license
+            .text
+            .contains("https://example.invalid/model-license"));
+        assert!(license.text.contains("file:///not-opened"));
+    }
+    #[test]
+    fn reads_vrm1_permissions_and_preserves_third_party_license_text() {
+        let mut value = model();
+        let bones = value["extensions"]["VRM"]["humanoid"]["humanBones"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|bone| {
+                (
+                    bone["bone"].as_str().unwrap().to_string(),
+                    json!({"node":bone["node"]}),
+                )
+            })
+            .collect::<serde_json::Map<_, _>>();
+        value["extensions"] = json!({"VRMC_vrm":{
+            "specVersion":"1.0", "humanoid":{"humanBones":bones},
+            "meta":{"name":"角色 B", "authors":["Author A","Author B"],
+                "licenseUrl":"https://example.invalid/vrm1",
+                "avatarPermission":"everyone", "commercialUsage":"personalNonProfit",
+                "creditNotation":"required", "allowRedistribution":false,
+                "modification":"allowModification",
+                "thirdPartyLicenses":"# 第三方条款\n\n保留原始署名。"}
+        }});
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("model.vrm");
+        fs::write(&source, glb(value, vec![])).unwrap();
+        let license = inspect(&source, &[], None).unwrap().license.unwrap();
+        assert_eq!(license.title, "角色 B");
+        for expected in [
+            "作者：Author A、Author B",
+            "商业使用：个人非商业使用",
+            "署名：必须署名",
+            "再分发：禁止",
+            "修改模型：允许修改",
+            "# 第三方条款\n\n保留原始署名。",
+        ] {
+            assert!(license.text.contains(expected), "missing {expected}");
+        }
+    }
+    #[test]
+    fn rejects_unbounded_or_control_character_license_metadata() {
+        assert!(
+            metadata_license(&json!({"thirdPartyLicenses":"x".repeat(64 * 1024 + 1)})).is_err()
+        );
+        assert!(metadata_license(&json!({"author":"bad\u{0000}name"})).is_err());
+        assert!(metadata_license(&json!({"authors":vec!["author";65]})).is_err());
     }
     #[test]
     #[ignore = "requires local private companion assets"]

@@ -41,6 +41,15 @@ async fn get_starter_pack() -> Result<Option<resource_pack::StarterPackInspectio
 }
 
 #[tauri::command]
+async fn mark_starter_seen(app: AppHandle, expected_sha256: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        resource_pack::mark_starter_seen(&app, expected_sha256)
+    })
+    .await
+    .map_err(|_| "无法保存微光引导状态。".to_string())?
+}
+
+#[tauri::command]
 async fn install_resource_pack(
     app: AppHandle,
     path: String,
@@ -127,6 +136,7 @@ pub fn run() {
             inspect_model,
             inspect_resource_pack,
             get_starter_pack,
+            mark_starter_seen,
             install_resource_pack,
             install_model,
             update_settings,
@@ -143,8 +153,10 @@ pub fn run() {
         .setup(|app| {
             tray::setup(app)?;
             hit_test::setup(app.handle())?;
+            let current = settings::load(app.handle());
             if !startup::is_connection_launch(std::env::args_os())
-                || settings::load(app.handle()).model.is_none()
+                || current.model.is_none()
+                || resource_pack::should_offer_starter(app.handle(), &current)
             {
                 tray::show_settings(app.handle());
             }

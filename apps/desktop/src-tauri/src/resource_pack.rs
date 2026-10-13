@@ -10,7 +10,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tempfile::TempDir;
 use zip::{CompressionMethod, ZipArchive};
 
@@ -68,6 +68,63 @@ const STARTER_ERROR: &str =
 pub fn starter() -> Result<Option<StarterPackInspection>, String> {
     let exe = std::env::current_exe().map_err(|_| STARTER_ERROR)?;
     starter_at(exe.parent().ok_or(STARTER_ERROR)?)
+}
+
+pub fn should_offer_starter(app: &AppHandle, current: &DesktopSettings) -> bool {
+    let Ok(marker) = starter_marker(app) else {
+        return false;
+    };
+    should_offer_at(
+        starter().ok().flatten().as_ref(),
+        current.model.as_ref(),
+        &marker,
+    )
+}
+
+fn should_offer_at(
+    starter: Option<&StarterPackInspection>,
+    model: Option<&settings::InstalledModel>,
+    marker: &Path,
+) -> bool {
+    let Some(starter) = starter else { return false };
+    if model.is_some_and(|model| {
+        model.backend == ModelBackend::Vrm && model.source_sha256 == starter.model_sha256
+    }) {
+        return false;
+    }
+    read_limited(marker, 64)
+        .ok()
+        .is_none_or(|bytes| bytes != starter.pack.sha256.as_bytes())
+}
+
+pub fn mark_starter_seen(app: &AppHandle, expected_sha256: String) -> Result<(), String> {
+    let starter = starter()?.ok_or(STARTER_ERROR)?;
+    let marker = starter_marker(app).map_err(|_| "无法保存微光引导状态。")?;
+    mark_seen_at(&marker, &starter, &expected_sha256)
+        .map_err(|_| "无法保存微光引导状态，下次启动可能再次显示；模型和设置未改变。".into())
+}
+
+fn starter_marker(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map(|path| path.join("starter-offered.sha256"))
+        .map_err(|e| e.to_string())
+}
+
+fn mark_seen_at(
+    marker: &Path,
+    starter: &StarterPackInspection,
+    expected: &str,
+) -> Result<(), String> {
+    if !valid_hash(expected) || starter.pack.sha256 != expected {
+        return Err("starter changed before it was shown".into());
+    }
+    fs::create_dir_all(marker.parent().ok_or("missing marker parent")?)
+        .map_err(|e| e.to_string())?;
+    let mut file = atomic_write_file::AtomicWriteFile::open(marker).map_err(|e| e.to_string())?;
+    file.write_all(expected.as_bytes())
+        .map_err(|e| e.to_string())?;
+    file.commit().map_err(|e| e.to_string())
 }
 
 fn starter_at(parent: &Path) -> Result<Option<StarterPackInspection>, String> {
@@ -804,6 +861,60 @@ mod tests {
         )
         .unwrap();
         assert_eq!(starter_at(folder.path()).unwrap_err(), STARTER_ERROR);
+    }
+
+    #[test]
+    fn offers_a_starter_once_per_archive_after_the_ui_acknowledges_it() {
+        let (folder, _) = starter_fixture(fixture());
+        let mut starter = starter_at(folder.path()).unwrap().unwrap();
+        let state = tempfile::tempdir().unwrap();
+        let marker = state.path().join("starter-offered.sha256");
+        assert!(!should_offer_at(None, None, &marker));
+        assert!(should_offer_at(Some(&starter), None, &marker));
+        // Inspection itself must not count as presenting the introduction.
+        assert!(!marker.exists());
+        assert!(mark_seen_at(&marker, &starter, &"0".repeat(64)).is_err());
+        assert!(!marker.exists());
+        mark_seen_at(&marker, &starter, &starter.pack.sha256).unwrap();
+        assert!(!should_offer_at(Some(&starter), None, &marker));
+        assert_eq!(fs::read_to_string(&marker).unwrap(), starter.pack.sha256);
+        starter.pack.sha256 = "1".repeat(64);
+        assert!(should_offer_at(Some(&starter), None, &marker));
+        fs::write(&marker, b"corrupted").unwrap();
+        assert!(should_offer_at(Some(&starter), None, &marker));
+        fs::write(&marker, vec![b'a'; 65]).unwrap();
+        assert!(should_offer_at(Some(&starter), None, &marker));
+    }
+
+    #[test]
+    fn skips_the_intro_for_the_installed_starter_and_never_changes_another_model() {
+        let (folder, _) = starter_fixture(fixture());
+        let starter = starter_at(folder.path()).unwrap().unwrap();
+        let marker = folder.path().join("starter-offered.sha256");
+        let prepared = prepare(
+            &folder.path().join("starter-character.zip"),
+            DesktopPreferences::default(),
+        )
+        .unwrap();
+        let mut model = settings::InstalledModel {
+            backend: ModelBackend::Vrm,
+            model_path: prepared.request.source_path.clone(),
+            source_sha256: starter.model_sha256.clone(),
+            animations: vec![json!({"name":"Rest","durationMs":1000})],
+            mappings: prepared.request.mappings,
+            inochi2d: None,
+            vrm: Some(settings::VrmModelData {
+                animations: prepared.request.animation_sources,
+                profile_path: None,
+            }),
+        };
+        assert!(!should_offer_at(Some(&starter), Some(&model), &marker));
+        model.source_sha256 = "f".repeat(64);
+        let before = serde_json::to_value(&model).unwrap();
+        assert!(should_offer_at(Some(&starter), Some(&model), &marker));
+        mark_seen_at(&marker, &starter, &starter.pack.sha256).unwrap();
+        assert!(!should_offer_at(Some(&starter), Some(&model), &marker));
+        assert_eq!(serde_json::to_value(model).unwrap(), before);
     }
 
     #[cfg(unix)]

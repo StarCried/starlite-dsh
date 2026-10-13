@@ -48,7 +48,7 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
     let pause = MenuItem::with_id(app, "pause", "暂停/继续动画", true, None::<&str>)?;
     let click_through =
         MenuItem::with_id(app, "click-through", "鼠标穿透开关", true, None::<&str>)?;
-    let privacy = MenuItem::with_id(app, "privacy", "固定文案隐私模式", true, None::<&str>)?;
+    let privacy = MenuItem::with_id(app, "privacy", "隐藏会话内容", true, None::<&str>)?;
     let reset = MenuItem::with_id(app, "reset", "复位模型", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
     let menu = Menu::with_items(
@@ -117,7 +117,11 @@ fn toggle_visibility(app: &AppHandle) {
     };
     if window.is_visible().unwrap_or(false) {
         let _ = window.hide();
-    } else if app.state::<UiState>().connected() {
+    } else if app.state::<UiState>().connected()
+        && settings::load(app)
+            .active_model()
+            .is_some_and(|model| model.data.backend == settings::ModelBackend::Vrm)
+    {
         let _ = window.show();
     }
 }

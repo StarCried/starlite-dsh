@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tauri::AppHandle;
@@ -40,10 +40,102 @@ pub struct ResourcePackInspection {
     pub animation_count: usize,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StarterPackInspection {
+    pub path: String,
+    pub model_sha256: String,
+    #[serde(flatten)]
+    pub pack: ResourcePackInspection,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StarterDescriptor {
+    schema_version: u32,
+    title: String,
+    sha256: String,
+    bytes: u64,
+    model_sha256: String,
+    archive: String,
+}
+
+const STARTER_ERROR: &str =
+    "微光资源准备失败。请重启 DSH 重试；也可以手动导入资源包，原模型和设置未改变。";
+
+/// Only the plugin-staged, executable-adjacent pack participates in onboarding.
+/// No webview-supplied path or archive name can redirect this lookup.
+pub fn starter() -> Result<Option<StarterPackInspection>, String> {
+    let exe = std::env::current_exe().map_err(|_| STARTER_ERROR)?;
+    starter_at(exe.parent().ok_or(STARTER_ERROR)?)
+}
+
+fn starter_at(parent: &Path) -> Result<Option<StarterPackInspection>, String> {
+    let descriptor_path = parent.join("starter-character.json");
+    match fs::symlink_metadata(&descriptor_path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err(STARTER_ERROR.into()),
+        Ok(_) => {}
+    }
+    starter_checked(parent, &descriptor_path)
+        .map(Some)
+        .map_err(|_| STARTER_ERROR.into())
+}
+
+fn starter_checked(parent: &Path, descriptor_path: &Path) -> Result<StarterPackInspection, String> {
+    let parent_meta = fs::symlink_metadata(parent).map_err(|e| e.to_string())?;
+    if !parent_meta.is_dir() || linked(&parent_meta) {
+        return Err("invalid starter directory".into());
+    }
+    let descriptor: StarterDescriptor =
+        serde_json::from_slice(&read_limited(descriptor_path, 4096)?)
+            .map_err(|_| "invalid starter descriptor")?;
+    if descriptor.schema_version != 1
+        || descriptor.title.trim().is_empty()
+        || descriptor.title.chars().count() > 128
+        || descriptor.title.chars().any(char::is_control)
+        || !valid_hash(&descriptor.sha256)
+        || !valid_hash(&descriptor.model_sha256)
+        || !(1..=ARCHIVE_LIMIT as u64).contains(&descriptor.bytes)
+        || descriptor.archive != "starter-character.zip"
+    {
+        return Err("invalid starter descriptor".into());
+    }
+    let path = parent.join("starter-character.zip");
+    let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+    if metadata.len() != descriptor.bytes || linked(&metadata) {
+        return Err("starter archive size or file type mismatch".into());
+    }
+    let prepared = prepare(&path, DesktopPreferences::default())?;
+    if prepared.inspection.sha256 != descriptor.sha256
+        || prepared.model_sha256 != descriptor.model_sha256
+    {
+        return Err("starter archive digest mismatch".into());
+    }
+    Ok(StarterPackInspection {
+        path: settings::path_string(&path)?,
+        model_sha256: descriptor.model_sha256,
+        pack: prepared.inspection,
+    })
+}
+
+fn linked(metadata: &fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        metadata.file_type().is_symlink() || metadata.file_attributes() & 0x400 != 0
+    }
+    #[cfg(not(windows))]
+    {
+        metadata.file_type().is_symlink()
+    }
+}
+
 struct PreparedPack {
     _directory: TempDir,
     inspection: ResourcePackInspection,
     request: ModelInstallRequest,
+    model_sha256: String,
 }
 
 pub fn inspect(path: String) -> Result<ResourcePackInspection, String> {
@@ -177,6 +269,7 @@ fn prepare(path: &Path, preferences: DesktopPreferences) -> Result<PreparedPack,
         .take(128)
         .collect();
     Ok(PreparedPack {
+        model_sha256: prepared.source_sha256,
         inspection: ResourcePackInspection {
             title,
             license,
@@ -226,7 +319,7 @@ fn read_archive(path: &Path) -> Result<Vec<u8>, String> {
 
 fn read_limited(path: &Path, limit: u64) -> Result<Vec<u8>, String> {
     let metadata = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
-    if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > limit {
+    if !metadata.is_file() || linked(&metadata) || metadata.len() > limit {
         return Err("resource has an invalid file type or exceeds its byte limit".into());
     }
     let mut bytes = Vec::new();
@@ -621,6 +714,112 @@ mod tests {
         let mut value: Value = serde_json::from_slice(bytes).unwrap();
         change(&mut value);
         *bytes = serde_json::to_vec(&value).unwrap();
+    }
+
+    fn starter_fixture(files: Vec<(String, Vec<u8>)>) -> (TempDir, Value) {
+        let model_hash = digest(
+            &files
+                .iter()
+                .find(|(name, _)| name == "desktop/model.vrm")
+                .unwrap()
+                .1,
+        );
+        let (folder, archive) = pack(files);
+        let bytes = fs::read(&archive).unwrap();
+        fs::rename(archive, folder.path().join("starter-character.zip")).unwrap();
+        let descriptor = json!({"schemaVersion":1,"title":"微光","sha256":digest(&bytes),"bytes":bytes.len(),"modelSha256":model_hash,"archive":"starter-character.zip"});
+        fs::write(
+            folder.path().join("starter-character.json"),
+            serde_json::to_vec(&descriptor).unwrap(),
+        )
+        .unwrap();
+        (folder, descriptor)
+    }
+
+    #[test]
+    fn discovers_only_the_fixed_starter_and_validates_model_identity_and_license() {
+        let portable = tempfile::tempdir().unwrap();
+        assert!(starter_at(portable.path()).unwrap().is_none());
+        let (folder, descriptor) = starter_fixture(fixture());
+        let result = starter_at(folder.path()).unwrap().unwrap();
+        assert_eq!(result.pack.animation_count, 1);
+        assert_eq!(result.pack.license, "Synthetic test license; no artwork.");
+        assert_eq!(result.model_sha256, descriptor["modelSha256"]);
+        assert_eq!(result.pack.sha256, descriptor["sha256"]);
+        assert_eq!(
+            Path::new(&result.path),
+            folder.path().join("starter-character.zip")
+        );
+        let serialized = serde_json::to_value(result).unwrap();
+        assert_eq!(serialized["animationCount"], 1);
+        assert!(serialized.get("pack").is_none());
+    }
+
+    #[test]
+    fn fails_closed_for_stale_or_redirected_starter_descriptors_without_exposing_paths() {
+        let (folder, original) = starter_fixture(fixture());
+        for (field, value) in [
+            ("schemaVersion", json!(2)),
+            ("archive", json!("../character.zip")),
+            ("bytes", json!(ARCHIVE_LIMIT + 1)),
+            ("bytes", json!(original["bytes"].as_u64().unwrap() + 1)),
+            ("sha256", json!("0".repeat(64))),
+            ("modelSha256", json!("0".repeat(64))),
+            ("title", json!("bad\ntitle")),
+            ("unexpected", json!(true)),
+        ] {
+            let mut descriptor = original.clone();
+            descriptor[field] = value;
+            fs::write(
+                folder.path().join("starter-character.json"),
+                serde_json::to_vec(&descriptor).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                starter_at(folder.path()).unwrap_err(),
+                STARTER_ERROR,
+                "{field}"
+            );
+        }
+        fs::write(
+            folder.path().join("starter-character.json"),
+            serde_json::to_vec(&original).unwrap(),
+        )
+        .unwrap();
+        fs::remove_file(folder.path().join("starter-character.zip")).unwrap();
+        assert_eq!(starter_at(folder.path()).unwrap_err(), STARTER_ERROR);
+    }
+
+    #[test]
+    fn checks_starter_pack_contents_even_when_outer_size_and_hash_match() {
+        let mut files = fixture();
+        change_manifest(&mut files, |manifest| {
+            manifest["mappings"]["idle"] = json!("Missing")
+        });
+        let (folder, _) = starter_fixture(files);
+        assert_eq!(starter_at(folder.path()).unwrap_err(), STARTER_ERROR);
+        fs::write(
+            folder.path().join("starter-character.json"),
+            vec![b' '; 4097],
+        )
+        .unwrap();
+        assert_eq!(starter_at(folder.path()).unwrap_err(), STARTER_ERROR);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_symlinked_starter_files_and_directories() {
+        use std::os::unix::fs::symlink;
+        let (folder, _) = starter_fixture(fixture());
+        let link_folder = tempfile::tempdir().unwrap();
+        let link = link_folder.path().join("linked");
+        symlink(folder.path(), &link).unwrap();
+        assert_eq!(starter_at(&link).unwrap_err(), STARTER_ERROR);
+        let archive = folder.path().join("starter-character.zip");
+        let real = folder.path().join("other.zip");
+        fs::rename(&archive, &real).unwrap();
+        symlink(real, archive).unwrap();
+        assert_eq!(starter_at(folder.path()).unwrap_err(), STARTER_ERROR);
     }
 
     #[test]

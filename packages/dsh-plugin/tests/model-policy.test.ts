@@ -36,3 +36,11 @@ it("does not fetch a character based on malformed, oversized or non-file setting
   await mkdir(path);
   expect(await readModelEnabled(path)).toBe(false);
 });
+
+it("does not interpret malformed model flags as permission to download the character", async () => {
+  const path = await fixture();
+  for (const modelEnabled of ["false", null, 0, {}]) {
+    await writeFile(path, JSON.stringify({preferences:{modelEnabled}}));
+    expect(await readModelEnabled(path)).toBe(false);
+  }
+});

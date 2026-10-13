@@ -103,7 +103,8 @@ export async function readModelEnabled(path: string): Promise<boolean> {
       const value: unknown = JSON.parse(bytes.subarray(0, result.bytesRead).toString("utf8"));
       if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
       const preferences = "preferences" in value ? value.preferences : undefined;
-      return !(typeof preferences === "object" && preferences !== null && "modelEnabled" in preferences && preferences.modelEnabled === false);
+      if (typeof preferences === "object" && preferences !== null && "modelEnabled" in preferences) return preferences.modelEnabled === true;
+      return true;
     } finally { await file.close(); }
   } catch (error) {
     return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";

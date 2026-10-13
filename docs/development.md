@@ -7,9 +7,9 @@
 - Windows 11 x64、Node.js 24、pnpm 11.7。
 - Rust stable（`x86_64-pc-windows-msvc`）、Visual Studio C++ Build Tools、WebView2。
 - Ubuntu WSL2 中的 DSH。已有契约验收记录对应 `0.1.5-rc.1`；CI 跟踪 latest，不能把每日检查理解为永远兼容未来版本。
-- 单独的 StarLite 组件 checkout：core、VRM、可选 Inochi2D 共用一个源码 revision。
+- 单独的 StarLite 组件 checkout：core 和 VRM 共用一个源码 revision。
 
-源码、包元数据和本地 checkout 统一使用 `StarCried/starlite` 与 `StarCried/starlite-dsh`。本机路径为 `/home/pc/StarCried/starlite` 和 `E:/StarCried/starlite-dsh`。alpha 源码候选位于 `feat/dual-model-backends` 分支；公开 npm 与安装器发布是后续独立步骤。原生 Cargo 依赖使用新仓库 URL，并保留既有固定 revision。
+源码、包元数据和本地 checkout 统一使用 `StarCried/starlite` 与 `StarCried/starlite-dsh`。本机路径为 `/home/pc/StarCried/starlite` 和 `E:/StarCried/starlite-dsh`。alpha 源码候选位于 `feat/dual-model-backends` 分支；公开 npm 与安装器发布是后续独立步骤。
 
 ## 1. 在 WSL 构建共享运行时
 
@@ -22,14 +22,11 @@ git clone https://github.com/StarCried/starlite.git starlite
 cd starlite
 git checkout REPLACE_WITH_RELEASE_RUNTIME_REV
 npm ci
-npm run fixtures
-npm run build:wasm
 npm run build --workspace @starcried/starlite-core
-npm run build --workspace @starcried/starlite-inochi2d
 npm run build --workspace @starcried/starlite-vrm
 ```
 
-Inochi2D 的官方 SDK／WASM 工具链按共享仓库开发说明准备。桌宠当前构建仍 staging 两种后端；更名阶段不更改该依赖结构。VRM 运行使用 WebGL2，不需要浏览器执行 Blender。
+当前 DSH 构建只 staging core 和 VRM，不需要 Inochi2D SDK、D 编译器或 WASM 工具链。VRM 使用 WebGL2，不需要浏览器执行 Blender。
 
 ## 2. 在 Windows 构建桌宠与桥接包
 
@@ -39,13 +36,13 @@ Inochi2D 的官方 SDK／WASM 工具链按共享仓库开发说明准备。桌�
 git clone https://github.com/StarCried/starlite-dsh.git starlite-dsh
 Set-Location starlite-dsh
 pnpm install --frozen-lockfile
-pnpm sync:runtime -- "//wsl.localhost/Ubuntu/home/<user>/starlite/packages/inochi2d/dist"
+pnpm sync:runtime -- "//wsl.localhost/Ubuntu/home/<user>/starlite"
 pnpm check
 pnpm desktop:build
 pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.0_x64-setup.exe"
 ```
 
-本机维护者 checkout 的同步源为 `//wsl.localhost/Ubuntu/home/pc/StarCried/starlite/packages/inochi2d/dist`。同步源必须显式给出，也可用 `STARLITE_INOCHI2D_DIST` 环境变量。工具从同一个 checkout 收集 `packages/core`、`packages/inochi2d`、`packages/vrm`，写入未跟踪的 `apps/desktop/public/runtime/{core,inochi2d,vrm}`，校验包名、官方 WASM 哈希和许可证，并记录 Git revision／dirty 与各文件哈希。发布只接受干净且匹配 pin 的运行时。
+本机维护者 checkout 的同步源为 `//wsl.localhost/Ubuntu/home/pc/StarCried/starlite`。同步源必须显式给出，也可用 `STARLITE_SOURCE` 环境变量。工具从同一个 checkout 收集 `packages/core/dist` 和 `packages/vrm/dist`，写入未跟踪的 `apps/desktop/public/runtime/{core,vrm}`，校验包名和许可证，并记录 Git revision／dirty 与各文件哈希。同步会移除已停用后端的受管生成目录，发布门拒绝残留的 Inochi2D 或 WASM 资源。发布只接受干净且匹配 pin 的运行时。
 
 原生 exe 位于 `apps/desktop/src-tauri/target/release/dsh-inochi2d-pet.exe`，可选安装器位于 `apps/desktop/src-tauri/target/release/bundle/nsis/`。普通用户使用包含 Windows 程序的统一插件，不需要安装器。不要在同一 checkout 混用 Windows 与 WSL 的 node_modules。
 
@@ -89,7 +86,7 @@ dsh --profile starlite-test --dump-config
 
 契约检查验证实际事件和 settings／credentials／sessionPersistence 的公开只读接口。费用服务不可用只使费用卡不可用，不阻止状态桥接或 DSH 启动。不要向普通会话发送测试提示来满足安装检查，不需要调用付费模型 API。
 
-随后运行 `dsh --profile starlite-test` 检查自动准备程序、首次下载、许可确认与原偏好保留。测试下载流程不需要填写模型 API Key 或发送任何会话请求。新旧名桥接不能同时加入一个 profile。
+随后运行 `dsh --profile starlite-test` 检查自动准备程序、默认微光、持续许可提示、禁用后重启不下载／显示，以及原偏好保留。手动 ZIP 导入继续检查许可确认。测试下载流程不需要填写模型 API Key 或发送任何会话请求。新旧名桥接不能同时加入一个 profile。
 
 ## 自动检查
 
@@ -103,7 +100,7 @@ cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
 git diff --check
 ```
 
-`check:core` 不需要浏览器运行时或 Windows EXE；完整 `check` 与桌宠构建需要先同步运行时。CI 在 Linux 构建官方 WASM，再把三个组件传给 Windows job。Windows CI 为打包结构检查生成不含资产、不可下载的本机测试清单；产物明确标记为 `local-only-windows-validation`，不能给普通用户使用或发布。私有微光不会传到 CI。公开发布仍需要独立 HTTPS 资源来源及完整发布门检查。
+`check:core` 不需要浏览器运行时或 Windows EXE；完整 `check` 与桌宠构建需要先同步运行时。CI 在 Linux 构建 core 和 VRM，再传给 Windows job。Windows CI 为打包结构检查生成不含资产、不可下载的本机测试清单；产物明确标记为 `local-only-windows-validation`，不能给普通用户使用或发布。私有微光不会传到 CI。公开发布仍需要独立 HTTPS 资源来源及完整发布门检查。
 
 ## 模拟与人工检查
 

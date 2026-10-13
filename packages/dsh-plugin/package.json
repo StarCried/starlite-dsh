@@ -48,7 +48,6 @@
     "dsh-plugin",
     "starlite",
     "vrm",
-    "inochi2d",
     "desktop-pet"
   ],
   "dependencies": {

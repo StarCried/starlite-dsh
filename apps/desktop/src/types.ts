@@ -27,8 +27,6 @@ export interface InstalledModel {
 }
 
 export interface DesktopPreferences {
-  /** Omitted only by older stored settings; native migration defaults to true. */
-  modelEnabled?: boolean;
   fps: 30 | 60;
   maxDevicePixelRatio: number;
   scale: number;
@@ -37,9 +35,15 @@ export interface DesktopPreferences {
 }
 
 export interface DesktopSettings {
-  schemaVersion: 3;
+  schemaVersion: 4;
   preferences: DesktopPreferences;
-  model?: InstalledModel;
+  models: LibraryModel[];
+  activeModelId: string | null;
+}
+
+export interface LibraryModel extends InstalledModel {
+  id: string;
+  title: string;
 }
 
 export interface ModelInspection {
@@ -47,6 +51,7 @@ export interface ModelInspection {
   sourceSha256: string;
   sourceBytes: number;
   modelName?: string;
+  license?: { title: string; text: string };
   animations: Array<{name: string; durationMs: number}>;
   compatibilitySupported: boolean;
   issues: Array<{ code: string; severity: "error" | "warning"; message: string }>;

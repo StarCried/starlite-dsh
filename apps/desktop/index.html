@@ -16,39 +16,19 @@
     <main id="settings-view" hidden>
       <div class="settings-scroll">
       <header>
-        <p class="eyebrow">本地桌面伙伴</p>
         <h1>StarLite for DSH</h1>
-        <p>启动已安装 StarLite 插件的 DSH，即可使用微光，无需额外配置。</p>
-        <p>模型保存在本机。关闭 DSH 后，桌宠会隐藏并退出。</p>
+        <p id="settings-status" role="status" aria-live="polite">更改自动保存</p>
+        <p id="settings-error" role="alert"></p>
       </header>
       <section>
         <h2>模型</h2>
-        <label class="model-toggle"><input id="model-enabled" type="checkbox" checked /> 启用模型</label>
-        <p class="model-license-notice">微光默认启用；使用微光即视为同意其许可。如不同意，请禁用模型。</p>
-        <p class="row"><button id="view-default-license" type="button">查看模型许可</button><button id="use-default-model" type="button">恢复默认微光</button></p>
-        <p id="model-path">尚未选择</p>
-        <details class="manual-model">
-        <summary>替换模型与动作（进阶）</summary>
-        <p>本版本仅支持 VRM，暂不提供 Inochi2D。资源包可自动配置模型、动作与状态映射。</p>
-        <p><button id="import-resource-pack" type="button">导入资源包 ZIP · 自动配置</button></p>
-        <div class="row">
-          <button id="choose-model" type="button">选择 .vrm</button>
-        </div>
-        <div id="vrm-resources" hidden>
-          <p>VRM 动作独立导入；动作名称取自文件名。</p>
-          <button id="choose-animations" type="button">选择 VRMA 动作</button>
-          <span id="animation-files">尚未选择动作</span>
-          <p><button id="choose-profile" type="button">选择角色配置（可选）</button>
-          <button id="clear-profile" type="button">使用标准 VRM</button>
-          <span id="profile-file">标准 VRM</span></p>
-        </div>
-        </details>
-        <p id="inspection-status" role="status"></p>
+        <div id="model-library" class="model-library" aria-label="模型列表"></div>
+        <p class="model-license-notice">使用模型即视为同意其许可；如不同意，请选择“不显示模型”。</p>
       </section>
       <form id="settings-form">
-        <section>
+        <section id="mapping-section" hidden>
           <details id="mapping-details">
-          <summary>动作映射（进阶）</summary>
+          <summary>动作映射</summary>
           <p id="animation-pool-help">只有待机持续循环，其他动作播放一次后回到待机。点击回应和偶发小动作可勾选多个，每次随机播放一个。</p>
           <div id="animation-mappings"></div>
           </details>
@@ -59,21 +39,36 @@
             <select id="fps"><option value="60">60 FPS</option><option value="30">30 FPS</option></select>
           </label>
           <label>渲染 DPR 上限
-            <input id="dpr" type="number" min="1" max="1.5" step="0.1" />
+            <input id="dpr" type="number" min="1" max="1.5" step="0.05" />
           </label>
           <label>模型缩放
             <input id="scale" type="number" min="0.25" max="3" step="0.05" />
           </label>
-          <label class="check"><input id="privacy" type="checkbox" /> 固定文案隐私模式</label>
+          <label class="check"><input id="privacy" type="checkbox" /> 隐藏会话内容</label>
+          <p>隐藏会话标题、正文、交互问题和费用，仅显示状态。</p>
           <label>工作气泡<select id="bubble-mode"><option value="compact">精简：会话标题和状态</option><option value="detailed">详细：会话标题和内容</option></select></label>
-          <p>点击模型查看 DeepSeek 余额与今日 DSH 费用估算，右键打开设置。隐私模式不查询或显示费用。</p>
         </section>
       </form>
       </div>
-      <footer class="actions">
-        <p id="settings-error" role="alert"></p>
-        <button id="save-settings" type="submit" form="settings-form">导入并保存</button>
-      </footer>
+      <dialog id="add-model-dialog" class="model-import">
+        <div class="dialog-heading"><h2>添加模型</h2><button id="close-model-import" type="button" aria-label="关闭添加模型">关闭</button></div>
+        <p><button id="import-resource-pack" type="button" class="primary">导入资源包 ZIP</button></p>
+        <p class="import-help">资源包会自动配置模型、动作和映射。</p>
+        <details class="manual-model">
+          <summary>导入 VRM 与独立动作</summary>
+          <p><button id="choose-model" type="button">选择 .vrm 模型</button> <span id="model-path">尚未选择</span></p>
+          <div id="vrm-resources" hidden>
+            <p><button id="choose-animations" type="button">选择 VRMA 动作</button> <span id="animation-files">尚未选择动作</span></p>
+            <p><button id="choose-profile" type="button">选择角色配置</button> <button id="clear-profile" type="button">使用标准 VRM</button> <span id="profile-file">标准 VRM</span></p>
+            <p><button id="view-import-license" type="button" hidden>查看模型许可</button></p>
+            <p id="import-pool-help" class="import-help">必须选择已有的待机动作。其余映射可以留空。</p>
+            <div id="import-mappings"></div>
+          </div>
+          <div class="import-actions"><button id="import-model" type="button" class="primary" disabled>导入模型</button></div>
+        </details>
+        <p id="inspection-status" role="status"></p>
+        <p id="import-error" role="alert"></p>
+      </dialog>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

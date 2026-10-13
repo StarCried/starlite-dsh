@@ -35,6 +35,33 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: npm install --global --prefix "$HOME/.local" @deepseek-ai/dsh@latest
       - run: node tools/check-dsh-contract.mjs "$HOME/.local/lib/node_modules/@deepseek-ai/dsh"
+      - name: Stage artwork-free package inputs for contract installation only
+        shell: bash
+        run: |
+          # This Linux job never launches a Windows program or publishes artifacts.
+          # A minimal synthetic PE lets the real unified-package whitelist run unchanged.
+          node --input-type=module <<'NODE'
+          import { mkdir, writeFile } from 'node:fs/promises';
+          import { dirname } from 'node:path';
+          const executable = Buffer.alloc(256), pe = 64;
+          executable.writeUInt16LE(0x5a4d);
+          executable.writeUInt32LE(pe, 0x3c);
+          executable.writeUInt32LE(0x00004550, pe);
+          executable.writeUInt16LE(0x8664, pe + 4);
+          executable.writeUInt16LE(112, pe + 20);
+          executable.writeUInt16LE(0x20b, pe + 24);
+          executable.writeUInt16LE(2, pe + 24 + 68);
+          const descriptor = { title: 'CI artwork-free fixture', url: 'http://127.0.0.1:1/fixture.zip', sha256: '0'.repeat(64), bytes: 1, modelSha256: '0'.repeat(64), localTest: true };
+          for (const [path, bytes] of [
+            ['apps/desktop/src-tauri/target/release/dsh-inochi2d-pet.exe', executable],
+            ['release-output/THIRD_PARTY_LICENSES.txt', 'Artwork-free contract-test fixture; not a public program build.\n'],
+            ['release-output/ci-starter-character.json', JSON.stringify(descriptor)],
+          ]) {
+            await mkdir(dirname(path), { recursive: true });
+            await writeFile(path, bytes, { flag: 'wx' });
+          }
+          NODE
+          pnpm stage:plugin -- release-output/ci-starter-character.json
       - run: pnpm pack:plugin
       - name: Install the packed bundle in an isolated profile
         shell: bash

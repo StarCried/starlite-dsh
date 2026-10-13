@@ -126,7 +126,7 @@ export async function startDshAdapter(
     instanceId: randomUUID(),
   }, {
     signal: launchAbort.signal,
-    onStarterFailure: () => {
+    onDefaultModelFailure: () => {
       if (!launchAbort.signal.aborted) context.logger?.warn?.(
         "StarLite could not acquire the starter character. The companion will show recovery instructions; existing models are preserved.",
       );

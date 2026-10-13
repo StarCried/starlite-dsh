@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { assertDesktopExecutable, assertDesktopManifest, assertStarterCharacter, sha256 } from "../plugin-desktop-assets.mjs";
+import { assertDesktopExecutable, assertDesktopManifest, assertDefaultModel, sha256 } from "../plugin-desktop-assets.mjs";
 import { stagePluginDesktop } from "../stage-plugin-desktop.mjs";
 
 const temporary = [];
@@ -19,7 +19,7 @@ function executable() {
   bytes.writeUInt16LE(0x20b, pe + 24); bytes.writeUInt16LE(2, pe + 24 + 68);
   return bytes;
 }
-const starter = { title: "Generated fixture", url: "https://example.com/character.zip", sha256: "a".repeat(64), bytes: 12, modelSha256: "b".repeat(64) };
+const starter = { title: "Generated fixture", url: "https://example.com/character.vrm", sha256: "a".repeat(64), bytes: 12 };
 const version = "0.1.0-alpha.0";
 async function file(root, path, bytes) { await mkdir(dirname(join(root, path)), { recursive: true }); await writeFile(join(root, path), bytes); }
 async function fixture() {
@@ -37,7 +37,7 @@ it("stages only four program files, binds version and hash, and leaves character
   await file(root, "release-output/private.vrm", "generated excluded fixture");
   const manifest = await stagePluginDesktop(root, join(root, "release-output/character.json"));
   expect(manifest.executable).toEqual({ file: "dsh-inochi2d-pet.exe", bytes: 256, sha256: sha256(executable()) });
-  expect(manifest.starterCharacter).toEqual(starter);
+  expect(manifest.defaultModel).toEqual(starter);
   expect(await readFile(join(root, "packages/dsh-plugin/assets/windows-x64/dsh-inochi2d-pet.exe"))).toEqual(executable());
   expect(assertDesktopManifest(manifest, { expectedVersion: version })).toBe(manifest);
   expect(() => assertDesktopManifest(manifest, { expectedVersion: "0.2.0" })).toThrow(/version/);
@@ -54,21 +54,21 @@ it("rejects corrupt or console executables and mismatched hashes", () => {
 });
 
 it("allows explicitly local test sources only during local acceptance", () => {
-  const local = { ...starter, url: "http://127.0.0.1:44123/character.zip", localTest: true };
-  expect(assertStarterCharacter(local)).toBe(local);
-  expect(() => assertStarterCharacter(local, { allowLocalTest: false })).toThrow(/publicly released/);
+  const local = { ...starter, url: "http://127.0.0.1:44123/character.vrm", localTest: true };
+  expect(assertDefaultModel(local)).toBe(local);
+  expect(() => assertDefaultModel(local, { allowLocalTest: false })).toThrow(/publicly released/);
   for (const value of [
-    { ...local, url: "http://localhost:44123/character.zip" },
-    { ...local, url: "http://192.168.1.2:44123/character.zip" },
+    { ...local, url: "http://localhost:44123/character.vrm" },
+    { ...local, url: "http://192.168.1.2:44123/character.vrm" },
     { ...starter, url: "http://example.com/a.zip" },
     { ...starter, url: "https://user:password@example.com/a.zip" },
     { ...starter, url: "https://example.com/a.zip?token=secret" },
     { ...starter, bytes: 64 * 1024 * 1024 + 1 },
     { ...starter, bytes: 1.1 },
-    { ...starter, modelSha256: "bad" },
+    { ...starter, url: "https://example.com/retired.zip" },
     { ...starter, localTest: false },
     { ...starter, extraFile: "private.blend" },
-  ]) expect(() => assertStarterCharacter(value)).toThrow();
+  ]) expect(() => assertDefaultModel(value)).toThrow();
 });
 
 it("rejects redirected build inputs and unexpected staged assets", async () => {

@@ -15,7 +15,7 @@ export interface PetConnection {
 
 export interface LaunchOptions {
   readonly signal?: AbortSignal;
-  readonly onStarterFailure?: () => void;
+  readonly onDefaultModelFailure?: () => void;
 }
 
 export function isWslEnvironment(environment: NodeJS.ProcessEnv = process.env): boolean {
@@ -42,7 +42,7 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
     if (!localCache.startsWith("/") || /[\p{Cc}]/u.test(localCache)) throw new Error("invalid Windows local application cache");
     const roaming = (await execFileText("wslpath", ["-u", windowsDirectories[1]!], options.signal)).trim();
     if (!roaming.startsWith("/") || /[\p{Cc}]/u.test(roaming)) throw new Error("invalid Windows application settings directory");
-    const acquireStarter = await shouldAcquireStarterCharacter(join(roaming, "com.starcried.dsh-inochi2d-pet", "settings.json"));
+    const acquireDefaultModel = await shouldAcquireDefaultModel(join(roaming, "com.starcried.dsh-inochi2d-pet", "settings.json"));
     const metadata: unknown = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
     if (typeof metadata !== "object" || metadata === null || !("version" in metadata) || typeof metadata.version !== "string") {
       throw new Error("invalid StarLite plugin package version");
@@ -51,11 +51,11 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
       assetDirectory: fileURLToPath(new URL("../assets/windows-x64/", import.meta.url)),
       cacheDirectory: join(localCache, "StarCried", "StarLite", "companions"),
       expectedVersion: metadata.version,
-      acquireStarter,
+      acquireDefaultModel,
       ...(options.signal ? {signal: options.signal} : {}),
     });
     executable = prepared.executable;
-    if (acquireStarter && !prepared.starterReady) options.onStarterFailure?.();
+    if (acquireDefaultModel && !prepared.defaultModelReady) options.onDefaultModelFailure?.();
   }
   if (!executable.startsWith("/") || basename(executable).toLowerCase() !== "dsh-inochi2d-pet.exe") {
     throw new Error("StarLite for DSH executable is invalid");
@@ -88,7 +88,7 @@ function validWindowsDirectory(path: string): boolean {
 }
 
 /** Read only the selected-model policy; never transfer or log companion settings. */
-export async function shouldAcquireStarterCharacter(path: string): Promise<boolean> {
+export async function shouldAcquireDefaultModel(path: string): Promise<boolean> {
   const maximum = 4 * 1024 * 1024;
   try {
     const info = await lstat(path);

@@ -16,17 +16,17 @@ afterEach(async () => {
 });
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "starlite-character-server-")); temporary.push(root);
-  const archivePath = join(root, "synthetic.zip"), descriptorPath = join(root, "descriptor.json");
-  await writeFile(archivePath, "artwork-free fixture, native importer validates real ZIP contents");
-  return { archivePath, descriptorPath, modelSha256: "a".repeat(64) };
+  const modelPath = join(root, "synthetic.vrm"), descriptorPath = join(root, "descriptor.json");
+  await writeFile(modelPath, "artwork-free fixture, native importer validates VRM contents");
+  return { modelPath, descriptorPath };
 }
 
 it("serves an immutable bounded file only on loopback and writes a pinned local-test descriptor", async () => {
   const options = await fixture(), { server, descriptor } = await serveLocalCharacter(options); servers.push(server);
   expect(server.address().address).toBe("127.0.0.1");
   expect(JSON.parse(await readFile(options.descriptorPath, "utf8"))).toEqual(descriptor);
-  expect(descriptor.localTest).toBe(true); expect(descriptor.modelSha256).toBe(options.modelSha256);
-  await writeFile(options.archivePath, "replaced after immutable startup snapshot");
+  expect(descriptor.localTest).toBe(true); expect(descriptor.url).toMatch(/\.vrm$/u);
+  await writeFile(options.modelPath, "replaced after immutable startup snapshot");
   const response = await fetch(descriptor.url), bytes = Buffer.from(await response.arrayBuffer());
   expect(response.status).toBe(200); expect(sha256(bytes)).toBe(descriptor.sha256); expect(bytes.length).toBe(descriptor.bytes);
   expect(response.headers.get("access-control-allow-origin")).toBeNull();
@@ -41,7 +41,7 @@ it("serves an immutable bounded file only on loopback and writes a pinned local-
 
 it("refuses invalid input and never overwrites an existing descriptor", async () => {
   const options = await fixture();
-  await expect(serveLocalCharacter({ ...options, modelSha256: "bad" })).rejects.toThrow(/SHA-256/);
+  await expect(serveLocalCharacter({ ...options, modelPath: join(dirname(options.modelPath), "retired.zip") })).rejects.toThrow(/\.vrm/);
   await writeFile(options.descriptorPath, "existing");
   await expect(serveLocalCharacter(options)).rejects.toMatchObject({ code: "EEXIST" });
   expect(await readFile(options.descriptorPath, "utf8")).toBe("existing");

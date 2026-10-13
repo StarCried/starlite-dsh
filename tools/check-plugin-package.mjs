@@ -39,7 +39,7 @@ assertDesktopExecutable(extract("package/assets/windows-x64/dsh-inochi2d-pet.exe
 for (const name of ["LICENSE", "THIRD_PARTY_LICENSES.txt"]) {
   if (extract(`package/assets/windows-x64/${name}`, 8 * 1024 * 1024).length === 0) throw Error(`missing embedded notice: ${name}`);
 }
-console.log(`Verified ${archive}: ${entries.length} allow-listed files, ${info.size} bytes; Windows GUI executable and ${manifest.starterCharacter.localTest ? "LOCAL TEST ONLY" : "HTTPS"} character reference.`);
+console.log(`Verified ${archive}: ${entries.length} allow-listed files, ${info.size} bytes; Windows GUI executable and ${manifest.defaultModel.localTest ? "LOCAL TEST ONLY" : "HTTPS"} character reference.`);
 
 function extract(name, maxBuffer) {
   return execFileSync("tar", ["-xOzf", archive, name], { cwd: root, maxBuffer, windowsHide: true });

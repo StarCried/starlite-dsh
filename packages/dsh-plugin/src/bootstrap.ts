@@ -9,16 +9,15 @@ const EXECUTABLE = "dsh-inochi2d-pet.exe";
 const NOTICES = ["LICENSE", "THIRD_PARTY_LICENSES.txt"] as const;
 
 export interface CompanionManifest {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   readonly version: string;
   readonly platform: "windows-x64";
   readonly executable: {readonly file: typeof EXECUTABLE; readonly sha256: string; readonly bytes: number};
-  readonly starterCharacter: {
+  readonly defaultModel: {
     readonly title: string;
     readonly url: string;
     readonly sha256: string;
     readonly bytes: number;
-    readonly modelSha256: string;
     readonly localTest?: true;
   };
 }
@@ -29,15 +28,15 @@ export interface PrepareCompanionOptions {
   readonly expectedVersion: string;
   readonly signal?: AbortSignal;
   readonly fetch?: typeof fetch;
-  readonly acquireStarter?: boolean;
+  readonly acquireDefaultModel?: boolean;
 }
 
 export interface PreparedCompanion {
   readonly executable: string;
-  readonly starterReady: boolean;
+  readonly defaultModelReady: boolean;
 }
 
-/** Stage the program separately from the independently licensed character archive. */
+/** Stage the program separately from the independently licensed VRM model. */
 export async function prepareEmbeddedCompanion(options: PrepareCompanionOptions): Promise<PreparedCompanion> {
   options.signal?.throwIfAborted();
   const assets = await realpath(options.assetDirectory);
@@ -48,15 +47,14 @@ export async function prepareEmbeddedCompanion(options: PrepareCompanionOptions)
   const notices = await Promise.all(NOTICES.map(name => ordinaryFile(assets, name, NOTICE_LIMIT)));
   options.signal?.throwIfAborted();
   await ensureSafeDirectory(options.cacheDirectory);
-  const cacheKey = createHash("sha256").update(`${manifest.executable.sha256}:${manifest.starterCharacter.sha256}`).digest("hex");
+  const cacheKey = createHash("sha256").update(`${manifest.executable.sha256}:${manifest.defaultModel.sha256}`).digest("hex");
   const directory = join(options.cacheDirectory, `${manifest.version}-${cacheKey}`);
   const descriptor = Buffer.from(JSON.stringify({
-    schemaVersion: 1,
-    title: manifest.starterCharacter.title,
-    sha256: manifest.starterCharacter.sha256,
-    bytes: manifest.starterCharacter.bytes,
-    modelSha256: manifest.starterCharacter.modelSha256,
-    archive: "starter-character.zip",
+    schemaVersion: 2,
+    title: manifest.defaultModel.title,
+    sha256: manifest.defaultModel.sha256,
+    bytes: manifest.defaultModel.bytes,
+    file: "default-model.vrm",
   }));
   if (!await exists(directory)) {
     const temporary = await mkdtemp(join(options.cacheDirectory, ".stage-"));
@@ -66,7 +64,7 @@ export async function prepareEmbeddedCompanion(options: PrepareCompanionOptions)
         await writeFile(join(temporary, name), notices[index]!, {flag: "wx", mode: 0o600});
       }
       // Keep the descriptor even when the external download fails, so the UI can explain/retry.
-      await writeFile(join(temporary, "starter-character.json"), descriptor, {flag: "wx", mode: 0o600});
+      await writeFile(join(temporary, "default-model.json"), descriptor, {flag: "wx", mode: 0o600});
       options.signal?.throwIfAborted();
       try { await rename(temporary, directory); }
       catch (error) { if (!await exists(directory)) throw error; }
@@ -75,47 +73,46 @@ export async function prepareEmbeddedCompanion(options: PrepareCompanionOptions)
   await assertSafeDirectory(directory);
   assertEqual(await ordinaryFile(directory, EXECUTABLE, LIMIT), executable);
   for (const [index, name] of NOTICES.entries()) assertEqual(await ordinaryFile(directory, name, NOTICE_LIMIT), notices[index]!);
-  assertEqual(await ordinaryFile(directory, "starter-character.json", 16_384), descriptor);
+  assertEqual(await ordinaryFile(directory, "default-model.json", 16_384), descriptor);
   options.signal?.throwIfAborted();
-  if (options.acquireStarter === false) return {executable: join(directory, EXECUTABLE), starterReady: false};
-  let starterReady = false;
+  if (options.acquireDefaultModel === false) return {executable: join(directory, EXECUTABLE), defaultModelReady: false};
+  let defaultModelReady = false;
   try {
-    const archive = join(directory, "starter-character.zip");
-    if (await exists(archive)) {
-      const cached = await ordinaryFile(directory, "starter-character.zip", LIMIT);
-      try { assertDigest(cached, manifest.starterCharacter); starterReady = true; }
+    const modelFile = join(directory, "default-model.vrm");
+    if (await exists(modelFile)) {
+      const cached = await ordinaryFile(directory, "default-model.vrm", LIMIT);
+      try { assertDigest(cached, manifest.defaultModel); defaultModelReady = true; }
       catch { /* Only a bounded ordinary cache file may be repaired from the pinned source. */ }
     }
-    if (!starterReady) await downloadCharacter(manifest.starterCharacter, directory, options.fetch ?? fetch, options.signal);
-    starterReady = true;
+    if (!defaultModelReady) await downloadCharacter(manifest.defaultModel, directory, options.fetch ?? fetch, options.signal);
+    defaultModelReady = true;
   } catch {
     options.signal?.throwIfAborted();
     // The desktop still starts and presents the explicit missing/invalid-character state.
   }
   options.signal?.throwIfAborted();
-  return {executable: join(directory, EXECUTABLE), starterReady};
+  return {executable: join(directory, EXECUTABLE), defaultModelReady};
 }
 
 export function parseCompanionManifest(bytes: Uint8Array, expectedVersion: string): CompanionManifest {
   const value: unknown = JSON.parse(Buffer.from(bytes).toString("utf8"));
-  if (!record(value) || !keys(value, ["schemaVersion", "version", "platform", "executable", "starterCharacter"])
-    || value.schemaVersion !== 1 || value.platform !== "windows-x64"
+  if (!record(value) || !keys(value, ["schemaVersion", "version", "platform", "executable", "defaultModel"])
+    || value.schemaVersion !== 2 || value.platform !== "windows-x64"
     || typeof value.version !== "string" || value.version.length > 64 || !/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/u.test(value.version)
     || value.version !== expectedVersion || !record(value.executable) || !keys(value.executable, ["file", "sha256", "bytes"])
     || value.executable.file !== EXECUTABLE || !digest(value.executable)
-    || !record(value.starterCharacter) || !keys(value.starterCharacter, ["title", "url", "sha256", "bytes", "modelSha256"], ["localTest"])
-    || typeof value.starterCharacter.title !== "string" || value.starterCharacter.title.length < 1 || value.starterCharacter.title.length > 128
-    || /[\p{Cc}]/u.test(value.starterCharacter.title) || !digest(value.starterCharacter)
-    || typeof value.starterCharacter.modelSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(value.starterCharacter.modelSha256)
-    || (value.starterCharacter.localTest !== undefined && value.starterCharacter.localTest !== true)
-    || typeof value.starterCharacter.url !== "string" || value.starterCharacter.url.length > 2_048
-    || /[\p{Cc}\\]/u.test(value.starterCharacter.url)) {
+    || !record(value.defaultModel) || !keys(value.defaultModel, ["title", "url", "sha256", "bytes"], ["localTest"])
+    || typeof value.defaultModel.title !== "string" || value.defaultModel.title.length < 1 || value.defaultModel.title.length > 128
+    || /[\p{Cc}]/u.test(value.defaultModel.title) || !digest(value.defaultModel)
+    || (value.defaultModel.localTest !== undefined && value.defaultModel.localTest !== true)
+    || typeof value.defaultModel.url !== "string" || value.defaultModel.url.length > 2_048
+    || /[\p{Cc}\\]/u.test(value.defaultModel.url)) {
     throw new Error("invalid embedded companion manifest");
   }
-  const url = new URL(value.starterCharacter.url);
-  if (url.username || url.password || url.hash || (url.protocol !== "https:"
-    && !(value.starterCharacter.localTest === true && url.protocol === "http:" && url.hostname === "127.0.0.1"
-      && /^http:\/\/127\.0\.0\.1(?::\d+)?\//u.test(value.starterCharacter.url)))) {
+  const url = new URL(value.defaultModel.url);
+  if (!url.pathname.toLowerCase().endsWith(".vrm") || url.username || url.password || url.hash || (url.protocol !== "https:"
+    && !(value.defaultModel.localTest === true && url.protocol === "http:" && url.hostname === "127.0.0.1"
+      && /^http:\/\/127\.0\.0\.1(?::\d+)?\//u.test(value.defaultModel.url)))) {
     throw new Error("invalid starter character download source");
   }
   return value as unknown as CompanionManifest;
@@ -130,7 +127,7 @@ export function assertWindowsGuiExecutable(bytes: Buffer): void {
     || bytes.readUInt16LE(pe + 24 + 68) !== 2) throw new Error("embedded executable must be Windows x64 GUI PE32+");
 }
 
-async function downloadCharacter(source: CompanionManifest["starterCharacter"], directory: string, request: typeof fetch, signal?: AbortSignal): Promise<void> {
+async function downloadCharacter(source: CompanionManifest["defaultModel"], directory: string, request: typeof fetch, signal?: AbortSignal): Promise<void> {
   const timeout = AbortSignal.timeout(30_000);
   const downloadSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   const response = await request(source.url, {method: "GET", redirect: "error", signal: downloadSignal});
@@ -163,13 +160,13 @@ async function downloadCharacter(source: CompanionManifest["starterCharacter"], 
     await file.sync();
     await file.close(); file = undefined;
     downloadSignal.throwIfAborted();
-    const archive = join(directory, "starter-character.zip");
-    if (await exists(archive)) {
-      const cached = await ordinaryFile(directory, "starter-character.zip", LIMIT);
+    const modelFile = join(directory, "default-model.vrm");
+    if (await exists(modelFile)) {
+      const cached = await ordinaryFile(directory, "default-model.vrm", LIMIT);
       try { assertDigest(cached, source); return; }
       catch { /* Replace only this validated ordinary cache file, after the replacement has passed its digest. */ }
     }
-    await rename(temporary, archive);
+    await rename(temporary, modelFile);
   } finally {
     await reader.cancel().catch(() => undefined);
     reader.releaseLock();

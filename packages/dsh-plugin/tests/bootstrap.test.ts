@@ -23,11 +23,11 @@ function pe(): Buffer {
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "starlite-bootstrap-")); roots.push(root);
   const assets = join(root, "assets"), cache = join(root, "cache"); await mkdir(assets);
-  const executable = pe(), archive = Buffer.from("generated test archive, no character artwork");
+  const executable = pe(), archive = Buffer.from("generated test VRM, no character artwork");
   const manifest = {
-    schemaVersion: 1, version: VERSION, platform: "windows-x64",
+    schemaVersion: 2, version: VERSION, platform: "windows-x64",
     executable: {file: EXE, sha256: sha(executable), bytes: executable.length},
-    starterCharacter: {title: "微光 v3.0", url: "https://example.test/character.zip", sha256: sha(archive), bytes: archive.length, modelSha256: "a".repeat(64)},
+    defaultModel: {title: "微光 v3.0", url: "https://example.test/character.vrm", sha256: sha(archive), bytes: archive.length},
   };
   await Promise.all([
     writeFile(join(assets, EXE), executable), writeFile(join(assets, "LICENSE"), "BSD test notice"),
@@ -42,26 +42,26 @@ async function fixture() {
 describe("embedded Windows companion and separate character bootstrap", () => {
   it("prepares the program without requesting character assets while the model is disabled", async () => {
     const f = await fixture();
-    const disabled = await prepareEmbeddedCompanion({...f.options,acquireStarter:false});
-    expect(disabled.starterReady).toBe(false);
+    const disabled = await prepareEmbeddedCompanion({...f.options,acquireDefaultModel:false});
+    expect(disabled.defaultModelReady).toBe(false);
     expect(f.request).not.toHaveBeenCalled();
-    expect(await readdir(join(disabled.executable, ".."))).not.toContain("starter-character.zip");
-    expect((await prepareEmbeddedCompanion(f.options)).starterReady).toBe(true);
+    expect(await readdir(join(disabled.executable, ".."))).not.toContain("default-model.vrm");
+    expect((await prepareEmbeddedCompanion(f.options)).defaultModelReady).toBe(true);
     expect(f.request).toHaveBeenCalledOnce();
-    expect((await prepareEmbeddedCompanion({...f.options,acquireStarter:false})).starterReady).toBe(false);
+    expect((await prepareEmbeddedCompanion({...f.options,acquireDefaultModel:false})).defaultModelReady).toBe(false);
     expect(f.request).toHaveBeenCalledOnce();
   });
-  it("atomically stages the program, downloads a hash-pinned archive and reuses both on restart", async () => {
+  it("atomically stages the program, downloads a hash-pinned VRM and reuses both on restart", async () => {
     const f = await fixture();
     const first = await prepareEmbeddedCompanion(f.options), second = await prepareEmbeddedCompanion(f.options);
-    expect(first).toEqual(second); expect(first.starterReady).toBe(true); expect(f.request).toHaveBeenCalledOnce();
+    expect(first).toEqual(second); expect(first.defaultModelReady).toBe(true); expect(f.request).toHaveBeenCalledOnce();
     expect(await readFile(first.executable)).toEqual(f.executable);
     const directory = join(first.executable, "..");
-    expect((await readdir(directory)).sort()).toEqual([EXE, "LICENSE", "THIRD_PARTY_LICENSES.txt", "starter-character.json", "starter-character.zip"].sort());
-    const descriptor = JSON.parse(await readFile(join(directory, "starter-character.json"), "utf8"));
-    expect(descriptor).toEqual({schemaVersion: 1, title: "微光 v3.0", sha256: sha(f.archive), bytes: f.archive.length, modelSha256: "a".repeat(64), archive: "starter-character.zip"});
+    expect((await readdir(directory)).sort()).toEqual([EXE, "LICENSE", "THIRD_PARTY_LICENSES.txt", "default-model.json", "default-model.vrm"].sort());
+    const descriptor = JSON.parse(await readFile(join(directory, "default-model.json"), "utf8"));
+    expect(descriptor).toEqual({schemaVersion: 2, title: "微光 v3.0", sha256: sha(f.archive), bytes: f.archive.length, file: "default-model.vrm"});
     expect(JSON.stringify(descriptor)).not.toContain("url");
-    expect(f.request).toHaveBeenCalledWith(f.manifest.starterCharacter.url, expect.objectContaining({method: "GET", redirect: "error", signal: expect.any(AbortSignal)}));
+    expect(f.request).toHaveBeenCalledWith(f.manifest.defaultModel.url, expect.objectContaining({method: "GET", redirect: "error", signal: expect.any(AbortSignal)}));
     expect((await readdir(f.cache)).some(name => name.startsWith(".stage-"))).toBe(false);
   });
 
@@ -80,10 +80,10 @@ describe("embedded Windows companion and separate character bootstrap", () => {
   it("retains an explicit descriptor and program on download failure, then retries on restart", async () => {
     const f = await fixture(); f.request.mockRejectedValueOnce(new Error("network detail must not be logged"));
     const failed = await prepareEmbeddedCompanion(f.options);
-    expect(failed.starterReady).toBe(false);
-    expect(JSON.parse(await readFile(join(failed.executable, "..", "starter-character.json"), "utf8"))).toHaveProperty("archive", "starter-character.zip");
-    expect(await readdir(join(failed.executable, ".."))).not.toContain("starter-character.zip");
-    expect((await prepareEmbeddedCompanion(f.options)).starterReady).toBe(true);
+    expect(failed.defaultModelReady).toBe(false);
+    expect(JSON.parse(await readFile(join(failed.executable, "..", "default-model.json"), "utf8"))).toHaveProperty("file", "default-model.vrm");
+    expect(await readdir(join(failed.executable, ".."))).not.toContain("default-model.vrm");
+    expect((await prepareEmbeddedCompanion(f.options)).defaultModelReady).toBe(true);
     expect(f.request).toHaveBeenCalledTimes(2);
   });
 
@@ -97,17 +97,17 @@ describe("embedded Windows companion and separate character bootstrap", () => {
     }
     f.request.mockResolvedValueOnce(response);
     const prepared = await prepareEmbeddedCompanion(f.options);
-    expect(prepared.starterReady).toBe(false);
-    expect((await readdir(join(prepared.executable, ".."))).some(name => name === "starter-character.zip" || name.startsWith(".download-"))).toBe(false);
+    expect(prepared.defaultModelReady).toBe(false);
+    expect((await readdir(join(prepared.executable, ".."))).some(name => name === "default-model.vrm" || name.startsWith(".download-"))).toBe(false);
   });
 
   it("repairs a corrupt ordinary cache archive only after a replacement passes its pinned digest", async () => {
     const f = await fixture(), prepared = await prepareEmbeddedCompanion(f.options);
-    const archive = join(prepared.executable, "..", "starter-character.zip"); await writeFile(archive, "changed archive");
+    const archive = join(prepared.executable, "..", "default-model.vrm"); await writeFile(archive, "changed archive");
     f.request.mockResolvedValueOnce(new Response("invalid replacement"));
-    expect((await prepareEmbeddedCompanion(f.options)).starterReady).toBe(false);
+    expect((await prepareEmbeddedCompanion(f.options)).defaultModelReady).toBe(false);
     expect(await readFile(archive, "utf8")).toBe("changed archive");
-    expect((await prepareEmbeddedCompanion(f.options)).starterReady).toBe(true);
+    expect((await prepareEmbeddedCompanion(f.options)).defaultModelReady).toBe(true);
     expect(await readFile(archive)).toEqual(f.archive); expect(f.request).toHaveBeenCalledTimes(3);
   });
 
@@ -122,10 +122,10 @@ describe("embedded Windows companion and separate character bootstrap", () => {
   it("uses a different cache directory when the character changes, even with the same program", async () => {
     const f = await fixture(), first = await prepareEmbeddedCompanion(f.options);
     const secondArchive = Buffer.from("new generated character");
-    f.manifest.starterCharacter.sha256 = sha(secondArchive); f.manifest.starterCharacter.bytes = secondArchive.length;
+    f.manifest.defaultModel.sha256 = sha(secondArchive); f.manifest.defaultModel.bytes = secondArchive.length;
     await writeFile(join(f.assets, "manifest.json"), JSON.stringify(f.manifest)); f.request.mockResolvedValueOnce(new Response(secondArchive));
     const second = await prepareEmbeddedCompanion(f.options);
-    expect(second.executable).not.toBe(first.executable); expect(second.starterReady).toBe(true);
+    expect(second.executable).not.toBe(first.executable); expect(second.defaultModelReady).toBe(true);
   });
 
   it("cancels startup without leaving a partial archive", async () => {
@@ -156,17 +156,17 @@ describe("embedded Windows companion and separate character bootstrap", () => {
   it("rejects malformed manifests, path fields, versions and unapproved local HTTP", async () => {
     const f = await fixture(), parse = (value: unknown) => parseCompanionManifest(Buffer.from(JSON.stringify(value)), VERSION);
     expect(() => parse(f.manifest)).not.toThrow();
-    const local = {...f.manifest, starterCharacter: {...f.manifest.starterCharacter, url: "http://127.0.0.1:1234/character.zip", localTest: true}};
+    const local = {...f.manifest, defaultModel: {...f.manifest.defaultModel, url: "http://127.0.0.1:1234/character.vrm", localTest: true}};
     expect(() => parse(local)).not.toThrow();
     for (const changed of [
       {...f.manifest, version: "0.0.0"}, {...f.manifest, platform: "windows-arm64"},
       {...f.manifest, executable: {...f.manifest.executable, file: "../dsh-inochi2d-pet.exe"}},
       {...f.manifest, executable: {...f.manifest.executable, bytes: 65 * 1024 * 1024}},
       {...f.manifest, executable: {...f.manifest.executable, sha256: "a".repeat(63)}},
-      ...["http://127.0.0.1/file", "http://localhost/file", "http://192.168.1.1/file", "file:///tmp/a", "https://user:password@example.test/file", "https://example.test/file#fragment"].map(url => ({...f.manifest, starterCharacter: {...f.manifest.starterCharacter, url}})),
-      {...local, starterCharacter: {...local.starterCharacter, url: "http://localhost:1234/file"}},
-      {...local, starterCharacter: {...local.starterCharacter, url: "http://127.1:1234/file"}},
-      {...local, starterCharacter: {...local.starterCharacter, url: "http://2130706433:1234/file"}},
+      ...["http://127.0.0.1/file", "http://localhost/file", "http://192.168.1.1/file", "file:///tmp/a", "https://user:password@example.test/file", "https://example.test/file#fragment"].map(url => ({...f.manifest, defaultModel: {...f.manifest.defaultModel, url}})),
+      {...local, defaultModel: {...local.defaultModel, url: "http://localhost:1234/file"}},
+      {...local, defaultModel: {...local.defaultModel, url: "http://127.1:1234/file"}},
+      {...local, defaultModel: {...local.defaultModel, url: "http://2130706433:1234/file"}},
       {...f.manifest, registry: "unused-stale-path"},
     ]) expect(() => parse(changed)).toThrow();
   });

@@ -16,13 +16,13 @@ function record(value, keys, required = keys) {
 }
 function boundedBytes(value) { return Number.isSafeInteger(value) && value > 0 && value <= MAX_DESKTOP_BYTES; }
 
-export function assertStarterCharacter(value, { allowLocalTest = true } = {}) {
-  record(value, ["title", "url", "sha256", "bytes", "modelSha256", "localTest"], ["title", "url", "sha256", "bytes", "modelSha256"]);
+export function assertDefaultModel(value, { allowLocalTest = true } = {}) {
+  record(value, ["title", "url", "sha256", "bytes", "localTest"], ["title", "url", "sha256", "bytes"]);
   if (typeof value.title !== "string" || !value.title.trim() || value.title.length > 120 || [...value.title].some(character => character.codePointAt(0) < 32 || character.codePointAt(0) === 127)
     || typeof value.url !== "string" || value.url.length > 2048 || typeof value.sha256 !== "string" || !HASH.test(value.sha256)
-    || typeof value.modelSha256 !== "string" || !HASH.test(value.modelSha256) || !boundedBytes(value.bytes)) throw Error("invalid starter character identity or bounds");
+    || !boundedBytes(value.bytes)) throw Error("invalid starter character identity or bounds");
   const url = new URL(value.url);
-  if (url.username || url.password || url.search || url.hash) throw Error("starter character URL must not contain credentials, queries or fragments");
+  if (!url.pathname.toLowerCase().endsWith(".vrm") || url.username || url.password || url.search || url.hash) throw Error("starter character URL must not contain credentials, queries or fragments");
   if (value.localTest === true) {
     if (!allowLocalTest || url.protocol !== "http:" || url.hostname !== "127.0.0.1" || !url.port) {
       throw Error("local-test character source cannot be publicly released");
@@ -34,13 +34,13 @@ export function assertStarterCharacter(value, { allowLocalTest = true } = {}) {
 }
 
 export function assertDesktopManifest(value, { allowLocalTest = true, expectedVersion } = {}) {
-  record(value, ["schemaVersion", "version", "platform", "executable", "starterCharacter"]);
+  record(value, ["schemaVersion", "version", "platform", "executable", "defaultModel"]);
   record(value.executable, ["file", "sha256", "bytes"]);
-  if (value.schemaVersion !== 1 || value.platform !== "windows-x64" || typeof value.version !== "string" || !VERSION.test(value.version)
+  if (value.schemaVersion !== 2 || value.platform !== "windows-x64" || typeof value.version !== "string" || !VERSION.test(value.version)
     || (expectedVersion !== undefined && value.version !== expectedVersion)
     || value.executable.file !== "dsh-inochi2d-pet.exe" || typeof value.executable.sha256 !== "string" || !HASH.test(value.executable.sha256)
     || !boundedBytes(value.executable.bytes)) throw Error("invalid desktop executable identity or version");
-  assertStarterCharacter(value.starterCharacter, { allowLocalTest });
+  assertDefaultModel(value.defaultModel, { allowLocalTest });
   return value;
 }
 

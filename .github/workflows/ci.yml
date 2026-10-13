@@ -158,6 +158,19 @@ jobs:
           $plugin = Join-Path 'packages/dsh-plugin/.pack' "$($bridge.name)-$($bridge.version).tgz"
           pnpm release:metadata -- $plugin $installer
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Package the optional portable app and include its checksum
+        shell: pwsh
+        run: |
+          # Packaging includes the license texts generated in the previous step.
+          pnpm pack:portable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $config = Get-Content -LiteralPath 'apps/desktop/src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json
+          $bridge = Get-Content -LiteralPath 'packages/dsh-plugin/package.json' -Raw | ConvertFrom-Json
+          $installer = Join-Path 'apps/desktop/src-tauri/target/release/bundle/nsis' "$($config.productName)_$($config.version)_x64-setup.exe"
+          $plugin = Join-Path 'packages/dsh-plugin/.pack' "$($bridge.name)-$($bridge.version).tgz"
+          $portable = Join-Path 'release-output' "StarLite-for-DSH_$($config.version)_x64-portable.zip"
+          pnpm release:metadata -- $plugin $installer $portable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v7
         with:
           name: unsigned-windows-alpha
@@ -166,6 +179,7 @@ jobs:
           path: |
             apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
             packages/dsh-plugin/.pack/*.tgz
+            release-output/StarLite-for-DSH_*_x64-portable.zip
             release-output/SHA256SUMS
             release-output/sbom.cdx.json
             release-output/THIRD_PARTY_LICENSES.txt

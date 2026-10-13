@@ -179,6 +179,43 @@ describe("resource packages and default character", () => {
     expect(idle().value).toBe("RelaxedBreath");
   });
 
+  it("locks the enable toggle while default restoration is pending", async () => {
+    await launch({...structuredClone(installed),preferences:{...preferences,modelEnabled:false}});
+    let restored: (settings: DesktopSettings) => void = () => {};
+    native.invoke.mockImplementationOnce(() => new Promise<DesktopSettings>(resolve => {restored = resolve;}));
+    document.querySelector<HTMLButtonElement>("#use-default-model")!.click();
+    const enabled = document.querySelector<HTMLInputElement>("#model-enabled")!;
+    expect(enabled.disabled).toBe(true);
+    enabled.click();
+    expect(native.invoke.mock.calls.some(([command]) => command === "set_model_enabled")).toBe(false);
+    restored({...structuredClone(installed),preferences:{...preferences,modelEnabled:true}});
+    await vi.waitFor(() => expect(enabled.disabled).toBe(false));
+    expect(enabled.checked).toBe(true);
+    expect(document.querySelector("#inspection-status")!.textContent).toContain("已恢复默认微光");
+  });
+
+  it("keeps a toggle request locked when model preparation finishes first", async () => {
+    let prepared: (settings: DesktopSettings) => void = () => {};
+    let toggled: (settings: DesktopSettings) => void = () => {};
+    native.invoke.mockImplementation(async (command: string) => {
+      if (command === "get_settings") return structuredClone(empty);
+      if (command === "prepare_model") return new Promise<DesktopSettings>(resolve => {prepared = resolve;});
+      if (command === "set_model_enabled") return new Promise<DesktopSettings>(resolve => {toggled = resolve;});
+      throw new Error(`unexpected ${command}`);
+    });
+    const started = startSettings();
+    await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledWith("prepare_model"));
+    const enabled = document.querySelector<HTMLInputElement>("#model-enabled")!;
+    enabled.click();
+    expect(enabled.disabled).toBe(true);
+    prepared(structuredClone(installed));
+    await started;
+    expect(enabled.disabled).toBe(true);
+    toggled({...structuredClone(empty),preferences:{...preferences,modelEnabled:false}});
+    await vi.waitFor(() => expect(enabled.disabled).toBe(false));
+    expect(enabled.checked).toBe(false);
+  });
+
   it("can disable a missing or invalid model without an Idle mapping or save", async () => {
     await launch(empty);
     const enabled = document.querySelector<HTMLInputElement>("#model-enabled")!;

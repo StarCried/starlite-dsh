@@ -32,6 +32,7 @@ export async function startSettings(): Promise<void> {
   let checking = false;
   let saving = false;
   let importing = false;
+  let toggling = false;
   let preparingDefault = true;
   let enabledRevision = 0;
   let preferencesEdited = false;
@@ -61,6 +62,7 @@ export async function startSettings(): Promise<void> {
     save.disabled = saving || importing || checking || !valid || !idle;
     importPack.disabled = saving || importing || checking;
     useDefault.disabled = saving || importing || checking;
+    modelEnabled.disabled = saving || importing || toggling;
     choose.disabled = saving || importing || preparingDefault;
     for (const button of [chooseAnimations, chooseProfile, clearProfile]) button.disabled = saving || importing || checking;
   };
@@ -84,7 +86,8 @@ export async function startSettings(): Promise<void> {
     const revision = ++enabledRevision;
     const enabled = modelEnabled.checked;
     settings.preferences.modelEnabled = enabled;
-    modelEnabled.disabled = true;
+    toggling = true;
+    updateSave();
     error.textContent = "";
     try {
       const next = await invoke<DesktopSettings>("set_model_enabled", {enabled});
@@ -97,7 +100,7 @@ export async function startSettings(): Promise<void> {
       settings = await invoke<DesktopSettings>("get_settings");
       modelEnabled.checked = settings.preferences.modelEnabled !== false;
       error.textContent = safeError(reason);
-    } finally { if (revision === enabledRevision) {modelEnabled.disabled = false; updateSave();} }
+    } finally { if (revision === enabledRevision) {toggling = false; updateSave();} }
   });
   viewLicense.addEventListener("click", async () => {
     viewLicense.disabled = true;

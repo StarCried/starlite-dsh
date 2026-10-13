@@ -1,5 +1,7 @@
 //! Self-contained VRM/VRMA import. No model-supplied URI is ever resolved.
-use crate::settings::{path_string, AnimationSource, ModelLicense, VrmModelData};
+use crate::settings::{
+    self, path_string, AnimationMappings, AnimationSource, ModelLicense, VrmModelData,
+};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
@@ -12,14 +14,18 @@ use std::{
 const MODEL_LIMIT: usize = 64 * 1024 * 1024;
 const ANIMATION_LIMIT: usize = 16 * 1024 * 1024;
 const PROFILE_LIMIT: usize = 1024 * 1024;
+pub const DEFAULT_IDLE_NAME: &str = "StarLiteIdle";
+const DEFAULT_IDLE: &[u8] = include_bytes!("../assets/default-idle.vrma");
 
 pub struct Prepared {
     pub source_sha256: String,
     pub source_bytes: u64,
     pub model_name: Option<String>,
     pub license: Option<ModelLicense>,
+    pub default_mappings: AnimationMappings,
     model: Vec<u8>,
     animations: Vec<(String, f64, Vec<u8>)>,
+    embedded_animations: Vec<(String, f64)>,
     profile: Option<Vec<u8>>,
 }
 
@@ -28,6 +34,11 @@ impl Prepared {
         self.animations
             .iter()
             .map(|(name, duration, _)| json!({"name":name,"durationMs":duration}))
+            .chain(
+                self.embedded_animations
+                    .iter()
+                    .map(|(name, duration)| json!({"name":name,"durationMs":duration})),
+            )
             .collect()
     }
     pub fn write(&self, directory: &Path) -> Result<(String, VrmModelData), String> {
@@ -54,6 +65,11 @@ impl Prepared {
             path_string(&model)?,
             VrmModelData {
                 animations,
+                embedded_animations: self
+                    .embedded_animations
+                    .iter()
+                    .map(|(name, _)| name.clone())
+                    .collect(),
                 profile_path,
             },
         ))
@@ -71,6 +87,7 @@ pub fn inspect(
     let model = read_limited(path, MODEL_LIMIT)?;
     let parsed = parse_glb(&model, false)?;
     validate_humanoid(&parsed.json)?;
+    validate_blink(&parsed.json)?;
     let meta = if parsed.json["extensions"]["VRM"].is_object() {
         &parsed.json["extensions"]["VRM"]["meta"]
     } else {
@@ -80,13 +97,35 @@ pub fn inspect(
         .as_str()
         .or_else(|| meta["name"].as_str())
         .map(str::to_owned);
-    let license = metadata_license(meta)?;
-    let mut names = HashSet::new();
+    let extras = &parsed.json["extras"]["starlite"];
+    let license = if extras["license"].is_null() {
+        metadata_license(meta)?
+    } else {
+        let license: ModelLicense = serde_json::from_value(extras["license"].clone())
+            .map_err(|_| "invalid embedded model license")?;
+        if license.title.trim().is_empty()
+            || license.title.chars().count() > 128
+            || license.title.chars().any(char::is_control)
+            || license.text.trim().is_empty()
+            || license.text.len() > 256 * 1024
+            || license.text.contains('\0')
+        {
+            return Err("invalid embedded model license".into());
+        }
+        Some(license)
+    };
+    let embedded_animations = embedded_animations(&parsed)?;
+    let mut names: HashSet<_> = embedded_animations
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect();
     let mut animations = Vec::new();
     let mut total = 0;
     for source in sources {
         if source.name.trim().is_empty()
             || source.name.len() > 128
+            || source.name.chars().any(char::is_control)
+            || source.name == DEFAULT_IDLE_NAME
             || !names.insert(source.name.as_str())
         {
             return Err("invalid or duplicate animation name".into());
@@ -100,22 +139,66 @@ pub fn inspect(
         let duration = animation_duration(&animation)?;
         animations.push((source.name.clone(), duration, bytes));
     }
+    let default_idle = parse_glb(DEFAULT_IDLE, true)?;
+    animations.push((
+        DEFAULT_IDLE_NAME.into(),
+        animation_duration(&default_idle)?,
+        DEFAULT_IDLE.into(),
+    ));
+    names.insert(DEFAULT_IDLE_NAME);
     let profile = if let Some(path) = profile {
         let bytes = read_limited(path, PROFILE_LIMIT)?;
         let value: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
         validate_profile(&value, &parsed.json, &names)?;
         Some(bytes)
+    } else if !extras["profile"].is_null() {
+        let bytes = serde_json::to_vec(&extras["profile"]).map_err(|e| e.to_string())?;
+        if bytes.len() > PROFILE_LIMIT {
+            return Err("embedded character profile exceeds size limit".into());
+        }
+        validate_profile(&extras["profile"], &parsed.json, &names)?;
+        Some(bytes)
     } else {
         None
     };
+    let mut default_mappings = AnimationMappings {
+        idle: if names.contains("Idle") {
+            "Idle".into()
+        } else {
+            DEFAULT_IDLE_NAME.into()
+        },
+        working: None,
+        completed: None,
+        error: None,
+        blocked: None,
+        approval: None,
+        click: vec![],
+        ambient: vec![],
+    };
+    if !extras["mappings"].is_null() {
+        default_mappings = serde_json::from_value(extras["mappings"].clone())
+            .map_err(|_| "invalid embedded animation mappings")?;
+    }
+    let catalog: Vec<_> = animations
+        .iter()
+        .map(|(name, duration, _)| json!({"name":name,"durationMs":duration}))
+        .chain(
+            embedded_animations
+                .iter()
+                .map(|(name, duration)| json!({"name":name,"durationMs":duration})),
+        )
+        .collect();
+    settings::validate_mappings(&default_mappings, &catalog)?;
     let source_sha256 = format!("{:x}", Sha256::digest(&model));
     Ok(Prepared {
         source_sha256,
         source_bytes: model.len() as u64,
         model_name,
         license,
+        default_mappings,
         model,
         animations,
+        embedded_animations,
         profile,
     })
 }
@@ -713,33 +796,182 @@ fn validate_humanoid(json: &Value) -> Result<(), String> {
     }
     Ok(())
 }
+
+fn validate_blink(model: &Value) -> Result<(), String> {
+    let meshes = array(model, "meshes")?;
+    let nodes = array(model, "nodes")?;
+    let vrm0 = model["extensions"]["VRM"].is_object();
+    let bound_expression = |expression: &Value| -> bool {
+        let binds = if vrm0 {
+            &expression["binds"]
+        } else {
+            &expression["morphTargetBinds"]
+        };
+        let Some(binds) = binds
+            .as_array()
+            .filter(|binds| !binds.is_empty() && binds.len() <= 256)
+        else {
+            return false;
+        };
+        let mut visible = false;
+        for bind in binds {
+            let mesh = if vrm0 {
+                index(&bind["mesh"], meshes.len()).ok()
+            } else {
+                index(&bind["node"], nodes.len())
+                    .ok()
+                    .and_then(|node| index(&nodes[node]["mesh"], meshes.len()).ok())
+            };
+            let Some(mesh) = mesh else {
+                return false;
+            };
+            let Some(target) = bind["index"]
+                .as_u64()
+                .and_then(|target| usize::try_from(target).ok())
+            else {
+                return false;
+            };
+            let Ok(primitives) = array(&meshes[mesh], "primitives") else {
+                return false;
+            };
+            if primitives.is_empty()
+                || primitives.iter().any(|primitive| {
+                    !array(primitive, "targets").is_ok_and(|targets| target < targets.len())
+                })
+            {
+                return false;
+            }
+            let Some(weight) = bind["weight"].as_f64().filter(|weight| {
+                weight.is_finite() && (0.0..=if vrm0 { 100.0 } else { 1.0 }).contains(weight)
+            }) else {
+                return false;
+            };
+            visible |= weight > 0.0;
+        }
+        visible
+    };
+    let usable = |name: &str| -> bool {
+        if vrm0 {
+            array(
+                &model["extensions"]["VRM"]["blendShapeMaster"],
+                "blendShapeGroups",
+            )
+            .is_ok_and(|groups| {
+                groups.iter().any(|group| {
+                    group["presetName"].as_str() == Some(name) && bound_expression(group)
+                })
+            })
+        } else {
+            bound_expression(&model["extensions"]["VRMC_vrm"]["expressions"]["preset"][name])
+        }
+    };
+    if usable("blink")
+        || (vrm0 && usable("blink_l") && usable("blink_r"))
+        || (!vrm0 && usable("blinkLeft") && usable("blinkRight"))
+    {
+        Ok(())
+    } else {
+        Err("模型缺少可用的眨眼形态键绑定。请在 VRM 中设置 Blink，或同时设置左眼和右眼 Blink 预设，再导出模型。".into())
+    }
+}
 fn animation_duration(glb: &Glb<'_>) -> Result<f64, String> {
     let animations = array(&glb.json, "animations")?;
     if animations.len() != 1 {
         return Err("VRMA must contain exactly one animation".into());
     }
+    clip_duration(glb, &animations[0])
+}
+
+fn embedded_animations(glb: &Glb<'_>) -> Result<Vec<(String, f64)>, String> {
+    let animations = array(&glb.json, "animations")?;
+    if animations.len() > 64 {
+        return Err("at most 64 embedded animations are supported".into());
+    }
+    let mut names = HashSet::new();
+    animations
+        .iter()
+        .enumerate()
+        .map(|(index, animation)| {
+            let name = animation["name"]
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("Animation_{}", index + 1));
+            if name.trim().is_empty()
+                || name.len() > 128
+                || name.chars().any(char::is_control)
+                || name == DEFAULT_IDLE_NAME
+                || !names.insert(name.clone())
+            {
+                return Err("invalid or duplicate embedded animation name".into());
+            }
+            Ok((name, clip_duration(glb, animation)?))
+        })
+        .collect()
+}
+
+fn clip_duration(glb: &Glb<'_>, animation: &Value) -> Result<f64, String> {
     let accessors = array(&glb.json, "accessors")?;
     let views = array(&glb.json, "bufferViews")?;
-    let samplers = array(&animations[0], "samplers")?;
+    let samplers = array(animation, "samplers")?;
     let nodes = array(&glb.json, "nodes")?;
     let mut duration = 0.0_f64;
-    if array(&animations[0], "channels")?.is_empty() {
-        return Err("VRMA animation is empty".into());
+    let channels = array(animation, "channels")?;
+    if channels.is_empty() || channels.len() > 4096 || samplers.is_empty() || samplers.len() > 4096
+    {
+        return Err("animation channels are empty or exceed limits".into());
     }
-    for channel in array(&animations[0], "channels")? {
-        index(&channel["sampler"], samplers.len())?;
+    let mut targets = HashSet::new();
+    for channel in channels {
+        let sampler = &samplers[index(&channel["sampler"], samplers.len())?];
         index(&channel["target"]["node"], nodes.len())?;
-        if !matches!(
-            channel["target"]["path"].as_str(),
-            Some("translation" | "rotation" | "scale" | "weights")
-        ) {
-            return Err("invalid animation channel".into());
+        let path = channel["target"]["path"]
+            .as_str()
+            .ok_or("invalid animation channel")?;
+        if !targets.insert((channel["target"]["node"].as_u64(), path)) {
+            return Err("duplicate animation target".into());
+        }
+        let input = &accessors[index(&sampler["input"], accessors.len())?];
+        let output = &accessors[index(&sampler["output"], accessors.len())?];
+        let multiplier = if sampler["interpolation"] == "CUBICSPLINE" {
+            3
+        } else {
+            1
+        };
+        let expected_count = offset(&input["count"])?
+            .checked_mul(multiplier)
+            .ok_or("invalid animation output")?;
+        let output_count = offset(&output["count"])?;
+        let valid_output = match path {
+            "translation" | "scale" => output["type"] == "VEC3" && output_count == expected_count,
+            "rotation" => output["type"] == "VEC4" && output_count == expected_count,
+            "weights" => {
+                output["type"] == "SCALAR"
+                    && expected_count > 0
+                    && output_count % expected_count == 0
+                    && output_count / expected_count <= 256
+            }
+            _ => false,
+        };
+        if !valid_output || output["componentType"] != 5126 {
+            return Err("invalid animation output".into());
         }
     }
     for sampler in samplers {
         index(&sampler["output"], accessors.len())?;
+        if !sampler["interpolation"].is_null()
+            && !matches!(
+                sampler["interpolation"].as_str(),
+                Some("LINEAR" | "STEP" | "CUBICSPLINE")
+            )
+        {
+            return Err("invalid animation interpolation".into());
+        }
         let a = &accessors[index(&sampler["input"], accessors.len())?];
-        if a["type"] != "SCALAR" || a["componentType"] != 5126 || !a["sparse"].is_null() {
+        if a["type"] != "SCALAR"
+            || a["componentType"] != 5126
+            || !a["sparse"].is_null()
+            || a["bufferView"].is_null()
+        {
             return Err("invalid animation timeline".into());
         }
         let count = offset(&a["count"])?;
@@ -768,8 +1000,34 @@ fn animation_duration(glb: &Glb<'_>) -> Result<f64, String> {
         }
         duration = duration.max(last);
     }
+    if let Some(expressions) = animation["extras"]["starlite"]["expressions"].as_object() {
+        if expressions.len() > 64 {
+            return Err("too many animated expressions".into());
+        }
+        for (name, sampler) in expressions {
+            if name.trim().is_empty() || name.len() > 128 || name.chars().any(char::is_control) {
+                return Err("invalid animated expression name".into());
+            }
+            let sampler = &samplers[index(sampler, samplers.len())?];
+            let input = &accessors[index(&sampler["input"], accessors.len())?];
+            let output = &accessors[index(&sampler["output"], accessors.len())?];
+            let multiplier = if sampler["interpolation"] == "CUBICSPLINE" {
+                3
+            } else {
+                1
+            };
+            if output["type"] != "SCALAR"
+                || output["componentType"] != 5126
+                || offset(&output["count"])? != offset(&input["count"])? * multiplier
+            {
+                return Err("invalid animated expression values".into());
+            }
+        }
+    } else if !animation["extras"]["starlite"]["expressions"].is_null() {
+        return Err("invalid animated expressions".into());
+    }
     if duration <= 0.0 {
-        return Err("VRMA duration must be positive".into());
+        return Err("animation duration must be positive".into());
     }
     Ok(duration * 1000.0)
 }
@@ -931,6 +1189,9 @@ fn validate_profile(
 mod tests {
     use super::*;
     fn glb(value: Value, mut bin: Vec<u8>) -> Vec<u8> {
+        if bin.is_empty() && value["buffers"][0]["byteLength"] == 12 {
+            bin = vec![0; 12];
+        }
         let mut text = serde_json::to_vec(&value).unwrap();
         while text.len() % 4 != 0 {
             text.push(b' ')
@@ -969,7 +1230,15 @@ mod tests {
             "rightLowerLeg",
             "rightFoot",
         ];
-        json!({"asset":{"version":"2.0"},"nodes":names.iter().map(|name|json!({"name":name})).collect::<Vec<_>>(),"extensions":{"VRM":{"specVersion":"0.0","humanoid":{"humanBones":names.iter().enumerate().map(|(i,name)|json!({"bone":name,"node":i})).collect::<Vec<_>>()}}}})
+        let mut value = json!({"asset":{"version":"2.0"},"nodes":names.iter().map(|name|json!({"name":name})).collect::<Vec<_>>(),"extensions":{"VRM":{"specVersion":"0.0","humanoid":{"humanBones":names.iter().enumerate().map(|(i,name)|json!({"bone":name,"node":i})).collect::<Vec<_>>()},
+            "blendShapeMaster":{"blendShapeGroups":[{"presetName":"blink","binds":[{"mesh":0,"index":0,"weight":100}]}]}}}});
+        value["buffers"] = json!([{"byteLength":12}]);
+        value["bufferViews"] = json!([{"buffer":0,"byteLength":12}]);
+        value["accessors"] = json!([{"bufferView":0,"componentType":5126,"count":1,"type":"VEC3"}]);
+        value["meshes"] =
+            json!([{"primitives":[{"attributes":{"POSITION":0},"targets":[{"POSITION":0}]}]}]);
+        value["nodes"][2]["mesh"] = 0.into();
+        value
     }
     #[test]
     fn rejects_external_references_and_cycles() {
@@ -1003,6 +1272,35 @@ mod tests {
         );
     }
     #[test]
+    fn blink_is_required_and_must_bind_real_morph_targets() {
+        let value = model();
+        assert!(validate_blink(&value).is_ok());
+        for invalid in [
+            Value::Null,
+            json!([]),
+            json!([{"presetName":"blink","binds":[]}]),
+            json!([{"presetName":"blink","binds":[{"mesh":0,"index":9,"weight":100}]}]),
+            json!([{"presetName":"blink","binds":[{"mesh":0,"index":0,"weight":0}]}]),
+        ] {
+            let mut broken = value.clone();
+            broken["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"] = invalid;
+            assert!(validate_blink(&broken).unwrap_err().contains("眨眼"));
+        }
+        let mut split = value;
+        let mut left =
+            split["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"][0].clone();
+        left["presetName"] = "blink_l".into();
+        let mut right = left.clone();
+        right["presetName"] = "blink_r".into();
+        split["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"] = json!([left, right]);
+        assert!(validate_blink(&split).is_ok());
+        split["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"]
+            .as_array_mut()
+            .unwrap()
+            .pop();
+        assert!(validate_blink(&split).is_err());
+    }
+    #[test]
     fn corrupt_motion_does_not_create_installed_files() {
         let temp = tempfile::tempdir().unwrap();
         let source = temp.path().join("model.vrm");
@@ -1021,14 +1319,110 @@ mod tests {
         assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 2);
     }
     #[test]
-    fn an_animation_free_vrm_can_be_inspected() {
+    fn an_animation_free_vrm_gets_the_authored_idle_and_can_be_installed() {
         let temp = tempfile::tempdir().unwrap();
         let source = temp.path().join("model.vrm");
         fs::write(&source, glb(model(), vec![])).unwrap();
         let prepared = inspect(&source, &[], None).unwrap();
-        assert!(prepared.catalog().is_empty());
+        assert_eq!(prepared.catalog().len(), 1);
+        assert_eq!(prepared.catalog()[0]["name"], DEFAULT_IDLE_NAME);
+        assert!(prepared.catalog()[0]["durationMs"].as_f64().unwrap() > 0.0);
+        assert_eq!(prepared.default_mappings.idle, DEFAULT_IDLE_NAME);
+        assert!(prepared.default_mappings.click.is_empty());
+        let (_, installed) = prepared.write(&temp.path().join("installed")).unwrap();
+        assert_eq!(installed.animations.len(), 1);
+        assert!(installed.embedded_animations.is_empty());
+        assert_eq!(
+            fs::read(&installed.animations[0].path).unwrap(),
+            DEFAULT_IDLE
+        );
         assert_eq!(prepared.source_sha256.len(), 64);
         assert!(prepared.license.is_none());
+    }
+    fn animated_model() -> (Value, Vec<u8>) {
+        let mut value = model();
+        value["buffers"] = json!([{"byteLength":52}]);
+        value["bufferViews"] = json!([{"buffer":0,"byteLength":8},{"buffer":0,"byteOffset":8,"byteLength":32},{"buffer":0,"byteOffset":40,"byteLength":12}]);
+        value["accessors"] = json!([
+            {"bufferView":0,"componentType":5126,"count":2,"type":"SCALAR","min":[0],"max":[1]},
+            {"bufferView":1,"componentType":5126,"count":2,"type":"VEC4"},
+            {"bufferView":2,"componentType":5126,"count":1,"type":"VEC3"}
+        ]);
+        value["meshes"][0]["primitives"][0]["attributes"]["POSITION"] = 2.into();
+        value["meshes"][0]["primitives"][0]["targets"][0]["POSITION"] = 2.into();
+        value["animations"] = json!([{"name":"Wave", "samplers":[{"input":0,"output":1}],
+            "channels":[{"sampler":0,"target":{"node":2,"path":"rotation"}}]}]);
+        let mut bin = vec![];
+        for number in [0.0_f32, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0] {
+            bin.extend(number.to_le_bytes());
+        }
+        bin.extend([0; 12]);
+        (value, bin)
+    }
+    #[test]
+    fn reads_embedded_gltf_clips_license_profile_and_explicit_mappings() {
+        let (mut value, bin) = animated_model();
+        value["extras"]["starlite"] = json!({
+            "license":{"title":"Example","text":"# Model license\n\nRead these terms."},
+            "mappings":{"idle":"Wave","working":null,"completed":null,"error":null,"blocked":null,
+                "approval":null,"click":["Wave"],"ambient":[]},
+            "profile":{"schemaVersion":1,"type":"weiguang","neutralAnimation":"Wave","neutralPose":{},
+                "earBones":[],"earPoses":{"Neutral":{}},"expressions":{},
+                "accessories":{"collar":"hips","cone":"head","collarVisible":true,"coneVisible":false},
+                "blink":{"period":4,"curve":[[0,0],[0.1,1],[0.2,0]]}}
+        });
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("model.vrm");
+        fs::write(&source, glb(value, bin)).unwrap();
+        let prepared = inspect(&source, &[], None).unwrap();
+        assert_eq!(prepared.catalog().len(), 2);
+        assert_eq!(
+            prepared.catalog()[1],
+            json!({"name":"Wave","durationMs":1000.0})
+        );
+        assert_eq!(prepared.default_mappings.idle, "Wave");
+        assert_eq!(prepared.default_mappings.click, ["Wave"]);
+        assert!(prepared
+            .license
+            .as_ref()
+            .unwrap()
+            .text
+            .contains("Read these terms."));
+        let (_, data) = prepared.write(&temp.path().join("installed")).unwrap();
+        assert_eq!(data.embedded_animations, ["Wave"]);
+        assert_eq!(data.animations.len(), 1);
+        assert!(Path::new(data.profile_path.as_ref().unwrap()).is_file());
+    }
+    #[test]
+    fn refuses_corrupt_embedded_clips_reserved_names_and_unavailable_mappings() {
+        let (value, bin) = animated_model();
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("model.vrm");
+        for mutate in [0, 1, 2, 3, 4, 5] {
+            let mut invalid = value.clone();
+            match mutate {
+                0 => invalid["animations"][0]["name"] = DEFAULT_IDLE_NAME.into(),
+                1 => invalid["animations"][0]["channels"][0]["sampler"] = 9.into(),
+                2 => invalid["animations"][0]["channels"][0]["target"]["node"] = 99.into(),
+                3 => {
+                    invalid["animations"][0]["channels"][0]["target"]["path"] = "translation".into()
+                }
+                4 => invalid["animations"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(value["animations"][0].clone()),
+                _ => {
+                    invalid["extras"]["starlite"]["mappings"] = json!({"idle":"Missing","working":null,
+                    "completed":null,"error":null,"blocked":null,"approval":null,"click":[],"ambient":[]})
+                }
+            }
+            fs::write(&source, glb(invalid, bin.clone())).unwrap();
+            assert!(
+                inspect(&source, &[], None).is_err(),
+                "invalid variant {mutate} was accepted"
+            );
+        }
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
     }
     #[test]
     fn reads_vrm0_author_and_license_metadata_without_resolving_urls() {
@@ -1072,6 +1466,7 @@ mod tests {
             .collect::<serde_json::Map<_, _>>();
         value["extensions"] = json!({"VRMC_vrm":{
             "specVersion":"1.0", "humanoid":{"humanBones":bones},
+            "expressions":{"preset":{"blink":{"morphTargetBinds":[{"node":2,"index":0,"weight":1}]}}},
             "meta":{"name":"角色 B", "authors":["Author A","Author B"],
                 "licenseUrl":"https://example.invalid/vrm1",
                 "avatarPermission":"everyone", "commercialUsage":"personalNonProfit",
@@ -1104,38 +1499,27 @@ mod tests {
         assert!(metadata_license(&json!({"authors":vec!["author";65]})).is_err());
     }
     #[test]
-    #[ignore = "requires local private companion assets"]
-    fn private_companion_bundles_pass_native_import() {
-        let root = std::env::var("DSH_PET_VRM_ASSETS").expect("set DSH_PET_VRM_ASSETS");
-        for variant in ["desktop", "blog"] {
-            let folder = Path::new(&root).join(variant);
-            let manifest: Value =
-                serde_json::from_slice(&fs::read(folder.join("manifest.json")).unwrap()).unwrap();
-            let clips = manifest["animations"].as_array().unwrap();
-            let sources = clips
-                .iter()
-                .map(|clip| AnimationSource {
-                    name: clip["name"].as_str().unwrap().into(),
-                    path: folder
-                        .join(clip["file"].as_str().unwrap())
-                        .to_string_lossy()
-                        .into_owned(),
-                })
-                .collect::<Vec<_>>();
-            assert!(!sources.is_empty());
-            assert!(sources.iter().all(|source| source.name != "Thinking"));
-            let prepared = inspect(
-                &folder.join("Weiguang.vrm"),
-                &sources,
-                Some(&folder.join("profile.json")),
-            )
-            .unwrap();
-            assert_eq!(prepared.catalog().len(), clips.len());
-            let temp = tempfile::tempdir().unwrap();
-            let (model, data) = prepared.write(&temp.path().join("installed")).unwrap();
-            assert!(Path::new(&model).is_file());
-            assert_eq!(data.animations.len(), clips.len());
-            assert!(Path::new(data.profile_path.as_ref().unwrap()).is_file());
-        }
+    #[ignore = "requires local private Weiguang VRM"]
+    fn private_single_vrm_passes_native_import_without_sidecars() {
+        let source = std::env::var("DSH_PET_VRM_FILE").expect("set DSH_PET_VRM_FILE");
+        let prepared = inspect(Path::new(&source), &[], None).unwrap();
+        assert_eq!(prepared.embedded_animations.len(), 14);
+        assert_eq!(prepared.catalog().len(), 15);
+        assert_eq!(prepared.default_mappings.idle, "Idle");
+        assert_eq!(prepared.default_mappings.click.len(), 5);
+        assert_eq!(prepared.default_mappings.ambient.len(), 3);
+        assert!(prepared
+            .license
+            .as_ref()
+            .unwrap()
+            .text
+            .contains("StarCried"));
+        let temp = tempfile::tempdir().unwrap();
+        let (model, data) = prepared.write(&temp.path().join("installed")).unwrap();
+        assert_eq!(fs::read(model).unwrap(), fs::read(source).unwrap());
+        assert_eq!(data.animations.len(), 1);
+        assert_eq!(data.animations[0].name, DEFAULT_IDLE_NAME);
+        assert_eq!(data.embedded_animations.len(), 14);
+        assert!(Path::new(data.profile_path.as_ref().unwrap()).is_file());
     }
 }

@@ -50,6 +50,8 @@ pub struct InochiModelData {
 #[serde(rename_all = "camelCase")]
 pub struct VrmModelData {
     pub animations: Vec<AnimationSource>,
+    #[serde(default)]
+    pub embedded_animations: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub profile_path: Option<String>,
 }
@@ -336,8 +338,9 @@ fn validate_model(model: &InstalledModel) -> Result<(), String> {
                 .animations
                 .iter()
                 .map(|item| item.name.as_str())
+                .chain(data.embedded_animations.iter().map(String::as_str))
                 .collect();
-            if data.animations.len() != names.len()
+            if data.animations.len() + data.embedded_animations.len() != names.len()
                 || resource_names != names
                 || data
                     .animations
@@ -677,6 +680,7 @@ mod tests {
                         name: "Idle".into(),
                         path: format!("{id}/idle.vrma"),
                     }],
+                    embedded_animations: vec![],
                     profile_path: None,
                 }),
                 license: None,
@@ -703,6 +707,49 @@ mod tests {
         assert_eq!(restored.models.len(), 2);
         assert!(restored.active_model_id.is_none());
         assert!(current.add_model(test_model("first")).is_err());
+    }
+
+    #[test]
+    fn embedded_and_external_animation_catalogs_round_trip_without_a_pack() {
+        let mut current = DesktopSettings::default();
+        let mut model = test_model("single-vrm");
+        model
+            .data
+            .animations
+            .push(serde_json::json!({"name":"Wave","durationMs":1500}));
+        model
+            .data
+            .vrm
+            .as_mut()
+            .unwrap()
+            .embedded_animations
+            .push("Wave".into());
+        model.data.mappings.click = vec!["Wave".into()];
+        current.add_model(model).unwrap();
+        let decoded = decode_settings(&settings_bytes(&current).unwrap()).unwrap();
+        assert_eq!(
+            decoded
+                .active_model()
+                .unwrap()
+                .data
+                .vrm
+                .as_ref()
+                .unwrap()
+                .embedded_animations,
+            ["Wave"]
+        );
+        assert_eq!(
+            decoded.active_model().unwrap().data.mappings.click,
+            ["Wave"]
+        );
+        current.models[0]
+            .data
+            .vrm
+            .as_mut()
+            .unwrap()
+            .embedded_animations
+            .push("Idle".into());
+        assert!(settings_bytes(&current).is_err());
     }
 
     #[test]

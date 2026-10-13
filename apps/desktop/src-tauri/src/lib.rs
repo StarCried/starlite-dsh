@@ -1,7 +1,7 @@
+mod default_model;
 mod hit_test;
 mod model;
 mod model_viewport;
-mod resource_pack;
 mod settings;
 mod startup;
 mod tray;
@@ -16,26 +16,21 @@ fn get_settings(app: AppHandle) -> settings::DesktopSettings {
 }
 
 #[tauri::command]
-fn inspect_model(
+async fn inspect_model(
     path: String,
     animation_sources: Option<Vec<settings::AnimationSource>>,
     profile_path: Option<String>,
 ) -> Result<model::ModelInspection, String> {
-    model::inspect(path, animation_sources.unwrap_or_default(), profile_path)
-}
-
-#[tauri::command]
-async fn inspect_resource_pack(
-    path: String,
-) -> Result<resource_pack::ResourcePackInspection, String> {
-    tauri::async_runtime::spawn_blocking(move || resource_pack::inspect(path))
-        .await
-        .map_err(|error| error.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        model::inspect(path, animation_sources.unwrap_or_default(), profile_path)
+    })
+    .await
+    .map_err(|_| "模型检查失败，请重试。".to_string())?
 }
 
 #[tauri::command]
 async fn prepare_model(app: AppHandle) -> Result<settings::DesktopSettings, String> {
-    mutate_model_settings(app, resource_pack::prepare_model).await
+    mutate_model_settings(app, default_model::prepare_model).await
 }
 
 #[tauri::command]
@@ -43,7 +38,7 @@ async fn select_model(
     app: AppHandle,
     model_id: Option<String>,
 ) -> Result<settings::DesktopSettings, String> {
-    mutate_model_settings(app, move |app| resource_pack::select_model(app, model_id)).await
+    mutate_model_settings(app, move |app| default_model::select_model(app, model_id)).await
 }
 
 #[tauri::command]
@@ -59,7 +54,7 @@ async fn get_model_license(
     app: AppHandle,
     model_id: String,
 ) -> Result<Option<settings::ModelLicense>, String> {
-    tauri::async_runtime::spawn_blocking(move || resource_pack::model_license(&app, model_id))
+    tauri::async_runtime::spawn_blocking(move || default_model::model_license(&app, model_id))
         .await
         .map_err(|_| "无法读取模型许可，请重试。".to_string())?
 }
@@ -86,20 +81,6 @@ async fn mutate_model_settings(
     })
     .await
     .map_err(|_| "模型设置操作失败，请重试。".to_string())?
-}
-
-#[tauri::command]
-async fn install_resource_pack(
-    app: AppHandle,
-    path: String,
-    expected_sha256: String,
-    preferences: settings::DesktopPreferences,
-    accept_license: bool,
-) -> Result<settings::DesktopSettings, String> {
-    mutate_model_settings(app, move |app| {
-        resource_pack::install(app, path, expected_sha256, preferences, accept_license)
-    })
-    .await
 }
 
 #[tauri::command]
@@ -164,12 +145,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_settings,
             inspect_model,
-            inspect_resource_pack,
             prepare_model,
             select_model,
             update_preferences,
             get_model_license,
-            install_resource_pack,
             install_model,
             update_model_mappings,
             set_connection_state,

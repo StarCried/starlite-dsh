@@ -22,6 +22,7 @@ pub struct ModelInspection {
     model_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     license: Option<ModelLicense>,
+    default_mappings: AnimationMappings,
     animations: Vec<Value>,
     compatibility_supported: bool,
     issues: Vec<Value>,
@@ -46,6 +47,7 @@ pub fn inspect(
         source_bytes: prepared.source_bytes,
         model_name: prepared.model_name,
         license: prepared.license,
+        default_mappings: prepared.default_mappings,
         animations,
         compatibility_supported: true,
         issues: vec![],
@@ -76,6 +78,21 @@ pub fn install_character(
         &request.animation_sources,
         request.profile_path.as_deref().map(std::path::Path::new),
     )?;
+    install_prepared_character(app, request, vrm, license, title, id, activate)
+}
+
+pub fn install_prepared_character(
+    app: &AppHandle,
+    request: ModelInstallRequest,
+    vrm: vrm::Prepared,
+    license: Option<ModelLicense>,
+    title: Option<String>,
+    id: Option<String>,
+    activate: bool,
+) -> Result<DesktopSettings, String> {
+    require_supported_backend(request.backend)?;
+    settings::validate_preferences(&request.preferences)?;
+    let input = PathBuf::from(&request.source_path);
     settings::validate_mappings(&request.mappings, &vrm.catalog())?;
     let models_dir = settings::models_dir(app)?;
     fs::create_dir_all(&models_dir).map_err(|error| error.to_string())?;

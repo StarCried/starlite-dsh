@@ -55,61 +55,103 @@ const STARTER_ERROR: &str =
     "微光资源准备失败。请重启 DSH 重试；也可以手动导入资源包，原模型和设置未改变。";
 
 pub fn prepare_model(app: &AppHandle) -> Result<DesktopSettings, String> {
-    let current = settings::load(app);
+    let mut current = settings::load(app);
     if !needs_default(&current) {
         return Ok(current);
     }
-    install_default(app, current.preferences)
-}
-
-pub fn use_default_model(
-    app: &AppHandle,
-    mut preferences: DesktopPreferences,
-) -> Result<DesktopSettings, String> {
-    preferences.model_enabled = true;
-    settings::validate_preferences(&preferences)?;
-    install_default(app, preferences)
-}
-
-pub fn set_model_enabled(app: &AppHandle, enabled: bool) -> Result<DesktopSettings, String> {
-    let mut current = settings::load(app);
-    current.preferences.model_enabled = enabled;
-    if needs_default(&current) {
-        return install_default(app, current.preferences);
+    let parent = starter_parent()?;
+    let descriptor = read_starter_descriptor(&parent)?;
+    if let Some(descriptor) = &descriptor {
+        if adopt_default_identity(&mut current, &descriptor.model_sha256, &descriptor.title) {
+            settings::store(app, &current)?;
+            return Ok(current);
+        }
     }
+    let pending = current.active_model_id.as_deref() == Some(settings::DEFAULT_MODEL_ID);
+    if !pending && (descriptor.is_none() || !parent.join("starter-character.zip").exists()) {
+        return Ok(current);
+    }
+    install_default(app, current.preferences, false)
+}
+
+pub fn select_model(app: &AppHandle, model_id: Option<String>) -> Result<DesktopSettings, String> {
+    let mut current = settings::load(app);
+    if model_id.as_deref() == Some(settings::DEFAULT_MODEL_ID) && needs_default(&current) {
+        current = prepare_model(app)?;
+        if needs_default(&current) {
+            current = install_default(app, current.preferences, true)?;
+        }
+    }
+    current.select(model_id)?;
     settings::store(app, &current)?;
     Ok(current)
 }
 
 fn needs_default(current: &DesktopSettings) -> bool {
-    current.preferences.model_enabled
-        && current
-            .model
-            .as_ref()
-            .is_none_or(|model| model.backend != ModelBackend::Vrm)
+    !current
+        .models
+        .iter()
+        .any(|model| model.id == settings::DEFAULT_MODEL_ID)
+}
+
+fn adopt_default_identity(current: &mut DesktopSettings, source_sha256: &str, title: &str) -> bool {
+    let Some(model) = current.models.iter_mut().find(|model| {
+        model.data.backend == ModelBackend::Vrm && model.data.source_sha256 == source_sha256
+    }) else {
+        return false;
+    };
+    let previous = std::mem::replace(&mut model.id, settings::DEFAULT_MODEL_ID.into());
+    model.title = title.into();
+    if current.active_model_id.as_ref() == Some(&previous) {
+        current.active_model_id = Some(settings::DEFAULT_MODEL_ID.into());
+    }
+    true
 }
 
 fn install_default(
     app: &AppHandle,
     preferences: DesktopPreferences,
+    activate: bool,
 ) -> Result<DesktopSettings, String> {
     let parent = starter_parent()?;
     let pack = prepare_default(&parent, preferences)?.ok_or(STARTER_ERROR)?;
-    install_prepared(app, pack)
+    let title = pack.inspection.title.clone();
+    let license = license_of(&pack);
+    model::install_character(
+        app,
+        pack.request,
+        Some(license),
+        Some(title),
+        Some(settings::DEFAULT_MODEL_ID.into()),
+        activate,
+    )
 }
 
 /// License viewing is read-only. Existing custom VRM models never acquire the
 /// default character's license, and normal startup never reopens their archive.
-pub fn model_license(app: &AppHandle) -> Result<Option<ModelLicense>, String> {
+pub fn model_license(app: &AppHandle, model_id: String) -> Result<Option<ModelLicense>, String> {
     let current = settings::load(app);
-    if let Some(license) = current
-        .model
-        .as_ref()
-        .and_then(|model| model.license.clone())
-    {
+    let model = current.models.iter().find(|model| model.id == model_id);
+    if let Some(license) = model.and_then(|model| model.data.license.clone()) {
         return Ok(Some(license));
     }
-    license_for_model(&starter_parent()?, current.model.as_ref())
+    if model.is_none() && model_id != settings::DEFAULT_MODEL_ID {
+        return Err("没有找到该模型，请重新打开设置。".into());
+    }
+    if model.is_some_and(|model| model.data.backend != ModelBackend::Vrm) {
+        return Ok(None);
+    }
+    let default_license = license_for_model(&starter_parent()?, model.map(|model| &model.data))?;
+    if default_license.is_some() {
+        return Ok(default_license);
+    }
+    model
+        .map(|model| {
+            vrm::inspect(Path::new(&model.data.model_path), &[], None)
+                .map(|prepared| prepared.license)
+        })
+        .transpose()
+        .map(Option::flatten)
 }
 
 fn license_for_model(
@@ -248,7 +290,8 @@ fn license_of(pack: &PreparedPack) -> ModelLicense {
 
 fn install_prepared(app: &AppHandle, pack: PreparedPack) -> Result<DesktopSettings, String> {
     let license = license_of(&pack);
-    model::install_with_license(app, pack.request, Some(license))
+    let title = pack.inspection.title.clone();
+    model::install_character(app, pack.request, Some(license), Some(title), None, true)
 }
 
 fn checked_prepare(
@@ -847,7 +890,6 @@ mod tests {
         assert_eq!(result.model_sha256, descriptor["modelSha256"]);
         assert_eq!(result.inspection.sha256, descriptor["sha256"]);
         assert!(Path::new(&result.request.source_path).is_file());
-        assert!(result.request.preferences.model_enabled);
     }
 
     #[test]
@@ -924,7 +966,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_vrm_and_disabled_models_are_preserved_without_archive_access() {
+    fn default_identity_reuses_migrated_resources_and_preserves_selection() {
         let (folder, _) = starter_fixture(fixture());
         let starter = read_starter_descriptor(folder.path()).unwrap().unwrap();
         let prepared = prepare(
@@ -932,35 +974,49 @@ mod tests {
             DesktopPreferences::default(),
         )
         .unwrap();
-        let model = settings::InstalledModel {
-            backend: ModelBackend::Vrm,
-            model_path: prepared.request.source_path.clone(),
-            source_sha256: starter.model_sha256.clone(),
-            animations: vec![json!({"name":"Rest","durationMs":1000})],
-            mappings: prepared.request.mappings,
-            inochi2d: None,
-            vrm: Some(settings::VrmModelData {
-                animations: prepared.request.animation_sources,
-                profile_path: None,
-            }),
-            license: None,
+        let model = settings::LibraryModel {
+            id: "migrated-character".into(),
+            title: "Character".into(),
+            data: settings::InstalledModel {
+                backend: ModelBackend::Vrm,
+                model_path: prepared.request.source_path.clone(),
+                source_sha256: starter.model_sha256.clone(),
+                animations: vec![json!({"name":"Rest","durationMs":1000})],
+                mappings: prepared.request.mappings,
+                inochi2d: None,
+                vrm: Some(settings::VrmModelData {
+                    animations: prepared.request.animation_sources,
+                    profile_path: None,
+                }),
+                license: None,
+            },
         };
-        let mut current = DesktopSettings {
-            model: Some(model),
-            ..DesktopSettings::default()
-        };
+        let mut current = DesktopSettings::default();
+        current.add_model(model).unwrap();
         fs::remove_file(folder.path().join("starter-character.zip")).unwrap();
-        assert!(!needs_default(&current));
-        current.model.as_mut().unwrap().source_sha256 = "f".repeat(64);
-        assert!(!needs_default(&current));
-        assert!(license_for_model(folder.path(), current.model.as_ref())
-            .unwrap()
-            .is_none());
-        current.model = None;
-        current.preferences.model_enabled = false;
-        assert!(!needs_default(&current));
-        current.preferences.model_enabled = true;
         assert!(needs_default(&current));
+        let original_path = current.models[0].data.model_path.clone();
+        assert!(adopt_default_identity(
+            &mut current,
+            &starter.model_sha256,
+            &starter.title
+        ));
+        assert!(!needs_default(&current));
+        assert_eq!(
+            current.active_model_id.as_deref(),
+            Some(settings::DEFAULT_MODEL_ID)
+        );
+        assert_eq!(current.models.len(), 1);
+        assert_eq!(current.models[0].data.model_path, original_path);
+        current.select(None).unwrap();
+        assert!(!needs_default(&current));
+        assert!(current.active_model_id.is_none());
+        current.models[0].data.source_sha256 = "f".repeat(64);
+        assert!(
+            license_for_model(folder.path(), Some(&current.models[0].data))
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]

@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
-pub const SETTINGS_SCHEMA_VERSION: u32 = 3;
+pub const SETTINGS_SCHEMA_VERSION: u32 = 4;
+pub const DEFAULT_MODEL_ID: &str = "weiguang-default";
+const SETTINGS_LIMIT: usize = 4 * 1024 * 1024;
 
 #[derive(Default)]
 pub struct SettingsWriteState(Mutex<()>);
@@ -81,8 +83,6 @@ fn deserialize_animation_pool<'de, D: serde::Deserializer<'de>>(
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopPreferences {
-    #[serde(default = "enabled_by_default")]
-    pub model_enabled: bool,
     pub fps: u16,
     pub max_device_pixel_ratio: f64,
     pub scale: f64,
@@ -102,7 +102,6 @@ pub enum BubbleMode {
 impl Default for DesktopPreferences {
     fn default() -> Self {
         Self {
-            model_enabled: true,
             fps: 30,
             max_device_pixel_ratio: 1.5,
             scale: 1.0,
@@ -110,10 +109,6 @@ impl Default for DesktopPreferences {
             bubble_mode: BubbleMode::Compact,
         }
     }
-}
-
-fn enabled_by_default() -> bool {
-    true
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -141,11 +136,20 @@ pub struct InstalledModel {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LibraryModel {
+    pub id: String,
+    pub title: String,
+    #[serde(flatten)]
+    pub data: InstalledModel,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DesktopSettings {
     pub schema_version: u32,
     pub preferences: DesktopPreferences,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<InstalledModel>,
+    pub models: Vec<LibraryModel>,
+    pub active_model_id: Option<String>,
 }
 
 impl Default for DesktopSettings {
@@ -153,8 +157,44 @@ impl Default for DesktopSettings {
         Self {
             schema_version: SETTINGS_SCHEMA_VERSION,
             preferences: DesktopPreferences::default(),
-            model: None,
+            models: Vec::new(),
+            active_model_id: Some(DEFAULT_MODEL_ID.into()),
         }
+    }
+}
+
+impl DesktopSettings {
+    pub fn active_model(&self) -> Option<&LibraryModel> {
+        self.active_model_id
+            .as_ref()
+            .and_then(|id| self.models.iter().find(|model| &model.id == id))
+    }
+
+    pub fn select(&mut self, id: Option<String>) -> Result<(), String> {
+        if let Some(id) = &id {
+            let selected = self.models.iter().find(|model| &model.id == id);
+            match selected {
+                Some(model) if model.data.backend == ModelBackend::Vrm => {}
+                None if id == DEFAULT_MODEL_ID => {}
+                _ => return Err("请选择已导入的 VRM 模型。".into()),
+            }
+        }
+        self.active_model_id = id;
+        Ok(())
+    }
+
+    pub fn add_model(&mut self, model: LibraryModel) -> Result<(), String> {
+        if self.models.iter().any(|item| item.id == model.id) {
+            return Err("model identifier already exists".into());
+        }
+        let previous = self.active_model_id.replace(model.id.clone());
+        self.models.push(model);
+        if let Err(error) = validate_settings(self) {
+            self.models.pop();
+            self.active_model_id = previous;
+            return Err(error);
+        }
+        Ok(())
     }
 }
 
@@ -228,7 +268,7 @@ pub fn load(app: &AppHandle) -> DesktopSettings {
     let Ok(bytes) = fs::read(path) else {
         return DesktopSettings::default();
     };
-    if bytes.len() > 4 * 1024 * 1024 {
+    if bytes.len() > SETTINGS_LIMIT {
         return DesktopSettings::default();
     }
     let Ok(settings) = decode_settings(&bytes) else {
@@ -313,6 +353,9 @@ fn validate_model(model: &InstalledModel) -> Result<(), String> {
 }
 
 pub fn decode_settings(bytes: &[u8]) -> Result<DesktopSettings, String> {
+    if bytes.len() > SETTINGS_LIMIT {
+        return Err("model settings exceed 4 MiB".into());
+    }
     let mut value: Value = serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
     let version = value.get("schemaVersion").and_then(Value::as_u64);
     if value.get("schemaVersion").and_then(Value::as_u64) == Some(1) {
@@ -339,33 +382,92 @@ pub fn decode_settings(bytes: &[u8]) -> Result<DesktopSettings, String> {
                 object.remove("thinking");
             }
         }
+    }
+    if matches!(version, Some(1..=3)) {
+        let enabled = value["preferences"]["modelEnabled"]
+            .as_bool()
+            .unwrap_or(true);
+        if let Some(preferences) = value["preferences"].as_object_mut() {
+            preferences.remove("modelEnabled");
+        }
+        let legacy = value
+            .as_object_mut()
+            .and_then(|object| object.remove("model"));
+        let mut active = enabled.then(|| DEFAULT_MODEL_ID.to_owned());
+        let models = if let Some(mut model) = legacy.filter(|model| !model.is_null()) {
+            use sha2::{Digest, Sha256};
+            let identity = format!("{}:{}", model["modelPath"], model["sourceSha256"]);
+            let id = format!("model-{:x}", Sha256::digest(identity.as_bytes()));
+            let title = model["license"]["title"]
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| {
+                    if model["backend"] == "inochi2d" {
+                        "Inochi2D 模型".into()
+                    } else {
+                        "VRM 模型".into()
+                    }
+                });
+            if enabled && model["backend"] == "vrm" {
+                active = Some(id.clone());
+            }
+            model["id"] = id.into();
+            model["title"] = title.into();
+            vec![model]
+        } else {
+            Vec::new()
+        };
+        value["models"] = Value::Array(models);
+        value["activeModelId"] = active.map(Value::String).unwrap_or(Value::Null);
         value["schemaVersion"] = SETTINGS_SCHEMA_VERSION.into();
     }
     let settings: DesktopSettings =
         serde_json::from_value(value).map_err(|error| error.to_string())?;
-    if settings.schema_version != SETTINGS_SCHEMA_VERSION {
-        return Err("unsupported settings version".into());
-    }
-    validate_preferences(&settings.preferences)?;
-    if let Some(model) = &settings.model {
-        validate_model(model)?;
-    }
+    validate_settings(&settings)?;
     Ok(settings)
 }
 
-pub fn store(app: &AppHandle, settings: &DesktopSettings) -> Result<(), String> {
+fn validate_settings(settings: &DesktopSettings) -> Result<(), String> {
     validate_preferences(&settings.preferences)?;
     if settings.schema_version != SETTINGS_SCHEMA_VERSION {
         return Err("unsupported settings version".into());
     }
-    if let Some(model) = &settings.model {
-        validate_model(model)?;
+    let mut identities = HashSet::new();
+    if settings.models.len() > 64 {
+        return Err("at most 64 imported models are supported".into());
     }
+    for model in &settings.models {
+        if model.id.is_empty()
+            || model.id.len() > 128
+            || !model
+                .id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+            || !identities.insert(&model.id)
+            || model.title.trim().is_empty()
+            || model.title.chars().count() > 128
+            || model.title.chars().any(char::is_control)
+        {
+            return Err("invalid model library metadata".into());
+        }
+        validate_model(&model.data)?;
+    }
+    if let Some(id) = &settings.active_model_id {
+        match settings.models.iter().find(|model| &model.id == id) {
+            Some(model) if model.data.backend == ModelBackend::Vrm => {}
+            None if id == DEFAULT_MODEL_ID => {}
+            _ => return Err("invalid active model selection".into()),
+        }
+    }
+    Ok(())
+}
+
+pub fn store(app: &AppHandle, settings: &DesktopSettings) -> Result<(), String> {
+    let bytes = settings_bytes(settings)?;
     let path = settings_path(app)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
-    let bytes = serde_json::to_vec_pretty(settings).map_err(|error| error.to_string())?;
     let mut file = AtomicWriteFile::open(path).map_err(|error| error.to_string())?;
     file.write_all(&bytes).map_err(|error| error.to_string())?;
     file.flush().map_err(|error| error.to_string())?;
@@ -373,6 +475,15 @@ pub fn store(app: &AppHandle, settings: &DesktopSettings) -> Result<(), String> 
         .sync_all()
         .map_err(|error| error.to_string())?;
     file.commit().map_err(|error| error.to_string())
+}
+
+fn settings_bytes(settings: &DesktopSettings) -> Result<Vec<u8>, String> {
+    validate_settings(settings)?;
+    let bytes = serde_json::to_vec_pretty(settings).map_err(|error| error.to_string())?;
+    if bytes.len() > SETTINGS_LIMIT {
+        return Err("模型库设置已达到容量上限，请使用更精简的许可信息。".into());
+    }
+    Ok(bytes)
 }
 
 pub fn models_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -437,18 +548,17 @@ mod tests {
     fn version_one_migrates_model_mapping_and_preferences() {
         let old = serde_json::json!({"schemaVersion":1,"preferences":{"fps":60,"maxDevicePixelRatio":1.25,"scale":0.8,"privacyMode":true},"model":{"modelPath":"local/model.inp","sourceSha256":"source","animations":[{"name":"Idle","timestepMs":100,"length":10,"lanes":[]}],"mappings":{"idle":"Idle","thinking":null,"working":null,"completed":null,"error":null,"blocked":null,"approval":null,"click":null}}});
         let migrated = decode_settings(&serde_json::to_vec(&old).unwrap()).unwrap();
-        assert_eq!(migrated.schema_version, 3);
+        assert_eq!(migrated.schema_version, 4);
         assert_eq!(migrated.preferences.fps, 60);
         assert!(migrated.preferences.privacy_mode);
-        assert!(migrated.preferences.model_enabled);
         assert_eq!(migrated.preferences.bubble_mode, BubbleMode::Compact);
-        let model = migrated.model.unwrap();
+        let model = &migrated.models[0].data;
         assert_eq!(model.backend, ModelBackend::Inochi2d);
         assert_eq!(model.model_path, "local/model.inp");
         assert_eq!(model.mappings.idle, "Idle");
         assert_eq!(model.animations[0]["durationMs"].as_f64(), Some(1000.0));
         assert_eq!(
-            model.inochi2d.unwrap().animations,
+            model.inochi2d.as_ref().unwrap().animations,
             old["model"]["animations"].as_array().unwrap().clone()
         );
     }
@@ -459,8 +569,8 @@ mod tests {
         value["schemaVersion"] = 2.into();
         value["model"] = serde_json::json!({"backend":"vrm","modelPath":"pet.vrm","sourceSha256":"source","animations":[{"name":"Idle","durationMs":1000},{"name":"Think","durationMs":1000}],"vrm":{"animations":[{"name":"Idle","path":"idle.vrma"},{"name":"Think","path":"think.vrma"}]},"mappings":{"idle":"Idle","thinking":"Think","working":null,"completed":null,"error":null,"blocked":null,"approval":null,"click":"Idle"}});
         let migrated = decode_settings(&serde_json::to_vec(&value).unwrap()).unwrap();
-        assert_eq!(migrated.schema_version, 3);
-        let mappings = migrated.model.unwrap().mappings;
+        assert_eq!(migrated.schema_version, 4);
+        let mappings = &migrated.models[0].data.mappings;
         assert_eq!(mappings.working.as_deref(), Some("Think"));
         assert_eq!(mappings.click, vec!["Idle"]);
         assert!(mappings.ambient.is_empty());
@@ -468,8 +578,8 @@ mod tests {
         assert_eq!(
             decode_settings(&serde_json::to_vec(&value).unwrap())
                 .unwrap()
-                .model
-                .unwrap()
+                .models[0]
+                .data
                 .mappings
                 .working
                 .as_deref(),
@@ -536,20 +646,126 @@ mod tests {
     }
 
     #[test]
-    fn disabling_a_model_survives_reload_without_requiring_an_installed_model() {
+    fn model_selection_survives_reload_and_legacy_opt_out_is_preserved() {
         let mut current = DesktopSettings::default();
-        current.preferences.model_enabled = false;
+        current.select(None).unwrap();
         let decoded = decode_settings(&serde_json::to_vec(&current).unwrap()).unwrap();
-        assert!(!decoded.preferences.model_enabled);
-        assert!(decoded.model.is_none());
-        let mut legacy = serde_json::to_value(current).unwrap();
-        legacy["preferences"]
-            .as_object_mut()
-            .unwrap()
-            .remove("modelEnabled");
-        legacy["preferences"]["fps"] = 60.into();
+        assert!(decoded.active_model_id.is_none());
+        assert!(decoded.models.is_empty());
+        let legacy = serde_json::json!({"schemaVersion":3,"preferences":{"modelEnabled":false,"fps":60,"maxDevicePixelRatio":1.25,"scale":0.8,"privacyMode":false}});
         let migrated = decode_settings(&serde_json::to_vec(&legacy).unwrap()).unwrap();
-        assert!(migrated.preferences.model_enabled);
+        assert!(migrated.active_model_id.is_none());
         assert_eq!(migrated.preferences.fps, 60);
+        assert!(serde_json::to_value(migrated).unwrap()["preferences"]
+            .get("modelEnabled")
+            .is_none());
+    }
+
+    fn test_model(id: &str) -> LibraryModel {
+        LibraryModel {
+            id: id.into(),
+            title: format!("Character {id}"),
+            data: InstalledModel {
+                backend: ModelBackend::Vrm,
+                model_path: format!("{id}/model.vrm"),
+                source_sha256: id.into(),
+                animations: vec![serde_json::json!({"name":"Idle","durationMs":1000})],
+                mappings: mappings("Idle"),
+                inochi2d: None,
+                vrm: Some(VrmModelData {
+                    animations: vec![AnimationSource {
+                        name: "Idle".into(),
+                        path: format!("{id}/idle.vrma"),
+                    }],
+                    profile_path: None,
+                }),
+                license: None,
+            },
+        }
+    }
+
+    #[test]
+    fn imports_retain_each_model_and_switch_without_replacing_resources() {
+        let mut current = DesktopSettings::default();
+        current.add_model(test_model("first")).unwrap();
+        current.add_model(test_model("second")).unwrap();
+        assert_eq!(current.models.len(), 2);
+        assert_eq!(current.active_model().unwrap().id, "second");
+        current.select(Some("first".into())).unwrap();
+        assert_eq!(
+            current.active_model().unwrap().data.model_path,
+            "first/model.vrm"
+        );
+        assert!(current.select(Some("missing".into())).is_err());
+        assert_eq!(current.active_model().unwrap().id, "first");
+        current.select(None).unwrap();
+        let restored = decode_settings(&serde_json::to_vec(&current).unwrap()).unwrap();
+        assert_eq!(restored.models.len(), 2);
+        assert!(restored.active_model_id.is_none());
+        assert!(current.add_model(test_model("first")).is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_ids_and_unknown_or_unsupported_selection() {
+        let mut current = DesktopSettings::default();
+        current.add_model(test_model("first")).unwrap();
+        let mut value = serde_json::to_value(current).unwrap();
+        value["activeModelId"] = "missing".into();
+        assert!(decode_settings(&serde_json::to_vec(&value).unwrap()).is_err());
+        value["activeModelId"] = "first".into();
+        let repeated = value["models"][0].clone();
+        value["models"].as_array_mut().unwrap().push(repeated);
+        assert!(decode_settings(&serde_json::to_vec(&value).unwrap()).is_err());
+    }
+
+    #[test]
+    fn version_three_retains_model_license_mappings_and_preferences() {
+        let mut model = test_model("original");
+        model.data.license = Some(ModelLicense {
+            title: "Original character".into(),
+            text: "Original license".into(),
+        });
+        model.data.mappings.click = vec!["Idle".into()];
+        let mut old = serde_json::json!({"schemaVersion":3,"preferences":{"modelEnabled":true,"fps":60,"maxDevicePixelRatio":1.25,"scale":0.8,"privacyMode":true,"bubbleMode":"detailed"},"model":model.data});
+        let bytes = serde_json::to_vec(&old).unwrap();
+        let migrated = decode_settings(&bytes).unwrap();
+        assert_eq!(migrated.models.len(), 1);
+        let selected = migrated.active_model().unwrap();
+        assert_eq!(selected.title, "Original character");
+        assert_eq!(selected.data.model_path, "original/model.vrm");
+        assert_eq!(selected.data.mappings.click, ["Idle"]);
+        assert_eq!(
+            selected.data.license.as_ref().unwrap().text,
+            "Original license"
+        );
+        assert_eq!(migrated.preferences.fps, 60);
+        assert_eq!(migrated.preferences.scale, 0.8);
+        assert_eq!(migrated.preferences.bubble_mode, BubbleMode::Detailed);
+        assert!(migrated.preferences.privacy_mode);
+        assert_eq!(
+            decode_settings(&bytes).unwrap().active_model_id,
+            migrated.active_model_id
+        );
+        old["preferences"]["modelEnabled"] = false.into();
+        let disabled = decode_settings(&serde_json::to_vec(&old).unwrap()).unwrap();
+        assert!(disabled.active_model_id.is_none());
+        assert_eq!(disabled.models.len(), 1);
+    }
+
+    #[test]
+    fn refuses_an_aggregate_library_larger_than_the_reload_limit() {
+        let mut current = DesktopSettings::default();
+        for index in 0..64 {
+            let mut model = test_model(&format!("model-{index}"));
+            model.data.license = Some(ModelLicense {
+                title: "License".into(),
+                text: "x".repeat(70_000),
+            });
+            current.add_model(model).unwrap();
+        }
+        assert!(settings_bytes(&current).is_err());
+        assert!(current.add_model(test_model("overflow")).is_err());
+        assert_eq!(current.models.len(), 64);
+        assert!(decode_settings(&vec![b' '; SETTINGS_LIMIT + 1]).is_err());
     }
 }

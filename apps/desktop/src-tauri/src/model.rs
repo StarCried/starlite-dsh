@@ -7,8 +7,8 @@ use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::settings::{
-    self, AnimationSource, DesktopSettings, InstalledModel, ModelBackend, ModelInstallRequest,
-    ModelLicense,
+    self, AnimationMappings, AnimationSource, DesktopPreferences, DesktopSettings, InstalledModel,
+    LibraryModel, ModelBackend, ModelInstallRequest, ModelLicense,
 };
 use crate::vrm;
 
@@ -20,6 +20,8 @@ pub struct ModelInspection {
     source_bytes: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     model_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    license: Option<ModelLicense>,
     animations: Vec<Value>,
     compatibility_supported: bool,
     issues: Vec<Value>,
@@ -43,6 +45,7 @@ pub fn inspect(
         source_sha256: prepared.source_sha256,
         source_bytes: prepared.source_bytes,
         model_name: prepared.model_name,
+        license: prepared.license,
         animations,
         compatibility_supported: true,
         issues: vec![],
@@ -50,13 +53,16 @@ pub fn inspect(
 }
 
 pub fn install(app: &AppHandle, request: ModelInstallRequest) -> Result<DesktopSettings, String> {
-    install_with_license(app, request, None)
+    install_character(app, request, None, None, None, true)
 }
 
-pub fn install_with_license(
+pub fn install_character(
     app: &AppHandle,
     request: ModelInstallRequest,
     license: Option<ModelLicense>,
+    title: Option<String>,
+    id: Option<String>,
+    activate: bool,
 ) -> Result<DesktopSettings, String> {
     require_supported_backend(request.backend)?;
     settings::validate_preferences(&request.preferences)?;
@@ -76,21 +82,45 @@ pub fn install_with_license(
     let output_dir = models_dir.join(format!("model-{}", Uuid::new_v4()));
     let prepared = (|| {
         let (model_path, data) = vrm.write(&output_dir)?;
-        let model = InstalledModel {
-            backend: ModelBackend::Vrm,
-            model_path,
-            source_sha256: vrm.source_sha256.clone(),
-            animations: vrm.catalog(),
-            mappings: request.mappings,
-            inochi2d: None,
-            vrm: Some(data),
-            license,
+        let title = title
+            .or(vrm.model_name.clone())
+            .unwrap_or_else(|| {
+                input
+                    .file_stem()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("VRM 模型")
+                    .to_owned()
+            })
+            .chars()
+            .filter(|character| !character.is_control())
+            .take(128)
+            .collect::<String>();
+        let model = LibraryModel {
+            id: id.unwrap_or_else(|| format!("model-{}", Uuid::new_v4())),
+            title: if title.trim().is_empty() {
+                "VRM 模型".into()
+            } else {
+                title
+            },
+            data: InstalledModel {
+                backend: ModelBackend::Vrm,
+                model_path,
+                source_sha256: vrm.source_sha256.clone(),
+                animations: vrm.catalog(),
+                mappings: request.mappings,
+                inochi2d: None,
+                vrm: Some(data),
+                license: license.or(vrm.license.clone()),
+            },
         };
-        Ok(DesktopSettings {
-            schema_version: settings::SETTINGS_SCHEMA_VERSION,
-            preferences: request.preferences,
-            model: Some(model),
-        })
+        let mut next = settings::load(app);
+        let previous = next.active_model_id.clone();
+        next.preferences = request.preferences;
+        next.add_model(model)?;
+        if !activate {
+            next.active_model_id = previous;
+        }
+        Ok(next)
     })();
     match prepared {
         Ok(next) => {
@@ -107,29 +137,31 @@ pub fn install_with_license(
     }
 }
 
-pub fn update(app: &AppHandle, request: ModelInstallRequest) -> Result<DesktopSettings, String> {
-    require_supported_backend(request.backend)?;
-    if !request.source_path.is_empty() {
-        return Err("updating settings cannot import a new source model".into());
-    }
-    settings::validate_preferences(&request.preferences)?;
-    let current = settings::load(app);
-    let Some(mut model) = current.model else {
-        return Err("no installed model is available to update".into());
-    };
-    if model.backend != request.backend
-        || !request.animation_sources.is_empty()
-        || request.profile_path.is_some()
-    {
-        return Err("updating preferences cannot replace model components".into());
-    }
-    settings::validate_mappings(&request.mappings, &model.animations)?;
-    model.mappings = request.mappings;
-    let next = DesktopSettings {
-        schema_version: settings::SETTINGS_SCHEMA_VERSION,
-        preferences: request.preferences,
-        model: Some(model),
-    };
+pub fn update_preferences(
+    app: &AppHandle,
+    preferences: DesktopPreferences,
+) -> Result<DesktopSettings, String> {
+    settings::validate_preferences(&preferences)?;
+    let mut next = settings::load(app);
+    next.preferences = preferences;
+    settings::store(app, &next)?;
+    Ok(next)
+}
+
+pub fn update_mappings(
+    app: &AppHandle,
+    model_id: String,
+    mappings: AnimationMappings,
+) -> Result<DesktopSettings, String> {
+    let mut next = settings::load(app);
+    let model = next
+        .models
+        .iter_mut()
+        .find(|model| model.id == model_id)
+        .ok_or("没有找到该模型，请重新打开设置。")?;
+    require_supported_backend(model.data.backend)?;
+    settings::validate_mappings(&mappings, &model.data.animations)?;
+    model.data.mappings = mappings;
     settings::store(app, &next)?;
     Ok(next)
 }

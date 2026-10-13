@@ -39,30 +39,27 @@ async fn prepare_model(app: AppHandle) -> Result<settings::DesktopSettings, Stri
 }
 
 #[tauri::command]
-async fn use_default_model(
+async fn select_model(
+    app: AppHandle,
+    model_id: Option<String>,
+) -> Result<settings::DesktopSettings, String> {
+    mutate_model_settings(app, move |app| resource_pack::select_model(app, model_id)).await
+}
+
+#[tauri::command]
+async fn update_preferences(
     app: AppHandle,
     preferences: settings::DesktopPreferences,
 ) -> Result<settings::DesktopSettings, String> {
-    mutate_model_settings(app, move |app| {
-        resource_pack::use_default_model(app, preferences)
-    })
-    .await
+    mutate_model_settings(app, move |app| model::update_preferences(app, preferences)).await
 }
 
 #[tauri::command]
-async fn set_model_enabled(
+async fn get_model_license(
     app: AppHandle,
-    enabled: bool,
-) -> Result<settings::DesktopSettings, String> {
-    mutate_model_settings(app, move |app| {
-        resource_pack::set_model_enabled(app, enabled)
-    })
-    .await
-}
-
-#[tauri::command]
-async fn get_model_license(app: AppHandle) -> Result<Option<settings::ModelLicense>, String> {
-    tauri::async_runtime::spawn_blocking(move || resource_pack::model_license(&app))
+    model_id: String,
+) -> Result<Option<settings::ModelLicense>, String> {
+    tauri::async_runtime::spawn_blocking(move || resource_pack::model_license(&app, model_id))
         .await
         .map_err(|_| "无法读取模型许可，请重试。".to_string())?
 }
@@ -114,11 +111,15 @@ async fn install_model(
 }
 
 #[tauri::command]
-async fn update_settings(
+async fn update_model_mappings(
     app: AppHandle,
-    request: settings::ModelInstallRequest,
+    model_id: String,
+    mappings: settings::AnimationMappings,
 ) -> Result<settings::DesktopSettings, String> {
-    mutate_model_settings(app, move |app| model::update(app, request)).await
+    mutate_model_settings(app, move |app| {
+        model::update_mappings(app, model_id, mappings)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -165,12 +166,12 @@ pub fn run() {
             inspect_model,
             inspect_resource_pack,
             prepare_model,
-            use_default_model,
-            set_model_enabled,
+            select_model,
+            update_preferences,
             get_model_license,
             install_resource_pack,
             install_model,
-            update_settings,
+            update_model_mappings,
             set_connection_state,
             open_settings,
             exit_app,

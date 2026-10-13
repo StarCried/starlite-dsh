@@ -67,4 +67,3 @@ it("keeps existing random pools and saves checkbox edits without modifier keys",
  document.getElementById("settings-form")!.dispatchEvent(new Event("submit",{cancelable:true}));await tick();
  expect(invoke).toHaveBeenCalledWith("update_settings",{request:expect.objectContaining({mappings:expect.objectContaining({idle:"Idle",click:["Click_1","Click_2"],ambient:[]})})});
 });
-

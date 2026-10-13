@@ -1,4 +1,4 @@
-export type { PetSnapshot, PetState } from "@dsh-inochi2d-pet/protocol";
+export type { PetSnapshot, PetState } from "@starcried/starlite-dsh-protocol";
 
 export interface AnimationClip {
   name: string;

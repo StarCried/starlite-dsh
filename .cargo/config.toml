@@ -1,5 +1,5 @@
 [net]
 # Use the system Git implementation for pinned dependencies. Besides honoring
 # normal credential/proxy policy, this lets local development redirect the
-# pinned inochi2d-web URL without changing the release manifest.
+# pinned StarLite component URL without changing the release manifest.
 git-fetch-with-cli = true

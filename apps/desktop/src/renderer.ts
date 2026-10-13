@@ -2,7 +2,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import type { DesktopSettings } from "./types.js";
 import type { ModelCore, ModelModule, ModelSlot, WidgetController } from "./vendor-types.js";
 import { VRM_VIEWPORT_PADDING } from "./model-viewport.js";
-const CORE_URL = "/runtime/model-widget-core/index.js";
+const CORE_URL = "/runtime/core/index.js";
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
 const loadCore = () => import(/* @vite-ignore */ CORE_URL) as Promise<ModelCore>;
 export async function createModelSlot(): Promise<ModelSlot> {
@@ -47,7 +47,7 @@ export async function mountModel(host: HTMLElement, settings: DesktopSettings, s
   const cleanup = () => surface.remove();
   signal.addEventListener("abort", cleanup, {once:true});
   try {
-    const controller = await core.mountModelWidget(surface, config, {inochi2d: () => load("inochi2d-web"), vrm: () => load("vrm-web")}, {signal});
+    const controller = await core.mountModelWidget(surface, config, {inochi2d: () => load("inochi2d"), vrm: () => load("vrm")}, {signal});
     if (controller.status === "fallback" || controller.status === "disabled") {controller.destroy(); throw new Error("Model failed to load");}
     return controller;
   } catch (error) { cleanup(); throw error; }

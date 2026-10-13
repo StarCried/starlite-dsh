@@ -4,7 +4,7 @@ import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { RUNTIMES, assertRuntime } from "./model-runtime.mjs";
+import { RUNTIMES, RUNTIME_PACKAGES, assertRuntime } from "./model-runtime.mjs";
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const inputs = process.argv.slice(2).filter((argument) => argument !== "--");
 if (inputs.length === 0) {
@@ -37,18 +37,18 @@ const cargoMetadata = JSON.parse(run("cargo", [
 ]));
 const components = collectComponents(nodeLicenses, cargoMetadata.packages);
 const runtimeProvenance = JSON.parse(await readFile(
-  resolve(root, "apps/desktop/public/runtime/inochi2d-web/runtime-provenance.json"),
+  resolve(root, "apps/desktop/public/runtime/inochi2d/runtime-provenance.json"),
   "utf8",
 ));
 components.push(...runtimeComponents(runtimeProvenance));
 for (const name of RUNTIMES) {
   const directory = resolve(root, "apps/desktop/public/runtime", name);
   await assertRuntime(name, directory);
-  if (name === "inochi2d-web") continue;
+  if (name === "inochi2d") continue;
   const metadata = JSON.parse(await readFile(resolve(directory, "runtime-provenance.json"), "utf8"));
-  components.push({ type: "library", name, version: metadata.version, licenses: licenseEntry("BSD-2-Clause"), properties: [{name: "git:revision", value: metadata.revision}] });
+  components.push({ type: "library", name: metadata.package, version: metadata.version, licenses: licenseEntry("BSD-2-Clause"), properties: [{name: "git:revision", value: metadata.revision}] });
   for (const [dependency, version] of Object.entries(metadata.dependencies)) {
-    if (RUNTIMES.includes(dependency)) continue;
+    if (Object.values(RUNTIME_PACKAGES).includes(dependency)) continue;
     components.push({ type: "library", name: dependency, version, purl: `pkg:npm/${npmPurlName(dependency)}@${encodeURIComponent(version)}`, licenses: licenseEntry(metadata.dependencyLicenses?.[dependency]) });
   }
 }
@@ -63,7 +63,7 @@ const sbom = {
     timestamp: new Date().toISOString(),
     component: {
       type: "application",
-      name: "DSH Companion",
+      name: "StarLite for DSH",
       version: workspacePackage.version,
       licenses: [{ license: { id: "BSD-2-Clause" } }],
     },
@@ -75,11 +75,11 @@ await writeFile(resolve(output, "sbom.cdx.json"), `${JSON.stringify(sbom, null, 
 const licenses = await collectLicenseTexts(nodeLicenses, cargoMetadata.packages);
 const runtimeLicenses = (await Promise.all(RUNTIMES.map(async name => {
   const directory = resolve(root, "apps/desktop/public/runtime", name);
-  return `${name} embedded runtime\n${await readFile(resolve(directory, "LICENSE"), "utf8")}\n${name === "model-widget-core" ? "" : await readFile(resolve(directory, "THIRD_PARTY_LICENSES.txt"), "utf8")}`;
+  return `${name} embedded runtime\n${await readFile(resolve(directory, "LICENSE"), "utf8")}\n${name === "core" ? "" : await readFile(resolve(directory, "THIRD_PARTY_LICENSES.txt"), "utf8")}`;
 }))).join("\n");
 await writeFile(
   resolve(output, "THIRD_PARTY_LICENSES.txt"),
-  `${licenses}\n${"=".repeat(78)}\ninochi2d-web embedded runtime\n${"=".repeat(78)}\n${runtimeLicenses.trim()}\n`,
+  `${licenses}\n${"=".repeat(78)}\nStarLite embedded runtimes\n${"=".repeat(78)}\n${runtimeLicenses.trim()}\n`,
   "utf8",
 );
 console.log(`Generated checksums, CycloneDX SBOM, and license texts in ${output}`);
@@ -119,7 +119,7 @@ function collectComponents(nodeGroups, cargoPackages) {
 function runtimeComponents(provenance) {
   const sdk = provenance.officialSdk;
   if (
-    provenance.package !== "inochi2d-web"
+    provenance.package !== RUNTIME_PACKAGES.inochi2d
     || typeof provenance.version !== "string"
     || typeof provenance.revision !== "string"
     || !sdk
@@ -128,16 +128,16 @@ function runtimeComponents(provenance) {
     || sdk.packages === null
     || Array.isArray(sdk.packages)
   ) {
-    throw new Error("inochi2d-web runtime provenance is incomplete");
+    throw new Error("StarLite Inochi2D runtime provenance is incomplete");
   }
   const components = [{
     type: "library",
-    name: "inochi2d-web",
+    name: RUNTIME_PACKAGES.inochi2d,
     version: provenance.version,
     licenses: [{ license: { id: "BSD-2-Clause" } }],
     externalReferences: [{
       type: "vcs",
-      url: `${provenance.repository ?? "https://github.com/StarCried/inochi2d-web"}#${provenance.revision}`,
+      url: `${provenance.repository ?? "https://github.com/StarCried/starlite"}#${provenance.revision}`,
     }],
     properties: [{ name: "git:revision", value: provenance.revision }],
   }, {
@@ -154,7 +154,7 @@ function runtimeComponents(provenance) {
       name,
       version: String(version),
       purl: `pkg:dub/${encodeURIComponent(name)}@${encodeURIComponent(String(version))}`,
-      licenses: [{ license: { name: "See bundled inochi2d-web license texts" } }],
+      licenses: [{ license: { name: "See bundled StarLite Inochi2D license texts" } }],
     });
   }
   return components;

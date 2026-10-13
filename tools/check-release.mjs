@@ -32,9 +32,9 @@ if (uniqueVersions.size !== 1) {
   failures.push(`release versions differ: ${versions.map(([name, value]) => `${name}=${value}`).join(", ")}`);
 }
 
-const pin = (await textFile("release/model-companion-web.rev"))?.trim();
+const pin = (await textFile("release/starlite.rev"))?.trim();
 if (!pin || !/^[0-9a-f]{40}$/u.test(pin)) {
-  failures.push("release/model-companion-web.rev must contain one public 40-character Git revision");
+  failures.push("release/starlite.rev must contain one public 40-character Git revision");
 }
 
 for (const name of RUNTIMES) {
@@ -42,14 +42,14 @@ for (const name of RUNTIMES) {
   const metadata = await jsonFile(`apps/desktop/public/runtime/${name}/runtime-provenance.json`);
   if (!metadata || metadata.dirty !== false || metadata.revision !== pin) failures.push(`${name} must match the clean runtime pin`);
 }
-const provenance = await jsonFile("apps/desktop/public/runtime/inochi2d-web/runtime-provenance.json");
+const provenance = await jsonFile("apps/desktop/public/runtime/inochi2d/runtime-provenance.json");
 if (!provenance) {
-  failures.push("the staged inochi2d-web runtime has no provenance");
+  failures.push("the staged StarLite Inochi2D runtime has no provenance");
 } else {
-  if (provenance.dirty !== false) failures.push("the staged inochi2d-web runtime is dirty");
-  if (pin && provenance.revision !== pin) failures.push("runtime provenance does not match release/model-companion-web.rev");
-  if (typeof provenance.repository !== "string" || !/github\.com[/:]StarCried\/inochi2d-web(?:\.git)?$/iu.test(provenance.repository)) {
-    failures.push("runtime provenance does not name the public StarCried/inochi2d-web repository");
+  if (provenance.dirty !== false) failures.push("the staged StarLite Inochi2D runtime is dirty");
+  if (pin && provenance.revision !== pin) failures.push("runtime provenance does not match release/starlite.rev");
+  if (typeof provenance.repository !== "string" || !/github\.com[/:]StarCried\/starlite(?:\.git)?$/iu.test(provenance.repository)) {
+    failures.push("runtime provenance does not name the public StarCried/starlite repository");
   }
   if (
     typeof provenance.officialSdk?.revision !== "string"
@@ -69,7 +69,7 @@ if (!/^[0-9a-f]{40}$/u.test(pipelinePin ?? "") || pipelinePin !== cargoRevision)
 failures.push(...await checkProgramAssets(root));
 
 const version = versions[0]?.[1] ?? "unknown";
-await requiredFile(`packages/dsh-plugin/.pack/dsh-inochi2d-pet-${version}.tgz`, 1);
+await requiredFile(`packages/dsh-plugin/.pack/dsh-starlite-${version}.tgz`, 1);
 const tauriConfig = await jsonFile("apps/desktop/src-tauri/tauri.conf.json");
 if (typeof tauriConfig?.productName !== "string" || !tauriConfig.productName) {
   failures.push("Tauri product name is missing");
@@ -87,8 +87,8 @@ try {
   const status = execFileSync("git", ["status", "--porcelain"], commandOptions);
   if (status.trim()) failures.push("the release worktree is not clean");
   const remote = execFileSync("git", ["remote", "get-url", "origin"], commandOptions).trim();
-  if (!/github\.com[/:]StarCried\/dsh-inochi2d-pet(?:\.git)?$/iu.test(remote)) {
-    failures.push("origin is not the public StarCried/dsh-inochi2d-pet repository");
+  if (!/github\.com[/:]StarCried\/starlite-dsh(?:\.git)?$/iu.test(remote)) {
+    failures.push("origin is not the public StarCried/starlite-dsh repository");
   }
 } catch {
   failures.push("the public origin remote is not configured");

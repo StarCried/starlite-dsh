@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "DSH Companion",
+  "productName": "StarLite for DSH",
   "version": "0.1.0-alpha.0",
   "identifier": "com.starcried.dsh-inochi2d-pet",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "DSH Companion",
+        "title": "StarLite for DSH",
         "width": 320,
         "height": 480,
         "minWidth": 214,
@@ -29,7 +29,7 @@
       },
       {
         "label": "settings",
-        "title": "DSH Companion 设置",
+        "title": "StarLite for DSH 设置",
         "url": "index.html?view=settings",
         "width": 760,
         "height": 720,
@@ -52,8 +52,8 @@
     "targets": ["nsis"],
     "publisher": "StarCried",
     "copyright": "Copyright © 2026 StarCried",
-    "shortDescription": "Inochi2D and VRM desktop companion for DeepSeek Harness",
-    "longDescription": "A local-only Inochi2D and VRM desktop companion driven by DeepSeek Harness running in WSL2.",
+    "shortDescription": "StarLite for DSH: lightweight VRM and Inochi2D desktop companion",
+    "longDescription": "A lightweight local StarLite character driven by DeepSeek Harness running in WSL2.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

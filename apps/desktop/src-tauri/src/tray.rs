@@ -65,7 +65,7 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
     )?;
 
     let mut builder = TrayIconBuilder::new()
-        .tooltip("DSH Companion")
+        .tooltip("StarLite for DSH")
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| handle_menu(app, event.id.as_ref()));

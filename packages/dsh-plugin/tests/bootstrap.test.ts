@@ -104,7 +104,7 @@ describe("embedded Windows companion and separate character bootstrap", () => {
     const f = await fixture(), notice = Buffer.alloc(4 * 1024 * 1024 + 80_215, 65);
     await writeFile(join(f.assets, "THIRD_PARTY_LICENSES.txt"), notice);
     const prepared = await prepareEmbeddedCompanion(f.options);
-    expect(await readFile(join(prepared.executable, "..", "THIRD_PARTY_LICENSES.txt"))).toEqual(notice);
+    expect((await readFile(join(prepared.executable, "..", "THIRD_PARTY_LICENSES.txt"))).equals(notice)).toBe(true);
     expect(await prepareEmbeddedCompanion(f.options)).toEqual(prepared);
   });
 

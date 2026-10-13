@@ -68,7 +68,10 @@ pub fn prepare_model(app: &AppHandle) -> Result<DesktopSettings, String> {
         }
     }
     let pending = current.active_model_id.as_deref() == Some(settings::DEFAULT_MODEL_ID);
-    if !pending && (descriptor.is_none() || !parent.join("starter-character.zip").exists()) {
+    if descriptor.is_some() && starter_archive_missing(&parent)? {
+        return Ok(current);
+    }
+    if !pending && descriptor.is_none() {
         return Ok(current);
     }
     install_default(app, current.preferences, false)
@@ -77,6 +80,10 @@ pub fn prepare_model(app: &AppHandle) -> Result<DesktopSettings, String> {
 pub fn select_model(app: &AppHandle, model_id: Option<String>) -> Result<DesktopSettings, String> {
     let mut current = settings::load(app);
     if model_id.as_deref() == Some(settings::DEFAULT_MODEL_ID) && needs_default(&current) {
+        if let Some(pending) = select_missing_default(&current, &starter_parent()?)? {
+            settings::store(app, &pending)?;
+            return Ok(pending);
+        }
         current = prepare_model(app)?;
         if needs_default(&current) {
             current = install_default(app, current.preferences, true)?;
@@ -85,6 +92,31 @@ pub fn select_model(app: &AppHandle, model_id: Option<String>) -> Result<Desktop
     current.select(model_id)?;
     settings::store(app, &current)?;
     Ok(current)
+}
+
+/// A user can select the default even after its cached ZIP was removed. Persist
+/// that explicit choice so the plugin can acquire it on the next DSH startup.
+/// Automatic preparation never changes an intentional no-model selection.
+fn select_missing_default(
+    current: &DesktopSettings,
+    parent: &Path,
+) -> Result<Option<DesktopSettings>, String> {
+    let descriptor = read_starter_descriptor(parent)?.ok_or(STARTER_ERROR)?;
+    if !starter_archive_missing(parent)? {
+        return Ok(None);
+    }
+    let mut pending = current.clone();
+    adopt_default_identity(&mut pending, &descriptor.model_sha256, &descriptor.title);
+    pending.select(Some(settings::DEFAULT_MODEL_ID.into()))?;
+    Ok(Some(pending))
+}
+
+fn starter_archive_missing(parent: &Path) -> Result<bool, String> {
+    match fs::symlink_metadata(parent.join("starter-character.zip")) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(true),
+        Err(_) => Err(STARTER_ERROR.into()),
+        Ok(_) => Ok(false),
+    }
 }
 
 fn needs_default(current: &DesktopSettings) -> bool {
@@ -963,6 +995,53 @@ mod tests {
             "Synthetic test license; no artwork."
         );
         assert!(!folder.path().join("starter-offered.sha256").exists());
+    }
+
+    #[test]
+    fn explicit_default_selection_recovers_a_missing_cache_without_losing_models() {
+        let (folder, _) = starter_fixture(fixture());
+        fs::remove_file(folder.path().join("starter-character.zip")).unwrap();
+        let old = json!({"schemaVersion":3,"preferences":{"modelEnabled":false,"fps":60,"maxDevicePixelRatio":1.25,"scale":0.8,"privacyMode":true},"model":{"backend":"vrm","modelPath":"custom/model.vrm","sourceSha256":"custom","animations":[{"name":"Rest","durationMs":1000}],"vrm":{"animations":[{"name":"Rest","path":"custom/rest.vrma"}]},"mappings":{"idle":"Rest","working":null,"completed":null,"error":null,"blocked":null,"approval":null,"click":[]}}});
+        let current = settings::decode_settings(&serde_json::to_vec(&old).unwrap()).unwrap();
+        let before = serde_json::to_value(&current).unwrap();
+        assert!(current.active_model_id.is_none());
+        let pending = select_missing_default(&current, folder.path())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            pending.active_model_id.as_deref(),
+            Some(settings::DEFAULT_MODEL_ID)
+        );
+        assert_eq!(pending.models.len(), 1);
+        assert_eq!(pending.models[0].data.model_path, "custom/model.vrm");
+        assert_eq!(pending.preferences.fps, 60);
+        assert!(pending.preferences.privacy_mode);
+        assert_eq!(pending.preferences.scale, 0.8);
+        assert_eq!(serde_json::to_value(&current).unwrap(), before);
+        assert!(!folder.path().join("starter-character.zip").exists());
+        let restored = settings::decode_settings(&serde_json::to_vec(&pending).unwrap()).unwrap();
+        assert_eq!(
+            restored.active_model_id.as_deref(),
+            Some(settings::DEFAULT_MODEL_ID)
+        );
+    }
+
+    #[test]
+    fn corrupt_present_cache_or_invalid_descriptor_never_becomes_a_pending_selection() {
+        let (folder, _) = starter_fixture(fixture());
+        let mut current = DesktopSettings::default();
+        current.select(None).unwrap();
+        let before = serde_json::to_value(&current).unwrap();
+        fs::write(folder.path().join("starter-character.zip"), b"corrupt").unwrap();
+        assert!(select_missing_default(&current, folder.path())
+            .unwrap()
+            .is_none());
+        assert!(prepare_default(folder.path(), current.preferences.clone()).is_err());
+        assert_eq!(serde_json::to_value(&current).unwrap(), before);
+        fs::remove_file(folder.path().join("starter-character.zip")).unwrap();
+        fs::write(folder.path().join("starter-character.json"), b"{}").unwrap();
+        assert!(select_missing_default(&current, folder.path()).is_err());
+        assert_eq!(serde_json::to_value(current).unwrap(), before);
     }
 
     #[test]

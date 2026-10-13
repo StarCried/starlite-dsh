@@ -1,10 +1,17 @@
 import { createHash } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import { lstat, readFile, readdir, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
-export const RUNTIMES=["core","inochi2d","vrm"];
-export const RUNTIME_PACKAGES={core:"@starcried/starlite-core",inochi2d:"@starcried/starlite-inochi2d",vrm:"@starcried/starlite-vrm"};
-const REQUIRED={core:["index.js","index.d.ts","dialogue.js","dialogue.d.ts","bubble.js","bubble.d.ts"],inochi2d:["index.js","widget.css","generated/inochi2d.wasm"],vrm:["index.js","widget.css"]};
+export const RUNTIMES=["core","vrm"];
+export const RUNTIME_PACKAGES={core:"@starcried/starlite-core",vrm:"@starcried/starlite-vrm"};
+const REQUIRED={core:["index.js","index.d.ts","dialogue.js","dialogue.d.ts","bubble.js","bubble.d.ts"],vrm:["index.js","widget.css"]};
+export async function assertRuntimeLayout(directory){
+ const info=await lstat(directory);
+ if(!info.isDirectory()||info.isSymbolicLink())throw new Error("runtime staging directory must be an ordinary directory");
+ const entries=await readdir(directory,{withFileTypes:true});
+ for(const entry of entries)if(!entry.isDirectory()||entry.isSymbolicLink()||!RUNTIMES.includes(entry.name))throw new Error(`unsupported staged runtime: ${entry.name}`);
+}
 export async function assertRuntime(name,directory,provenance=true){
+ if(!RUNTIMES.includes(name))throw new Error(`unsupported runtime: ${name}`);
  for(const file of REQUIRED[name])if(!(await stat(resolve(directory,file)).catch(()=>undefined))?.isFile())throw new Error(`Missing ${name} runtime (${file}). Run pnpm sync:runtime first.`);
  if(!provenance)return;
  const metadata=JSON.parse(await readFile(resolve(directory,"runtime-provenance.json"),"utf8"));

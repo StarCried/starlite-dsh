@@ -12,6 +12,7 @@ export async function checkProgramAssets(root) {
     for (const entry of entries) {
       const path = `${relativePath}/${entry.name}`;
       if (entry.isSymbolicLink()) failures.push(`program resource must not be a symlink: ${path}`);
+      else if (/inochi2d/iu.test(entry.name) || /\.wasm$/iu.test(entry.name)) failures.push(`disabled Inochi2D runtime in program resources: ${path}`);
       else if (entry.isDirectory()) await visit(path);
       else if (/\.(inp|inx|vrm|vrma|blend)$/iu.test(entry.name)) failures.push(`separately licensed character asset in program resources: ${path}`);
     }

@@ -13,8 +13,18 @@ afterEach(async () => {
 it("permits ordinary runtime resources and no optional model directory", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "dsh-program-assets-")); temporary.push(root);
   await mkdir(resolve(root,"apps/desktop/public/runtime"), {recursive:true});
-  await writeFile(resolve(root,"apps/desktop/public/runtime/runtime.wasm"), "synthetic");
+  await writeFile(resolve(root,"apps/desktop/public/runtime/index.js"), "synthetic");
   expect(await checkProgramAssets(root)).toEqual([]);
+});
+it("rejects stale Inochi2D resources and WASM in source and built program assets", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "dsh-program-assets-")); temporary.push(root);
+  const paths = ["apps/desktop/public/runtime/inochi2d/index.js", "apps/desktop/dist/runtime/inochi2d-web/index.js", "apps/desktop/public/runtime/unexpected/runtime.wasm"];
+  for (const path of paths) { await mkdir(dirname(resolve(root,path)),{recursive:true}); await writeFile(resolve(root,path), "synthetic"); }
+  const failures = await checkProgramAssets(root);
+  expect(failures).toHaveLength(3);
+  expect(failures.join("\n")).toContain("public/runtime/inochi2d");
+  expect(failures.join("\n")).toContain("dist/runtime/inochi2d-web");
+  expect(failures.join("\n")).toContain("unexpected/runtime.wasm");
 });
 it("rejects ignored nested character files in every installer resource location", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "dsh-program-assets-")); temporary.push(root);

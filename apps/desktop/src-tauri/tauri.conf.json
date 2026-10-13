@@ -40,7 +40,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost blob: http://127.0.0.1:*; worker-src 'none'; frame-src 'none'",
+      "csp": "default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost blob: http://127.0.0.1:*; worker-src 'none'; frame-src 'none'",
       "assetProtocol": {
         "enable": true,
         "scope": ["$APPDATA/models/**/*"]
@@ -52,7 +52,7 @@
     "targets": ["nsis"],
     "publisher": "StarCried",
     "copyright": "Copyright © 2026 StarCried",
-    "shortDescription": "StarLite for DSH: lightweight VRM and Inochi2D desktop companion",
+    "shortDescription": "StarLite for DSH: lightweight VRM desktop companion",
     "longDescription": "A lightweight local StarLite character driven by DeepSeek Harness running in WSL2.",
     "icon": [
       "icons/32x32.png",

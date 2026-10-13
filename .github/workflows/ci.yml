@@ -75,38 +75,11 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: starlite/package-lock.json
-      - name: Install deterministic WASM build tools
-        shell: bash
-        run: |
-          curl --fail --location --silent --show-error \
-            --output "$RUNNER_TEMP/llvm-snapshot.gpg.key" \
-            https://apt.llvm.org/llvm-snapshot.gpg.key
-          test "$(gpg --show-keys --with-colons "$RUNNER_TEMP/llvm-snapshot.gpg.key" \
-            | awk -F: '$1 == "fpr" { print $10; exit }')" \
-            = "6084F3CF814B57C1CF12EFD515CF4D18AF4F7421"
-          sudo gpg --dearmor \
-            --output /usr/share/keyrings/apt.llvm.org.gpg \
-            "$RUNNER_TEMP/llvm-snapshot.gpg.key"
-          echo "deb [signed-by=/usr/share/keyrings/apt.llvm.org.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" \
-            | sudo tee /etc/apt/sources.list.d/llvm-20.list
-          sudo apt-get update
-          sudo apt-get install --yes lld-20
-          curl --fail --location --silent --show-error \
-            --output "$RUNNER_TEMP/binaryen.tar.gz" \
-            https://github.com/WebAssembly/binaryen/releases/download/version_120/binaryen-version_120-x86_64-linux.tar.gz
-          echo "ddb097af51d1bdb17300d986b0de7d97422f1933dedb4c9eda3510e0bf4076cc  $RUNNER_TEMP/binaryen.tar.gz" \
-            | sha256sum --check
-          tar -xzf "$RUNNER_TEMP/binaryen.tar.gz" -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/binaryen-version_120/bin" >> "$GITHUB_PATH"
-      - uses: actions/cache@v6
-        with:
-          path: ~/.cache/starlite/official-sdk
-          key: official-sdk-${{ runner.os }}-${{ hashFiles('starlite/tools/official-sdk/pin.json', 'starlite/tools/official-sdk/**', 'starlite/tools/build-official-sdk.mjs') }}
       - working-directory: starlite
         run: npm ci
       - working-directory: starlite
-        run: npm run fixtures && npm run build:wasm && npm run build --workspace @starcried/starlite-core && npm run build --workspace @starcried/starlite-inochi2d && npm run build --workspace @starcried/starlite-vrm && npm run test --workspace @starcried/starlite-inochi2d && npm run test --workspace @starcried/starlite-vrm
-      - run: node tools/sync-model-runtime.mjs starlite/packages/inochi2d/dist
+        run: npm run build --workspace @starcried/starlite-core && npm run build --workspace @starcried/starlite-vrm && npm run test --workspace @starcried/starlite-core && npm run test --workspace @starcried/starlite-vrm
+      - run: node tools/sync-model-runtime.mjs starlite
       - uses: actions/upload-artifact@v7
         with:
           name: model-runtimes

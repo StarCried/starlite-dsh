@@ -4,7 +4,7 @@ import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { RUNTIMES, RUNTIME_PACKAGES, assertRuntime } from "./model-runtime.mjs";
+import { RUNTIMES, RUNTIME_PACKAGES, assertRuntime, assertRuntimeLayout } from "./model-runtime.mjs";
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const inputs = process.argv.slice(2).filter((argument) => argument !== "--");
 if (inputs.length === 0) {
@@ -36,15 +36,10 @@ const cargoMetadata = JSON.parse(run("cargo", [
   "apps/desktop/src-tauri/Cargo.toml",
 ]));
 const components = collectComponents(nodeLicenses, cargoMetadata.packages);
-const runtimeProvenance = JSON.parse(await readFile(
-  resolve(root, "apps/desktop/public/runtime/inochi2d/runtime-provenance.json"),
-  "utf8",
-));
-components.push(...runtimeComponents(runtimeProvenance));
+await assertRuntimeLayout(resolve(root, "apps/desktop/public/runtime"));
 for (const name of RUNTIMES) {
   const directory = resolve(root, "apps/desktop/public/runtime", name);
   await assertRuntime(name, directory);
-  if (name === "inochi2d") continue;
   const metadata = JSON.parse(await readFile(resolve(directory, "runtime-provenance.json"), "utf8"));
   components.push({ type: "library", name: metadata.package, version: metadata.version, licenses: licenseEntry("BSD-2-Clause"), properties: [{name: "git:revision", value: metadata.revision}] });
   for (const [dependency, version] of Object.entries(metadata.dependencies)) {
@@ -114,50 +109,6 @@ function collectComponents(nodeGroups, cargoPackages) {
     });
   }
   return [...result.values()].sort((left, right) => `${left.name}@${left.version}`.localeCompare(`${right.name}@${right.version}`));
-}
-
-function runtimeComponents(provenance) {
-  const sdk = provenance.officialSdk;
-  if (
-    provenance.package !== RUNTIME_PACKAGES.inochi2d
-    || typeof provenance.version !== "string"
-    || typeof provenance.revision !== "string"
-    || !sdk
-    || typeof sdk.revision !== "string"
-    || typeof sdk.packages !== "object"
-    || sdk.packages === null
-    || Array.isArray(sdk.packages)
-  ) {
-    throw new Error("StarLite Inochi2D runtime provenance is incomplete");
-  }
-  const components = [{
-    type: "library",
-    name: RUNTIME_PACKAGES.inochi2d,
-    version: provenance.version,
-    licenses: [{ license: { id: "BSD-2-Clause" } }],
-    externalReferences: [{
-      type: "vcs",
-      url: `${provenance.repository ?? "https://github.com/StarCried/starlite"}#${provenance.revision}`,
-    }],
-    properties: [{ name: "git:revision", value: provenance.revision }],
-  }, {
-    type: "library",
-    name: "inochi2d",
-    version: sdk.revision,
-    purl: `pkg:github/Inochi2D/inochi2d@${sdk.revision}`,
-    licenses: [{ license: { id: "BSD-2-Clause" } }],
-    hashes: [{ alg: "SHA-256", content: sdk.wasmSha256 }],
-  }];
-  for (const [name, version] of Object.entries(sdk.packages)) {
-    components.push({
-      type: "library",
-      name,
-      version: String(version),
-      purl: `pkg:dub/${encodeURIComponent(name)}@${encodeURIComponent(String(version))}`,
-      licenses: [{ license: { name: "See bundled StarLite Inochi2D license texts" } }],
-    });
-  }
-  return components;
 }
 
 async function collectLicenseTexts(nodeGroups, cargoPackages) {

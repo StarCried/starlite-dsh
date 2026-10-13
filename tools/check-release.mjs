@@ -11,7 +11,7 @@ const failures = [];
 const arguments_ = process.argv.slice(2).filter(argument => argument !== "--");
 if (arguments_.some(argument => argument !== "--local-test") || arguments_.length > 1) throw Error("usage: pnpm check:release [-- --local-test]");
 const localTest = arguments_.includes("--local-test");
-import { RUNTIMES, assertRuntime } from "./model-runtime.mjs";
+import { RUNTIMES, assertRuntime, assertRuntimeLayout } from "./model-runtime.mjs";
 const versionFiles = [
   ["workspace", "package.json", "version"],
   ["desktop", "apps/desktop/package.json", "version"],
@@ -41,34 +41,13 @@ if (!pin || !/^[0-9a-f]{40}$/u.test(pin)) {
   failures.push("release/starlite.rev must contain one public 40-character Git revision");
 }
 
+try { await assertRuntimeLayout(resolve(root, "apps/desktop/public/runtime")); } catch (error) { failures.push(String(error)); }
 for (const name of RUNTIMES) {
   try { await assertRuntime(name, resolve(root, "apps/desktop/public/runtime", name)); } catch (error) { failures.push(String(error)); }
   const metadata = await jsonFile(`apps/desktop/public/runtime/${name}/runtime-provenance.json`);
   if (!metadata || metadata.dirty !== false || metadata.revision !== pin) failures.push(`${name} must match the clean runtime pin`);
+  if (typeof metadata?.repository !== "string" || !/github\.com[/:]StarCried\/starlite(?:\.git)?$/iu.test(metadata.repository)) failures.push(`${name} provenance does not name the public StarCried/starlite repository`);
 }
-const provenance = await jsonFile("apps/desktop/public/runtime/inochi2d/runtime-provenance.json");
-if (!provenance) {
-  failures.push("the staged StarLite Inochi2D runtime has no provenance");
-} else {
-  if (provenance.dirty !== false) failures.push("the staged StarLite Inochi2D runtime is dirty");
-  if (pin && provenance.revision !== pin) failures.push("runtime provenance does not match release/starlite.rev");
-  if (typeof provenance.repository !== "string" || !/github\.com[/:]StarCried\/starlite(?:\.git)?$/iu.test(provenance.repository)) {
-    failures.push("runtime provenance does not name the public StarCried/starlite repository");
-  }
-  if (
-    typeof provenance.officialSdk?.revision !== "string"
-    || !/^[0-9a-f]{40}$/u.test(provenance.officialSdk.revision)
-    || typeof provenance.officialSdk?.wasmSha256 !== "string"
-    || !/^[0-9a-f]{64}$/u.test(provenance.officialSdk.wasmSha256)
-  ) {
-    failures.push("runtime provenance lacks the pinned official SDK identity");
-  }
-}
-
-const cargoRevision = cargo?.match(/inochi2d-pipeline\s*=\s*\{[^\n]*rev\s*=\s*"([0-9a-f]{40})"/u)?.[1];
-if (!cargoRevision) failures.push("inochi2d-pipeline must use a fixed Git revision");
-const pipelinePin = (await textFile("release/inochi2d-pipeline.rev"))?.trim();
-if (!/^[0-9a-f]{40}$/u.test(pipelinePin ?? "") || pipelinePin !== cargoRevision) failures.push("inochi2d-pipeline revision differs from its release pin");
 
 failures.push(...await checkProgramAssets(root));
 

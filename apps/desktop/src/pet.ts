@@ -179,6 +179,30 @@ export async function startPet(): Promise<void> {
     }
   };
   globalThis.addEventListener("pagehide", () => { closing=true; ++mountGeneration; hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
+  let settingsRevision = 0;
+  await listen<DesktopSettings>("settings-changed", ({ payload }) => {
+    ++settingsRevision;
+    const previous=settings;
+    settings = payload;
+    fees.cancel();
+    if (latestSnapshot) workBubble.update(latestSnapshot, settings.preferences);
+    syncInputAvailable();
+    if(JSON.stringify([previous.model,previous.preferences.fps,previous.preferences.maxDevicePixelRatio,previous.preferences.scale])===JSON.stringify([settings.model,settings.preferences.fps,settings.preferences.maxDevicePixelRatio,settings.preferences.scale]))return;
+    void remount()
+      .then(() => {
+        if (connected && settings.model) void window.show();
+      })
+      .catch(() => {
+        empty.hidden = false;
+        empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
+      });
+  });
+  // The settings window can finish automatic onboarding while this webview is
+  // initializing. Subscribe before mounting and then read the current state,
+  // without letting a late read replace a newer settings event.
+  const readRevision = settingsRevision;
+  const currentSettings = await invoke<DesktopSettings>("get_settings");
+  if (readRevision === settingsRevision) settings = currentSettings;
   await remount();
 
   connection = new StatusConnection({
@@ -222,22 +246,6 @@ export async function startPet(): Promise<void> {
   connectUrls(await getCurrent());
   await onOpenUrl(connectUrls);
 
-  await listen<DesktopSettings>("settings-changed", ({ payload }) => {
-    const previous=settings;
-    settings = payload;
-    fees.cancel();
-    if (latestSnapshot) workBubble.update(latestSnapshot, settings.preferences);
-    syncInputAvailable();
-    if(JSON.stringify([previous.model,previous.preferences.fps,previous.preferences.maxDevicePixelRatio,previous.preferences.scale])===JSON.stringify([settings.model,settings.preferences.fps,settings.preferences.maxDevicePixelRatio,settings.preferences.scale]))return;
-    void remount()
-      .then(() => {
-        if (connected && settings.model) void window.show();
-      })
-      .catch(() => {
-        empty.hidden = false;
-        empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
-      });
-  });
   await listen<string>("tray-action", ({ payload }) => {
     if (payload === "pause") pausedByTray = true;
     if (payload === "resume") pausedByTray = false;

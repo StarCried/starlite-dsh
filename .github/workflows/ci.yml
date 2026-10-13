@@ -161,6 +161,8 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: unsigned-windows-alpha
+          # The explicitly listed plugin tarball lives in the hidden .pack directory.
+          include-hidden-files: true
           path: |
             apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
             packages/dsh-plugin/.pack/*.tgz

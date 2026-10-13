@@ -1,3 +1,5 @@
+import { renderLicenseContent } from "./license-content.js";
+
 export interface ResourcePackInspection {
   title: string;
   license: string;
@@ -13,10 +15,8 @@ export function showResourceLicense(pack: {title: string; text: string}): void {
   const title = document.createElement("h2");
   title.textContent = `${pack.title} · 使用许可`;
   const notice = document.createElement("p");
-  notice.textContent = "使用本模型即视为同意其许可；如不同意，请在设置中禁用模型。";
-  const license = document.createElement("pre");
-  license.tabIndex = 0;
-  license.textContent = pack.text;
+  notice.textContent = "使用本模型即视为同意其许可；如不同意，请在设置中选择“不显示模型”。";
+  const license = renderLicenseContent(pack.text);
   const actions = document.createElement("div");
   actions.className = "license-actions";
   const close = document.createElement("button");
@@ -40,10 +40,8 @@ export function confirmResourceLicense(pack: ResourcePackInspection): Promise<bo
   title.textContent = pack.title;
   const description = document.createElement("p");
   description.textContent = `包含 ${pack.animationCount} 个动作。确认许可后自动导入模型、动作、角色配置与状态映射。`;
-  const license = document.createElement("pre");
-  license.tabIndex = 0;
+  const license = renderLicenseContent(pack.license);
   license.setAttribute("aria-label", "资源包使用许可");
-  license.textContent = pack.license;
   const actions = document.createElement("div");
   actions.className = "license-actions";
   const cancel = document.createElement("button");

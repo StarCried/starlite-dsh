@@ -1,37 +1,32 @@
-# dsh-starlite
+# StarLite for DSH
 
-**StarLite for DSH** 的桥接插件：让 Windows 桌宠跟随 WSL2 中的 DSH 工作状态，显示气泡并接收普通用户问题的回答。
+用动作和气泡陪伴你的 DSH 工作。**一个插件自动准备 Windows 桌宠，首次使用自动获取微光**，无需另装软件或手动导入资源。
+
+需要 Windows 11 x64、WebView2，以及 WSL2 中已经可用的 DSH。当前为未发布的本地 alpha 候选。
 
 ## 安装与启动
 
-需要 Windows 11 x64、已经可用的 WSL2 DSH，以及同版本的 Windows 桌宠。目前是尚未公开发布的 alpha 候选，已验收 DSH `0.1.5-rc.1`；无需重装已有 DSH。
-
-1. 安装 Windows 桌宠。首次打开时选择独立授权的微光 ZIP、确认许可，资源和动作映射会自动导入。
-2. 在 WSL 终端给日常使用的 profile 安装候选插件，然后启动 DSH：
+在 **WSL 终端**给平时使用的 profile 安装候选包，然后启动 DSH：
 
 ```bash
-dsh plugin --profile web add /mnt/c/Downloads/dsh-starlite-0.1.0-alpha.0.tgz
+dsh plugin --profile web add /path/to/dsh-starlite-0.1.0-alpha.0.tgz
 dsh --profile web
 ```
 
-将路径和 `web` 换成自己的资源位置及 profile。公开 alpha 发布后，安装命令可简化为 `dsh plugin --profile web add dsh-starlite@alpha`。以后只需运行 `dsh --profile web`，插件会自动启动 Windows 桌宠。
+将路径和 `web` 换成自己的包位置及 profile。首次启动自动下载独立授权的微光资源包，阅读并确认许可后自动配置；已有模型、映射与偏好保留。以后只需启动 DSH。当前本地测试包依赖作者在本机运行的资源服务，不能作为公开发行包。
 
-Windows 桌宠也有免安装 ZIP：解压后，在启动 DSH 的 WSL 环境设置 `export DSH_INOCHI2D_PET_EXE='D:\Apps\StarLite\dsh-inochi2d-pet.exe'`，路径换成实际位置。安装器可自动发现路径，免安装版须自行保留该配置；两者均需要 WebView2，模型与设置仍在 Windows AppData。详见[免安装说明](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/user-guide.md#免安装版可选)。
-
-模型及第三方动作与程序独立分发。导入自己的模型时当前仍需提供真实 Idle 动作；通用默认 Idle 和无动作自动站姿尚未提供。
+公开 npm 发布后，安装命令可改为 `dsh plugin --profile web add dsh-starlite@alpha`。目前还没有可安装的公开版本。
 
 ## 日常使用
 
-单击模型查看回应与官方 DeepSeek 费用信息；双击打开气泡对应的 DSH 会话，无会话时打开 Web UI 首页。拖动模型身体可移动桌宠，右键或托盘打开设置。气泡默认显示标题和状态，也可切换详细模式；普通用户问题可直接在气泡里回答，工具权限审批仍在 DSH 中处理。
+单击模型回应并查看费用；双击打开当前会话，无会话时打开 Web UI；拖动身体移动桌宠。右键或托盘打开设置。工作气泡可选精简／详细模式，普通问题可直接在气泡里选择或输入。
 
-在 DSH「设置 → 插件 → 插件列表 → 全局」查找 `dsh-starlite`。桌宠设置位于 Windows 程序；「插件配置」页不显示桌宠设置卡。
-
-若同一 profile 曾安装 `dsh-inochi2d-pet`，先执行 `dsh plugin --profile web remove dsh-inochi2d-pet`。不要同时运行新旧桥接；已有 Windows 用户模型与设置保留。
+在 DSH「设置 → 插件 → 插件列表 → 全局」查找 `dsh-starlite`。若同一 profile 装过 `dsh-inochi2d-pet`，先移除旧包，避免同时运行新旧桥接。
 
 ## 进阶
 
-[安装、升级与卸载](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/user-guide.md) · [换模型与动作](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/model-import.md) · [气泡、费用与隐私边界](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/companion-interactions.md) · [开发与兼容检查](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/development.md)
+[安装、升级与卸载](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/user-guide.md) · [换模型与动作](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/model-import.md) · [气泡、费用与隐私](https://github.com/StarCried/starlite-dsh/blob/feat/dual-model-backends/docs/companion-interactions.md)
 
-插件不向 Windows 发送 API Key、用户提示、工具参数／结果或真实会话 ID。不兼容或缺少 Windows 程序时只停用桌宠，DSH 继续运行。桥接随 DSH 停止；Windows 桌宠断连后隐藏，等待重连后退出。当前不支持原生 Windows DSH。
+当前桌宠导入自己的模型仍需真实 Idle 动作。桌宠准备、下载或兼容性检查失败时，DSH 仍可正常运行。插件不向 Windows 发送 API Key、用户提示、工具参数／结果或真实会话 ID。当前仅支持 WSL2 DSH。
 
-BSD-2-Clause；Windows alpha 安装器未签名，安装前核对来源与哈希。
+程序 BSD-2-Clause；微光和第三方动作独立授权，不打包在 npm 插件内。Windows 程序目前未签名。

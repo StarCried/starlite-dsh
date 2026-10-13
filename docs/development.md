@@ -41,17 +41,42 @@ Set-Location starlite-dsh
 pnpm install --frozen-lockfile
 pnpm sync:runtime -- "//wsl.localhost/Ubuntu/home/<user>/starlite/packages/inochi2d/dist"
 pnpm check
-pnpm pack:plugin
 pnpm desktop:build
+pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.0_x64-setup.exe"
 ```
 
 本机维护者 checkout 的同步源为 `//wsl.localhost/Ubuntu/home/pc/StarCried/starlite/packages/inochi2d/dist`。同步源必须显式给出，也可用 `STARLITE_INOCHI2D_DIST` 环境变量。工具从同一个 checkout 收集 `packages/core`、`packages/inochi2d`、`packages/vrm`，写入未跟踪的 `apps/desktop/public/runtime/{core,inochi2d,vrm}`，校验包名、官方 WASM 哈希和许可证，并记录 Git revision／dirty 与各文件哈希。发布只接受干净且匹配 pin 的运行时。
 
-产物分别在 `packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.0.tgz` 与 `apps/desktop/src-tauri/target/release/bundle/nsis/`。原生 exe 名仍为 `dsh-inochi2d-pet.exe`，安装器显示名为 StarLite for DSH。不要在同一 checkout 混用 Windows 与 WSL 的 node_modules；Windows 构建打包，WSL 只安装生成的桥接 tarball。
+原生 exe 位于 `apps/desktop/src-tauri/target/release/dsh-inochi2d-pet.exe`，可选安装器位于 `apps/desktop/src-tauri/target/release/bundle/nsis/`。普通用户使用包含 Windows 程序的统一插件，不需要安装器。不要在同一 checkout 混用 Windows 与 WSL 的 node_modules。
+
+### 准备统一插件和本地下载服务
+
+程序包只带 `assets/windows-x64/` 中的 EXE、两份程序许可和固定清单。微光始终是独立 ZIP，不进入 npm tarball、桌宠资源或源码。
+
+维护者本地验收时，在 **WSL 的另一个终端**启动只监听 `127.0.0.1` 的资源服务，保持运行。将三个参数分别换为私有 ZIP、包内桌面模型的 SHA-256，以及本仓库 `release-output` 中一个尚不存在的描述文件路径：
+
+```bash
+node /mnt/e/path/to/starlite-dsh/tools/local-character-server.mjs \
+  /mnt/e/path/to/Weiguang.zip DESKTOP_MODEL_SHA256 \
+  /mnt/e/path/to/starlite-dsh/release-output/local-character.json
+```
+
+服务只向本机提供该 ZIP 的不可变快照，不开放目录或 CORS。描述文件包含本机 URL、ZIP 长度／SHA-256、模型 SHA-256 和 `localTest: true`。使用显式模型哈希是因为资源导入由 Windows 原生 ZIP 检查完成，资源服务不重复实现导入器。不要把私有 ZIP 放进项目目录。
+
+回到 **Windows PowerShell**，显式 staging 并打包：
+
+```powershell
+pnpm stage:plugin -- release-output/local-character.json
+pnpm pack:plugin
+```
+
+`stage:plugin` 只从固定 release 构建路径收集程序和通知，检查 Windows x64 GUI PE、版本与 SHA-256。`pack:plugin` 要求恰好 11 个允许文件，检查内嵌程序和清单，拒绝多余资产。普通 JS 构建／测试不要求 EXE 已存在。生成的本地 tarball 只用于本机验收，不可发布。
+
+公开发布前，维护者必须在获得资源公开分发批准后提供独立 HTTPS 下载地址的描述文件，再重新 staging 和打包。`pnpm check:release` 拒绝本机地址；`pnpm check:release -- --local-test` 仅用于本地构建验收，不代表允许发布。它仍检查干净工作树、固定运行时来源、版本和程序资源。
 
 ## 3. 隔离 DSH 安装检查
 
-先在 Windows 安装候选程序，再在 WSL 中安装生成的包。把示例绝对路径换成实际路径，使用单独的测试 profile：
+在 WSL 中安装生成的统一插件即可，不必先安装 Windows 程序。把示例绝对路径换成实际路径，使用单独的测试 profile：
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
@@ -64,14 +89,7 @@ dsh --profile starlite-test --dump-config
 
 契约检查验证实际事件和 settings／credentials／sessionPersistence 的公开只读接口。费用服务不可用只使费用卡不可用，不阻止状态桥接或 DSH 启动。不要向普通会话发送测试提示来满足安装检查，不需要调用付费模型 API。
 
-如果直接测试本地原生构建，在启动 DSH 的 WSL 环境设置：
-
-```bash
-export DSH_INOCHI2D_PET_EXE='E:\path\to\starlite-dsh\apps\desktop\src-tauri\target\release\dsh-inochi2d-pet.exe'
-dsh --profile starlite-test
-```
-
-该现有变量继续保留，仅接受本机盘符绝对路径和原生 exe 文件名，不接受参数；未设置时使用 Windows 协议注册。新旧名桥接不能同时加入一个 profile。
+随后运行 `dsh --profile starlite-test` 检查自动准备程序、首次下载、许可确认与原偏好保留。测试下载流程不需要填写模型 API Key 或发送任何会话请求。新旧名桥接不能同时加入一个 profile。
 
 ## 自动检查
 
@@ -85,7 +103,7 @@ cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
 git diff --check
 ```
 
-`check:core` 不需要生成浏览器运行时；完整 `check` 与桌宠构建需要先同步运行时。CI 在 Linux 构建官方 WASM，再把三个组件传给 Windows job。更名后的本地 source pin 仍需在后续公开候选时更新，不能在本轮伪造干净 provenance 或绕过发布门。
+`check:core` 不需要浏览器运行时或 Windows EXE；完整 `check` 与桌宠构建需要先同步运行时。CI 在 Linux 构建官方 WASM，再把三个组件传给 Windows job。Windows CI 为打包结构检查生成不含资产、不可下载的本机测试清单；产物明确标记为 `local-only-windows-validation`，不能给普通用户使用或发布。私有微光不会传到 CI。公开发布仍需要独立 HTTPS 资源来源及完整发布门检查。
 
 ## 模拟与人工检查
 

@@ -147,8 +147,25 @@ jobs:
       - name: Verify isolated NSIS install, synthetic upgrade, reinstall and uninstall
         shell: pwsh
         run: ./tools/test-installer.ps1
+      - name: Generate dependency notices for the embedded desktop
+        shell: pwsh
+        run: |
+          $config = Get-Content -LiteralPath 'apps/desktop/src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json
+          $installer = Join-Path 'apps/desktop/src-tauri/target/release/bundle/nsis' "$($config.productName)_$($config.version)_x64-setup.exe"
+          pnpm release:metadata -- $installer
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Stage the unified plugin with an artwork-free local test reference
+        shell: pwsh
+        run: |
+          # CI verifies package structure without downloading or uploading the private character.
+          # This deliberately unavailable loopback reference cannot pass the public release gate.
+          $descriptor = @{ title = 'CI artwork-free fixture'; url = 'http://127.0.0.1:1/fixture.zip'; sha256 = ('0' * 64); bytes = 1; modelSha256 = ('0' * 64); localTest = $true }
+          $descriptor | ConvertTo-Json | Set-Content -LiteralPath 'release-output/ci-starter-character.json' -Encoding utf8
+          pnpm stage:plugin -- release-output/ci-starter-character.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run: pnpm pack:plugin
-      - run: pnpm check:release
+      - name: Check local build gates (not a public release)
+        run: pnpm check:release -- --local-test
       - name: Generate checksums, SBOM and dependency license texts
         shell: pwsh
         run: |
@@ -173,7 +190,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v7
         with:
-          name: unsigned-windows-alpha
+          name: local-only-windows-validation
           # The explicitly listed plugin tarball lives in the hidden .pack directory.
           include-hidden-files: true
           path: |

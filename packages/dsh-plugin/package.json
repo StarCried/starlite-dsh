@@ -1,7 +1,7 @@
 {
   "name": "dsh-starlite",
   "version": "0.1.0-alpha.0",
-  "description": "StarLite DSH Bridge: a local DeepSeek Harness status bridge",
+  "description": "StarLite for DSH: a lightweight Windows companion managed by one DSH plugin",
   "type": "module",
   "license": "BSD-2-Clause",
   "author": "StarCried",
@@ -16,6 +16,7 @@
   "exports": {".":"./dist/index.js","./client":"./dist/client.js"},
   "files": [
     "dist",
+    "assets/windows-x64",
     "cordis.patch.yml",
     "LICENSE",
     "README.md"

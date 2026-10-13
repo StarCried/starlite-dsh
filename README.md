@@ -2,26 +2,20 @@
 
 让微光陪你使用 DeepSeek Harness：安静待机，用动作和气泡显示工作状态，也能直接回答会话里的选择题。
 
-需要 **Windows 11 x64 + WebView2**，DSH 运行在 **WSL2**。当前为本地候选，新名称的公开下载尚未发布。
+需要 **Windows 11 x64 + WebView2**，DSH 运行在 **WSL2**。当前是本地测试候选，尚未发布 npm 包。
 
-## 安装并使用微光
+## 安装并体验微光
 
-1. 在 Windows 安装 **StarLite for DSH**。首次打开时选择独立授权的 **Weiguang for StarLite** ZIP 并确认许可，模型、动作和状态映射自动导入并保存。
-2. 在 WSL 中，为平时使用的 DSH profile 安装桥接插件：
-
-   ```sh
-   dsh plugin --profile web add /path/to/dsh-starlite-0.1.0-alpha.0.tgz
-   ```
-
-不想运行安装器时，可使用[免安装 ZIP](docs/user-guide.md#免安装版可选)：解压后指定一次 Windows EXE 路径。安装器会自动完成路径发现，操作更少；两种方式使用同一个桌宠程序。
-
-以后只需启动 DSH，桌宠会自动出现：
+在 **WSL 终端**给平时使用的 DSH profile 安装插件，然后启动：
 
 ```sh
+dsh plugin --profile web add /path/to/dsh-starlite-0.1.0-alpha.0.tgz
 dsh --profile web
 ```
 
-桌宠在 DSH 连接后出现；单独打开 Windows 程序用于导入模型和调整设置，不会自动启动 DSH。程序不打包浏览器，使用 Windows 的 WebView2。
+把路径和 `web` 换成自己的候选包位置及 profile。**只安装这一个插件**：它自动准备 Windows 桌宠，首次使用自动获取独立授权的微光资源包。阅读并确认许可后，模型、动作和状态映射一起导入；已有模型和偏好保留。
+
+以后只需启动 DSH，桌宠随之出现。无需另装桌宠软件、手动解压模型或填写 EXE 路径。程序使用系统 WebView2，不打包浏览器。当前候选使用作者在本机启动的资源服务测试下载流程，尚无公开资源下载地址。
 
 ## 日常操作
 
@@ -33,6 +27,6 @@ dsh --profile web
 
 ## 进阶使用
 
-[自定义模型与动作](docs/model-import.md) · [气泡与互动](docs/companion-interactions.md) · [开发说明](docs/development.md) · [项目结构](docs/model-components.md)
+[安装、升级与卸载](docs/user-guide.md) · [自定义模型与动作](docs/model-import.md) · [气泡与互动](docs/companion-interactions.md) · [开发说明](docs/development.md)
 
-程序采用 [BSD-2-Clause](LICENSE)。微光资源包单独授权，不包含在程序安装包内。
+程序采用 [BSD-2-Clause](LICENSE)。微光资源包单独授权、单独下载，不包含在 npm 程序包内。

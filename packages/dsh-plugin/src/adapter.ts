@@ -119,11 +119,20 @@ export async function startDshAdapter(
     throw error;
   }
 
+  const launchAbort = new AbortController();
   void (dependencies.launch ?? launchWindowsPet)({
     port: server.port,
     token: server.token,
     instanceId: randomUUID(),
+  }, {
+    signal: launchAbort.signal,
+    onStarterFailure: () => {
+      if (!launchAbort.signal.aborted) context.logger?.warn?.(
+        "StarLite could not acquire the starter character. The companion will show recovery instructions; existing models are preserved.",
+      );
+    },
   }).catch(() => {
+    if (launchAbort.signal.aborted) return;
     context.logger?.warn?.(
       "StarLite for DSH could not start the Windows companion; DSH will continue without it.",
     );
@@ -134,6 +143,7 @@ export async function startDshAdapter(
   return async () => {
     if (closed) return;
     closed = true;
+    launchAbort.abort();
     billing.close();
     questions.close();
     await closeAdapter(disposers, server);

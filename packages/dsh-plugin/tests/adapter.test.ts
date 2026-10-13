@@ -88,7 +88,7 @@ describe("DSH compatibility adapter", () => {
     expect(snapshots.at(-1)?.state).toBe("working");
     expect(JSON.stringify(snapshots)).not.toContain("private");
     expect(source).toBeDefined();
-    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ port: 41234 }));
+    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ port: 41234 }), expect.objectContaining({signal:expect.any(AbortSignal),onStarterFailure:expect.any(Function)}));
 
     let settleApproval: ((value: string) => void) | undefined;
     const next = vi.fn(() => new Promise<string>((resolve) => {
@@ -122,6 +122,32 @@ describe("DSH compatibility adapter", () => {
       startServer,
     })).rejects.toThrow(/WSL2/);
     expect(startServer).not.toHaveBeenCalled();
+  });
+
+  it("cancels preparation on disposal and contains startup failures without leaking details", async () => {
+    const warn = vi.fn(), close = vi.fn(async () => undefined);
+    let signal: AbortSignal | undefined;
+    let reportStarterFailure: (() => void) | undefined;
+    const stop = await startDshAdapter({on:() => () => undefined,logger:{warn}}, {
+      isWsl:() => true,
+      startServer:async () => ({port:41234,token:"a".repeat(43),close}),
+      launch:async (_connection,options) => {
+        signal = options?.signal;
+        reportStarterFailure = options?.onStarterFailure;
+        await new Promise<void>((_resolve,reject) => signal!.addEventListener("abort", () => reject(new Error("private launch details")), {once:true}));
+      },
+    });
+    expect(signal?.aborted).toBe(false);
+    reportStarterFailure?.();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]?.[0]).toContain("starter character");
+    await stop();
+    await stop();
+    expect(signal?.aborted).toBe(true);
+    expect(close).toHaveBeenCalledOnce();
+    reportStarterFailure?.();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("private");
   });
 
   it("receives the new live stream, resets retries, and keeps durable completion text", async () => {

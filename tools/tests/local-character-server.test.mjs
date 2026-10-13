@@ -3,6 +3,9 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { get } from "node:http";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { once } from "node:events";
 import { serveLocalCharacter } from "../local-character-server.mjs";
 import { sha256 } from "../plugin-desktop-assets.mjs";
 
@@ -45,4 +48,22 @@ it("refuses invalid input and never overwrites an existing descriptor", async ()
   await writeFile(options.descriptorPath, "existing");
   await expect(serveLocalCharacter(options)).rejects.toMatchObject({ code: "EEXIST" });
   expect(await readFile(options.descriptorPath, "utf8")).toBe("existing");
+});
+
+it("starts through the documented two-argument CLI and keeps serving the VRM", async () => {
+  const options = await fixture();
+  const child = spawn(process.execPath, [fileURLToPath(new URL("../local-character-server.mjs", import.meta.url)), options.modelPath, options.descriptorPath], {stdio:["ignore","pipe","pipe"],windowsHide:true});
+  const exited = once(child, "exit");
+  try {
+    await new Promise((accept, reject) => {
+      let output = "";
+      child.stdout.on("data", chunk => { output += chunk; if (output.includes("source ready")) accept(); });
+      child.once("error", reject);
+      child.once("exit", code => reject(Error("model source exited before ready: " + code)));
+    });
+    const descriptor = JSON.parse(await readFile(options.descriptorPath, "utf8"));
+    const response = await fetch(descriptor.url);
+    expect(response.status).toBe(200);
+    expect(sha256(Buffer.from(await response.arrayBuffer()))).toBe(descriptor.sha256);
+  } finally { child.kill(); await exited; }
 });

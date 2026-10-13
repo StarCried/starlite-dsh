@@ -49,6 +49,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const arguments_ = process.argv.slice(2).filter(argument => argument !== "--");
   if (arguments_.length !== 2) throw Error("usage: pnpm serve:character -- /path/Weiguang.vrm /path/release-output/local-character.json");
   const { server } = await serveLocalCharacter({ modelPath: resolve(arguments_[0]), descriptorPath: resolve(arguments_[1]) });
-  console.log(`LOCAL TEST ONLY: character source ready; descriptor ${resolve(arguments_[2])}. Keep this process running during first startup. No public upload occurred.`);
+  console.log(`LOCAL TEST ONLY: character source ready; descriptor ${resolve(arguments_[1])}. Keep this process running during first startup. No public upload occurred.`);
   for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => server.close(() => process.exit(0)));
 }

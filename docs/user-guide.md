@@ -4,7 +4,7 @@
 
 ## 1. 安装 Windows 桌宠
 
-取得同版本的 `StarLite for DSH_0.1.0-alpha.0_x64-setup.exe`、`dsh-starlite-0.1.0-alpha.0.tgz` 和作者提供的 `SHA256SUMS`。正式发布后从作者发布页取得；新命名安装器将在候选验收阶段本地构建，本轮尚未生成。
+取得同版本的 `StarLite for DSH_0.1.0-alpha.0_x64-setup.exe`、`dsh-starlite-0.1.0-alpha.0.tgz` 和作者提供的 `SHA256SUMS`。候选文件用于本地验收，正式发布后从作者发布页取得。
 
 在 PowerShell 核对安装包和插件的 SHA-256：
 
@@ -38,7 +38,7 @@ dsh plugin --profile web add /mnt/c/Downloads/dsh-starlite-0.1.0-alpha.0.tgz
 dsh plugin --profile web remove dsh-inochi2d-pet
 ```
 
-这一步只移除旧桥接插件，不删除桌宠用户模型与设置。不要编辑插件缓存，也不要把临时认证链接写入配置。此文档整理阶段不会自动替换你当前运行的插件或安装包。
+这一步只移除旧桥接插件，不删除桌宠用户模型与设置。不要编辑插件缓存，也不要把临时认证链接写入配置。
 
 在 DSH 的「设置 → 插件 → 插件列表 → 全局」中查找 `dsh-starlite`。默认的「插件配置」页只展示带网页配置卡的插件；桌宠设置在 Windows 程序里。安装后重新打开设置刷新清单。
 

@@ -221,13 +221,29 @@ function New-SyntheticBaseline {
     $text = Set-NsisDefinition $text 'OUTFILE' $baselineInstaller
     $baselineScript = Assert-PathInside (Join-Path $baselineDirectory 'installer.nsi') $taskRoot
     Set-Content -LiteralPath $baselineScript -Value $text -Encoding utf8
-    Push-Location -LiteralPath $baselineDirectory
+    # Match Tauri's compiler environment without changing the parent shell or
+    # inheriting a different NSIS installation's includes, stubs or configuration.
+    $compilerInfo = [Diagnostics.ProcessStartInfo]::new()
+    $compilerInfo.FileName = $makensis
+    $compilerInfo.WorkingDirectory = $baselineDirectory
+    $compilerInfo.UseShellExecute = $false
+    $compilerInfo.CreateNoWindow = $true
+    $compilerInfo.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+    foreach ($argument in @('-INPUTCHARSET', 'UTF8', '-OUTPUTCHARSET', 'UTF8', '-V2', $baselineScript)) {
+        $compilerInfo.ArgumentList.Add($argument)
+    }
+    [void]$compilerInfo.Environment.Remove('NSISDIR')
+    [void]$compilerInfo.Environment.Remove('NSISCONFDIR')
+    $compiler = [Diagnostics.Process]::Start($compilerInfo)
     try {
-        & $makensis '/V2' '/INPUTCHARSET' 'UTF8' $baselineScript | ForEach-Object { Write-Host $_ }
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $baselineInstaller -PathType Leaf)) {
+        if (-not $compiler.WaitForExit(120000)) {
+            $compiler.Kill($true)
+            throw 'Compiling the synthetic old-version installer exceeded its two-minute timeout.'
+        }
+        if ($compiler.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $baselineInstaller -PathType Leaf)) {
             throw 'Compiling the synthetic old-version installer failed.'
         }
-    } finally { Pop-Location }
+    } finally { $compiler.Dispose() }
     if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -ne $expectedInstallerHash -or
         (Get-Item -LiteralPath $installer).LastWriteTimeUtc -ne $expectedInstallerTime -or
         (Get-FileHash -LiteralPath $buildBinary -Algorithm SHA256).Hash -ne $expectedBinaryHash -or

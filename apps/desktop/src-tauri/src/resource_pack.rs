@@ -65,9 +65,12 @@ const STARTER_ERROR: &str =
 
 /// Only the plugin-staged, executable-adjacent pack participates in onboarding.
 /// No webview-supplied path or archive name can redirect this lookup.
-pub fn starter() -> Result<Option<StarterPackInspection>, String> {
+pub fn starter(app: &AppHandle) -> Result<Option<StarterPackInspection>, String> {
     let exe = std::env::current_exe().map_err(|_| STARTER_ERROR)?;
-    starter_at(exe.parent().ok_or(STARTER_ERROR)?)
+    starter_for_model(
+        exe.parent().ok_or(STARTER_ERROR)?,
+        settings::load(app).model.as_ref(),
+    )
 }
 
 pub fn should_offer_starter(app: &AppHandle, current: &DesktopSettings) -> bool {
@@ -87,9 +90,7 @@ fn should_offer_at(
     marker: &Path,
 ) -> bool {
     let Some(starter) = starter else { return false };
-    if model.is_some_and(|model| {
-        model.backend == ModelBackend::Vrm && model.source_sha256 == starter.model_sha256
-    }) {
+    if installed_starter(starter, model) {
         return false;
     }
     read_limited(marker, 64)
@@ -123,11 +124,29 @@ fn mark_seen_at(marker: &Path, starter: &StarterDescriptor, expected: &str) -> R
     file.commit().map_err(|e| e.to_string())
 }
 
+#[cfg(test)]
 fn starter_at(parent: &Path) -> Result<Option<StarterPackInspection>, String> {
+    starter_for_model(parent, None)
+}
+
+fn starter_for_model(
+    parent: &Path,
+    model: Option<&settings::InstalledModel>,
+) -> Result<Option<StarterPackInspection>, String> {
     read_starter_descriptor(parent)?
+        .filter(|descriptor| !installed_starter(descriptor, model))
         .map(|descriptor| starter_checked(parent, descriptor))
         .transpose()
         .map_err(|_| STARTER_ERROR.into())
+}
+
+fn installed_starter(
+    descriptor: &StarterDescriptor,
+    model: Option<&settings::InstalledModel>,
+) -> bool {
+    model.is_some_and(|model| {
+        model.backend == ModelBackend::Vrm && model.source_sha256 == descriptor.model_sha256
+    })
 }
 
 fn starter_descriptor() -> Result<Option<StarterDescriptor>, String> {
@@ -926,7 +945,16 @@ mod tests {
             }),
         };
         assert!(!should_offer_at(Some(&starter), Some(&model), &marker));
+        // Already-installed startup must not read or extract the archive.
+        fs::remove_file(folder.path().join("starter-character.zip")).unwrap();
+        assert!(starter_for_model(folder.path(), Some(&model))
+            .unwrap()
+            .is_none());
         model.source_sha256 = "f".repeat(64);
+        assert_eq!(
+            starter_for_model(folder.path(), Some(&model)).unwrap_err(),
+            STARTER_ERROR
+        );
         let before = serde_json::to_value(&model).unwrap();
         assert!(should_offer_at(Some(&starter), Some(&model), &marker));
         mark_seen_at(&marker, &starter, &starter.sha256).unwrap();

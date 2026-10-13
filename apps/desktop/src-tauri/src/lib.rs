@@ -34,8 +34,10 @@ async fn inspect_resource_pack(
 }
 
 #[tauri::command]
-async fn get_starter_pack() -> Result<Option<resource_pack::StarterPackInspection>, String> {
-    tauri::async_runtime::spawn_blocking(resource_pack::starter)
+async fn get_starter_pack(
+    app: AppHandle,
+) -> Result<Option<resource_pack::StarterPackInspection>, String> {
+    tauri::async_runtime::spawn_blocking(move || resource_pack::starter(&app))
         .await
         .map_err(|_| "微光资源检查失败，请重启 DSH 重试。".to_string())?
 }

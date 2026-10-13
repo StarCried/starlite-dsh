@@ -33,6 +33,7 @@ beforeEach(() => {
 it("maps both embedded and external actions without a resource package", () => {
   expect(modelConfig(installed)).toMatchObject({backend:"vrm",model:"asset:m.vrm",embeddedAnimations:[],animations:[{name:"StarLiteIdle",url:"asset:a.vrma"}],profile:"asset:p.json",ambient:{animations:["StarLiteIdle"]},render:{viewportPadding:{left:128,top:64,right:128,bottom:192}},camera:{pitchDegrees:5,targetHeight:.54}});
   expect(modelConfig({...installed,models:[{...model,vrm:{...model.vrm!,embeddedAnimations:["Wave"]}}]}).embeddedAnimations).toEqual(["Wave"]);
+  expect(modelConfig(installed).neutralAnimation).toBe("StarLiteIdle");
   expect(() => modelConfig({...installed,activeModelId:null})).toThrow();
   expect(() => modelConfig({...installed,models:[{...model,backend:"inochi2d"}]})).toThrow("Inochi2D is disabled");
 });

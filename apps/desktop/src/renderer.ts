@@ -25,6 +25,7 @@ export function modelConfig(settings: DesktopSettings): Record<string, unknown> 
     animations: model.vrm.animations.map(({name,path}) => ({name,url:convertFileSrc(path)})),
     ...(model.vrm.profilePath ? {profile:convertFileSrc(model.vrm.profilePath)} : {}),
     ambient: {animations:[model.mappings.idle]},
+    neutralAnimation: model.mappings.idle,
     camera: {yawDegrees:0,pitchDegrees:5,fovDegrees:20,targetHeight:.54},
     gaze: {maxYawDegrees:25,maxPitchDegrees:15,smoothingMs:100},
   };

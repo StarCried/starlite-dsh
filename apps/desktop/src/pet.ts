@@ -30,6 +30,7 @@ export async function startPet(): Promise<void> {
   const empty = requiredElement("empty-model");
   const anchor = requiredElement("pet-view");
   let settings = await invoke<DesktopSettings>("get_settings");
+  const modelAvailable = () => settings.preferences.modelEnabled !== false && settings.model?.backend === "vrm";
   const slot = await createModelSlot();
   let mountGeneration = 0;
   let controller: WidgetController | undefined;
@@ -65,7 +66,7 @@ export async function startPet(): Promise<void> {
   let availabilityQueue=Promise.resolve();
   const syncInputAvailable=()=>{
     availabilityQueue=availabilityQueue.catch(()=>{}).then(async()=>{
-      if(connected)await connection?.setInputAvailable(!settings.preferences.privacyMode&&document.visibilityState==="visible");
+      if(connected)await connection?.setInputAvailable(modelAvailable()&&!settings.preferences.privacyMode&&document.visibilityState==="visible");
     }).catch(()=>{});
   };
   const workBubble=new WorkBubble(bubble,{
@@ -80,10 +81,10 @@ export async function startPet(): Promise<void> {
       if (!connection) throw new Error("billing disconnected");
       return connection.readBilling();
     },
-    allowed: () => connected && !settings.preferences.privacyMode && !latestSnapshot?.inputRequest,
+    allowed: () => connected && modelAvailable() && !settings.preferences.privacyMode && !latestSnapshot?.inputRequest,
     render: view => {renderBillingBubble(bubble, view,latestSnapshot?.session?.title);updateRegion();},
     restore: () => {
-      if (latestSnapshot) workBubble.update(latestSnapshot, settings.preferences);
+      if (latestSnapshot && modelAvailable()) workBubble.update(latestSnapshot, settings.preferences);
       else bubble.hidden = true;
     },
   });
@@ -124,7 +125,7 @@ export async function startPet(): Promise<void> {
   });
 
   const syncRendering = () => {
-    const paused = pausedByTray || document.visibilityState !== "visible";
+    const paused = !modelAvailable() || pausedByTray || document.visibilityState !== "visible";
     animator?.setPaused(paused);
     if (paused) controller?.pause();
     else controller?.resume();
@@ -152,13 +153,17 @@ export async function startPet(): Promise<void> {
     const generation = ++mountGeneration;
     hostPosition.invalidate();
     const next = settings;
+    const enabled = next.preferences.modelEnabled !== false && next.model?.backend === "vrm";
+    fees.cancel(); cancelClick(); workBubble.clear(); bubble.hidden = true;
     animator?.disconnected(); animator = undefined;
     slot.destroy(); controller = undefined;
     interaction.update(undefined);
-    await viewport.configure(next.model?.backend==="vrm");
+    if (!enabled) void window.hide();
+    await viewport.configure(enabled);
     if(generation!==mountGeneration)return;
-    host.replaceChildren(); empty.hidden = Boolean(next.model);
-    if (!next.model) return;
+    host.replaceChildren(); empty.hidden = !enabled || Boolean(next.model);
+    syncInputAvailable();
+    if (!enabled || !next.model) return;
     try {
       const mounted = await slot.mount(signal => mountModel(host, next, signal));
       if (!mounted || generation !== mountGeneration) return;
@@ -174,6 +179,7 @@ export async function startPet(): Promise<void> {
       });
       animator = new StateAnimator(mounted, next.model.mappings);
       if (latestSnapshot) animator.apply(latestSnapshot);
+      if (latestSnapshot && !fees.visible) workBubble.update(latestSnapshot, next.preferences);
       syncRendering();
     } catch {
       if (generation !== mountGeneration) return;
@@ -183,29 +189,35 @@ export async function startPet(): Promise<void> {
   };
   globalThis.addEventListener("pagehide", () => { closing=true; ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
+  let preparing = true;
   await listen<DesktopSettings>("settings-changed", ({ payload }) => {
     ++settingsRevision;
     const previous=settings;
     settings = payload;
     fees.cancel();
-    if (latestSnapshot) workBubble.update(latestSnapshot, settings.preferences);
+    if (latestSnapshot && modelAvailable()) workBubble.update(latestSnapshot, settings.preferences);
+    else workBubble.clear();
     syncInputAvailable();
-    if(JSON.stringify([previous.model,previous.preferences.fps,previous.preferences.maxDevicePixelRatio,previous.preferences.scale])===JSON.stringify([settings.model,settings.preferences.fps,settings.preferences.maxDevicePixelRatio,settings.preferences.scale]))return;
+    if (preparing) return;
+    if(JSON.stringify([previous.model,previous.preferences.modelEnabled,previous.preferences.fps,previous.preferences.maxDevicePixelRatio,previous.preferences.scale])===JSON.stringify([settings.model,settings.preferences.modelEnabled,settings.preferences.fps,settings.preferences.maxDevicePixelRatio,settings.preferences.scale]))return;
     void remount()
       .then(() => {
-        if (connected && settings.model) void window.show();
+        if (connected && modelAvailable() && controller) void window.show();
       })
       .catch(() => {
         empty.hidden = false;
         empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
       });
   });
-  // The settings window can finish automatic onboarding while this webview is
-  // initializing. Subscribe before mounting and then read the current state,
-  // without letting a late read replace a newer settings event.
+  // Native preparation is idempotent, serializes with settings mutations and
+  // preserves an installed user VRM. Never wait for a first-use settings UI.
   const readRevision = settingsRevision;
-  const currentSettings = await invoke<DesktopSettings>("get_settings");
-  if (readRevision === settingsRevision) settings = currentSettings;
+  try {
+    const currentSettings = await invoke<DesktopSettings>("prepare_model");
+    if (readRevision === settingsRevision) settings = currentSettings;
+  } catch {
+    void invoke("open_settings");
+  } finally { preparing = false; }
   await remount();
 
   connection = new StatusConnection({
@@ -214,15 +226,15 @@ export async function startPet(): Promise<void> {
       latestSnapshot = snapshot;
       animator?.apply(snapshot);
       fees.stateChanged(snapshot.state);
-      if (!fees.visible) workBubble.update(snapshot, settings.preferences);
+      if (!fees.visible && modelAvailable()) workBubble.update(snapshot, settings.preferences);
     },
     onConnected() {
       connected = true;
       if (offlineTimer) clearTimeout(offlineTimer);
       offlineTimer = undefined;
       void invoke("set_connection_state", { connected: true });
-      if (settings.model) void window.show();
-      else void invoke("open_settings");
+      if (modelAvailable() && controller) void window.show();
+      else if (settings.preferences.modelEnabled !== false) void invoke("open_settings");
       syncInputAvailable();
     },
     onDisconnected() {

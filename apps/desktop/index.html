@@ -18,22 +18,21 @@
       <header>
         <p class="eyebrow">本地桌面伙伴</p>
         <h1>StarLite for DSH</h1>
-        <p>启动已安装 StarLite 插件的 DSH，即可自动准备微光。首次使用时确认角色许可，桌宠随后出现。</p>
+        <p>启动已安装 StarLite 插件的 DSH，即可使用微光，无需额外配置。</p>
         <p>模型保存在本机。关闭 DSH 后，桌宠会隐藏并退出。</p>
       </header>
       <section>
         <h2>模型</h2>
-        <div id="starter-character" hidden>
-          <p>微光已准备好。确认独立角色许可后，自动导入模型、动作和映射；保留你的显示与隐私偏好。</p>
-          <p><button id="use-starter-character" type="button" class="primary">使用微光</button></p>
-        </div>
-        <p>选择一次资源包，自动导入模型、动作、角色配置和状态映射。</p>
-        <p><button id="import-resource-pack" type="button" class="primary">导入资源包 ZIP · 自动配置</button></p>
+        <label class="model-toggle"><input id="model-enabled" type="checkbox" checked /> 启用模型</label>
+        <p class="model-license-notice">默认使用微光。使用本模型即视为同意其许可；如不同意，请禁用模型。</p>
+        <p class="row"><button id="view-default-license" type="button">查看微光许可</button><button id="use-default-model" type="button">恢复默认微光</button></p>
         <p id="model-path">尚未选择</p>
         <details class="manual-model">
-        <summary>使用自己的模型与动作</summary>
+        <summary>替换模型与动作（进阶）</summary>
+        <p>本版本仅支持 VRM，暂不提供 Inochi2D。资源包可自动配置模型、动作与状态映射。</p>
+        <p><button id="import-resource-pack" type="button">导入资源包 ZIP · 自动配置</button></p>
         <div class="row">
-          <button id="choose-model" type="button">选择 .inp / .vrm</button>
+          <button id="choose-model" type="button">选择 .vrm</button>
         </div>
         <div id="vrm-resources" hidden>
           <p>VRM 动作独立导入；动作名称取自文件名。</p>

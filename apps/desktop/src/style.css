@@ -38,17 +38,9 @@ body {
 }
 
 #model > .model-surface,
-#model .inochi2d-widget,
 #model .model-vrm-widget {
   width: 100% !important;
   height: 100% !important;
-}
-
-#model .inochi2d-widget {
-  position: absolute;
-  inset: 0;
-  max-width: none;
-  max-height: none;
 }
 
 #bubble {
@@ -249,6 +241,9 @@ h2 { font-size: 17px; }
 .empty-animations { grid-column: 1 / -1; margin: 8px; color: #9aa8bf; font-size: 13px; }
 #animation-pool-help { margin: 0 0 20px; color: #a7b1c4; font-size: 13px; line-height: 1.7; }
 #settings-view .row { flex-wrap: wrap; }
+#settings-view .model-toggle { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+#settings-view .model-toggle input { accent-color: #a9c7f5; }
+#settings-view .model-license-notice { color: #a7b1c4; font-size: 13px; line-height: 1.7; }
 #settings-view .preferences > p { margin: 2px 0 0; color: #a7b1c4; font-size: 13px; line-height: 1.7; }
 
 .preferences .check { display: block; }

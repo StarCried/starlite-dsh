@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { confirmResourceLicense, type ResourcePackInspection, type StarterPackInspection } from "./resource-pack-dialog.js";
+import { confirmResourceLicense, showResourceLicense, type ResourcePackInspection } from "./resource-pack-dialog.js";
 import type {
   AnimationSource,
   AnimationMappings,
@@ -32,12 +32,14 @@ export async function startSettings(): Promise<void> {
   let checking = false;
   let saving = false;
   let importing = false;
-  let starter: StarterPackInspection | undefined;
+  let preparingDefault = true;
+  let enabledRevision = 0;
   let preferencesEdited = false;
   const choose = requiredElement<HTMLButtonElement>("choose-model");
   const importPack = requiredElement<HTMLButtonElement>("import-resource-pack");
-  const starterBanner = requiredElement("starter-character");
-  const useStarter = requiredElement<HTMLButtonElement>("use-starter-character");
+  const modelEnabled = requiredElement<HTMLInputElement>("model-enabled");
+  const useDefault = requiredElement<HTMLButtonElement>("use-default-model");
+  const viewLicense = requiredElement<HTMLButtonElement>("view-default-license");
   const chooseAnimations = requiredElement<HTMLButtonElement>("choose-animations");
   const chooseProfile = requiredElement<HTMLButtonElement>("choose-profile");
   const clearProfile = requiredElement<HTMLButtonElement>("clear-profile");
@@ -48,33 +50,84 @@ export async function startSettings(): Promise<void> {
   const form = requiredElement<HTMLFormElement>("settings-form");
   const mappings = requiredElement("animation-mappings");
   const save = requiredElement<HTMLButtonElement>("save-settings");
+  modelEnabled.checked = settings.preferences.modelEnabled !== false;
   populatePreferences(settings.preferences);
   renderMappings(mappings, settings.model?.animations ?? [], settings.model?.mappings);
   pathLabel.textContent = settings.model ? "已安装模型" : "尚未选择";
   save.textContent = settings.model ? "保存设置" : "导入并保存";
   const updateSave = () => {
-    const valid = sourcePath ? inspection?.compatibilitySupported : Boolean(settings.model);
+    const valid = sourcePath ? inspection?.compatibilitySupported && inspection.backend === "vrm" : settings.model?.backend === "vrm";
     const idle = mappings.querySelector<HTMLSelectElement>('select[data-state="idle"]')?.value;
     save.disabled = saving || importing || checking || !valid || !idle;
     importPack.disabled = saving || importing || checking;
-    useStarter.disabled = saving || importing || checking;
+    useDefault.disabled = saving || importing || checking;
+    choose.disabled = saving || importing || preparingDefault;
+    for (const button of [chooseAnimations, chooseProfile, clearProfile]) button.disabled = saving || importing || checking;
   };
   form.addEventListener("change", event => {
     if ((event.target as HTMLElement).closest(".preferences")) preferencesEdited = true;
     updateSave();
   });
   updateSave();
-  const importResource = async (available?: StarterPackInspection) => {
+  const adoptSettings = (next: DesktopSettings, preserveEdits = false) => {
+    settings = next;
+    modelEnabled.checked = settings.preferences.modelEnabled !== false;
+    sourcePath = undefined; inspection = undefined; animationSources = []; profilePath = undefined;
+    resources.hidden = true;
+    if (!preserveEdits) populatePreferences(settings.preferences);
+    renderMappings(mappings, settings.model?.animations ?? [], settings.model?.mappings);
+    requiredElement<HTMLDetailsElement>("mapping-details").open = false;
+    pathLabel.textContent = settings.model?.backend === "vrm" ? "已安装 VRM 模型" : "默认微光待准备";
+    save.textContent = "保存设置";
+  };
+  modelEnabled.addEventListener("change", async () => {
+    const revision = ++enabledRevision;
+    const enabled = modelEnabled.checked;
+    settings.preferences.modelEnabled = enabled;
+    modelEnabled.disabled = true;
+    error.textContent = "";
+    try {
+      const next = await invoke<DesktopSettings>("set_model_enabled", {enabled});
+      if (revision !== enabledRevision) return;
+      if (JSON.stringify(next.model) !== JSON.stringify(settings.model)) adoptSettings(next, true);
+      else { settings = next; modelEnabled.checked = settings.preferences.modelEnabled !== false; }
+      status.textContent = enabled ? "模型已启用。DSH 连接后自动显示。" : "模型已禁用，不再显示或更新模型与气泡。";
+    } catch (reason) {
+      if (revision !== enabledRevision) return;
+      settings = await invoke<DesktopSettings>("get_settings");
+      modelEnabled.checked = settings.preferences.modelEnabled !== false;
+      error.textContent = safeError(reason);
+    } finally { if (revision === enabledRevision) {modelEnabled.disabled = false; updateSave();} }
+  });
+  viewLicense.addEventListener("click", async () => {
+    viewLicense.disabled = true;
+    try {
+      const pack = await invoke<{title: string; text: string} | null>("get_model_license");
+      if (!pack) throw new Error("当前模型未附带许可文本，请参阅模型来源；微光许可会在资源准备完成后提供。");
+      showResourceLicense(pack);
+    } catch (reason) { error.textContent = safeError(reason); }
+    finally { viewLicense.disabled = false; }
+  });
+  useDefault.addEventListener("click", async () => {
+    if (importing || saving || checking) return;
+    importing = true; error.textContent = ""; updateSave();
+    try {
+      adoptSettings(await invoke<DesktopSettings>("use_default_model", {preferences:readPreferences()}));
+      status.textContent = "已恢复默认微光，保留显示与隐私偏好。";
+    } catch (reason) { error.textContent = safeError(reason); }
+    finally { importing = false; updateSave(); }
+  });
+  const importResource = async () => {
     if (importing || saving || checking) return;
     importing = true;
     error.textContent = "";
     updateSave();
     for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = true;
     try {
-      const path = available?.path ?? await open({title:"选择独立授权的资源包",multiple:false,directory:false,filters:[{name:"StarLite 资源包",extensions:["zip"]}]});
+      const path = await open({title:"选择独立授权的资源包",multiple:false,directory:false,filters:[{name:"StarLite 资源包",extensions:["zip"]}]});
       if (typeof path !== "string") return;
       status.textContent = "正在检查资源包…";
-      const pack = available ?? await invoke<ResourcePackInspection>("inspect_resource_pack", {path});
+      const pack = await invoke<ResourcePackInspection>("inspect_resource_pack", {path});
       if (!await confirmResourceLicense(pack)) {
         status.textContent = "已取消导入。";
         return;
@@ -85,18 +138,12 @@ export async function startSettings(): Promise<void> {
         preferences.fps = 30;
         preferences.maxDevicePixelRatio = 1.5;
       }
-      settings = await invoke<DesktopSettings>("install_resource_pack", {
+      adoptSettings(await invoke<DesktopSettings>("install_resource_pack", {
         path, expectedSha256:pack.sha256, preferences, acceptLicense:true,
-      });
-      sourcePath = undefined; inspection = undefined; animationSources = []; profilePath = undefined;
-      resources.hidden = true;
-      populatePreferences(settings.preferences);
-      renderMappings(mappings, settings.model?.animations ?? [], settings.model?.mappings);
-      requiredElement<HTMLDetailsElement>("mapping-details").open = false;
+      }));
       pathLabel.textContent = pack.title;
       status.textContent = "资源包已自动导入并保存。在 WSL 启动 DSH 后，桌宠会自动出现。";
       save.textContent = "保存设置";
-      starterBanner.hidden = !starter || settings.model?.backend === "vrm" && settings.model.sourceSha256 === starter.modelSha256;
     } catch (reason) {
       status.textContent = "资源包导入失败，原模型和设置未改变。";
       error.textContent = safeError(reason);
@@ -107,7 +154,6 @@ export async function startSettings(): Promise<void> {
     }
   };
   importPack.addEventListener("click", () => { void importResource(); });
-  useStarter.addEventListener("click", () => { if (starter) void importResource(starter); });
   const inspect = async () => {
     if (!sourcePath) return;
     const ticket = ++generation;
@@ -117,9 +163,9 @@ export async function startSettings(): Promise<void> {
       const result = await invoke<ModelInspection>("inspect_model", {path:sourcePath, animationSources, profilePath});
       if (ticket !== generation) return;
       inspection = result;
-      if (!result.compatibilitySupported) {
+      if (!result.compatibilitySupported || result.backend !== "vrm") {
         status.textContent = "模型或资源不兼容，不能导入。";
-        error.textContent = result.issues.map(({message}) => message).join("；");
+        error.textContent = result.backend !== "vrm" ? "本版本暂不支持 Inochi2D，请使用 VRM。" : result.issues.map(({message}) => message).join("；");
         return;
       }
       status.textContent = result.animations.length ? `检查通过：${result.animations.length} 个动画。请选择待机动作。` : "模型可预览；请添加动作并选择待机后保存。";
@@ -133,8 +179,9 @@ export async function startSettings(): Promise<void> {
   };
   choose.addEventListener("click", async () => {
     try {
-      const selected = await open({ title: "选择模型", multiple:false, directory:false, filters:[{name:"模型",extensions:["inp","vrm"]}] });
+      const selected = await open({ title: "选择 VRM 模型", multiple:false, directory:false, filters:[{name:"VRM",extensions:["vrm"]}] });
       if (typeof selected !== "string" || saving || importing) return;
+      if (!selected.toLowerCase().endsWith(".vrm")) throw new Error("本版本暂不支持 Inochi2D，请选择 .vrm 模型。");
       sourcePath = selected; animationSources = []; profilePath = undefined;
       resources.hidden = !selected.toLowerCase().endsWith(".vrm");
       requiredElement("animation-files").textContent = "尚未选择动作";
@@ -172,7 +219,7 @@ export async function startSettings(): Promise<void> {
     for (const button of [choose,chooseAnimations,chooseProfile,clearProfile]) button.disabled = true;
     try {
       const request: ModelInstallRequest = {
-        backend: inspection?.backend ?? settings.model?.backend ?? "inochi2d",
+        backend: "vrm",
         sourcePath: sourcePath ?? "", animationSources, ...(profilePath ? {profilePath} : {}),
         mappings: readMappings(mappings), preferences: readPreferences(),
       };
@@ -183,45 +230,17 @@ export async function startSettings(): Promise<void> {
     finally { saving = false; for (const button of [choose,chooseAnimations,chooseProfile,clearProfile]) button.disabled = false; updateSave(); }
   });
 
-  // A plugin launch has already acquired this separate licensed resource pack.
-  // A standalone/BYOM executable has no descriptor and keeps the manual flow.
-  // Tauri creates this settings webview even while its window is hidden. Never
-  // inspect a character ZIP until the user actually sees the settings window.
-  let starterRequested = false;
-  const loadStarter = async () => {
-    if (starterRequested || document.visibilityState !== "visible") return;
-    starterRequested = true;
-    document.removeEventListener("visibilitychange", onSettingsVisible);
-    checking = true; updateSave();
-    for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = true;
-    try {
-      starter = await invoke<StarterPackInspection | null>("get_starter_pack") ?? undefined;
-      const installedStarter = starter && settings.model?.backend === "vrm" && settings.model.sourceSha256 === starter.modelSha256;
-      starterBanner.hidden = !starter || Boolean(installedStarter);
-    } catch (reason) {
-      status.textContent = "微光资源准备失败，请重启 DSH 重试；也可以手动导入资源包。";
-      error.textContent = safeError(reason);
-    } finally {
-      checking = false;
-      for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = false;
-      updateSave();
-    }
-    if (starter && !settings.model) void importResource(starter);
-    if (starter && !starterBanner.hidden) {
-      // Introduction acknowledgment is separate from license consent.
-      try {
-        await invoke("mark_starter_seen", {expectedSha256:starter.sha256});
-      } catch (reason) {
-        error.textContent = safeError(reason);
-      }
-    }
-  };
-  const onSettingsVisible = () => { void loadStarter(); };
-  if (document.visibilityState === "visible") await loadStarter();
-  else {
-    document.addEventListener("visibilitychange", onSettingsVisible);
-    globalThis.addEventListener("pagehide", () => document.removeEventListener("visibilitychange", onSettingsVisible), {once:true});
-  }
+  // Default preparation has the same path on every launch, including hidden
+  // settings webviews. It never opens a first-use dialog or replaces a user VRM.
+  checking = true; updateSave();
+  const revision = enabledRevision;
+  try {
+    const prepared = await invoke<DesktopSettings>("prepare_model");
+    if (revision === enabledRevision) adoptSettings(prepared, preferencesEdited);
+  } catch (reason) {
+    status.textContent = "微光资源准备失败，请重启 DSH 重试；也可以手动导入 VRM 资源包。";
+    error.textContent = safeError(reason);
+  } finally { preparingDefault = false; checking = false; updateSave(); }
 }
 
 function renderMappings(
@@ -328,6 +347,7 @@ function readPreferences(): DesktopPreferences {
     throw new Error("模型缩放必须在 0.25 到 3 之间。");
   }
   return {
+    modelEnabled: requiredElement<HTMLInputElement>("model-enabled").checked,
     fps,
     maxDevicePixelRatio,
     scale,

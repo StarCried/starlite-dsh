@@ -5,9 +5,30 @@ export interface ResourcePackInspection {
   animationCount: number;
 }
 
-export interface StarterPackInspection extends ResourcePackInspection {
-  path: string;
-  modelSha256: string;
+/** Read-only license access stays available after automatic default setup. */
+export function showResourceLicense(pack: {title: string; text: string}): void {
+  const dialog = document.createElement("dialog");
+  dialog.className = "resource-license";
+  dialog.setAttribute("aria-label", `${pack.title}使用许可`);
+  const title = document.createElement("h2");
+  title.textContent = `${pack.title} · 使用许可`;
+  const notice = document.createElement("p");
+  notice.textContent = "使用本模型即视为同意其许可；如不同意，请在设置中禁用模型。";
+  const license = document.createElement("pre");
+  license.tabIndex = 0;
+  license.textContent = pack.text;
+  const actions = document.createElement("div");
+  actions.className = "license-actions";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "关闭";
+  close.autofocus = true;
+  actions.append(close);
+  dialog.append(title, notice, license, actions);
+  dialog.addEventListener("close", () => dialog.remove(), {once:true});
+  close.addEventListener("click", () => dialog.close());
+  document.body.append(dialog);
+  dialog.showModal();
 }
 
 export function confirmResourceLicense(pack: ResourcePackInspection): Promise<boolean> {

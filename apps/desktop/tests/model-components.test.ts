@@ -15,12 +15,12 @@ const initial:DesktopSettings={schemaVersion:3,preferences};
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 const choose=(path:string)=>{open.mockResolvedValueOnce(path);document.getElementById("choose-model")!.click();return tick()};
 beforeEach(()=>{vi.clearAllMocks();vi.stubGlobal("Option",function(text:string,value:string){const option=document.createElement("option");option.textContent=text;option.value=value;return option});document.body.innerHTML=readFileSync(resolve(import.meta.dirname,"../index.html"),"utf8").replace(/<script[\s\S]*?<\/script>/gu, "");invoke.mockResolvedValue(initial)});
-it("keeps backend payloads separate and maps every local VRM asset",()=>{
+it("maps every local VRM asset and rejects disabled backends before mounting",()=>{
  const settings:DesktopSettings={...initial,model:{backend:"vrm",modelPath:"m.vrm",sourceSha256:"hash",mappings,animations:catalog,vrm:{animations:[{name:"Idle",path:"a.vrma"}],profilePath:"p.json"}}};
  expect(modelConfig(settings)).toMatchObject({backend:"vrm",model:"asset:m.vrm",animations:[{name:"Idle",url:"asset:a.vrma"}],profile:"asset:p.json",ambient:{animations:["Idle"]},render:{viewportPadding:{left:128,top:64,right:128,bottom:192}},camera:{pitchDegrees:5,targetHeight:.54},gaze:{maxYawDegrees:25,maxPitchDegrees:15}});
  const tracks=[{name:"Idle",timestepMs:10,length:10,leadIn:0,leadOut:0,weight:1,lanes:[]}];
- expect(modelConfig({...settings,model:{...settings.model!,backend:"inochi2d",inochi2d:{animations:tracks}}}).animations).toEqual(tracks);
- expect(modelConfig({...settings,model:{...settings.model!,backend:"inochi2d",inochi2d:{animations:tracks}}}).render).not.toHaveProperty("viewportPadding");
+ expect(()=>modelConfig({...settings,model:{...settings.model!,backend:"inochi2d",inochi2d:{animations:tracks}}})).toThrow("Inochi2D is disabled");
+ expect(()=>modelConfig({...settings,preferences:{...preferences,modelEnabled:false}})).toThrow("Model is disabled");
  expect(modelConfig({...settings,model:{...settings.model!,mappings:{...mappings,idle:"Rest"}}}).ambient).toEqual({animations:["Rest"]});
 });
 it("requires explicit Idle and imports actions and profile with VRM defaults",async()=>{
@@ -40,7 +40,7 @@ it("requires explicit Idle and imports actions and profile with VRM defaults",as
 });
 it("ignores an old inspection after choosing a different model",async()=>{
  await startSettings();let resolveOld!:(v:unknown)=>void;
- invoke.mockImplementationOnce(()=>new Promise(r=>{resolveOld=r}));await choose("old.inp");
+ invoke.mockImplementationOnce(()=>new Promise(r=>{resolveOld=r}));await choose("old.vrm");
  invoke.mockResolvedValueOnce({backend:"vrm",compatibilitySupported:true,animations:[],issues:[]});await choose("new.vrm");
  resolveOld({backend:"inochi2d",compatibilitySupported:true,animations:catalog,issues:[]});await tick();
  expect(document.getElementById("model-path")!.textContent).toBe("new.vrm");
@@ -48,12 +48,19 @@ it("ignores an old inspection after choosing a different model",async()=>{
  expect((document.getElementById("save-settings") as HTMLButtonElement).disabled).toBe(true);
 });
 it("retains installed preferences and leaves failed replacement unsaved",async()=>{
- invoke.mockResolvedValueOnce({...initial,model:{backend:"inochi2d",modelPath:"old",animations:catalog,mappings}});
+ invoke.mockResolvedValue({...initial,model:{backend:"vrm",modelPath:"old.vrm",animations:catalog,mappings,vrm:{animations:[]}}});
  await startSettings();invoke.mockRejectedValueOnce(new Error("invalid model"));await choose("new.vrm");
  expect((document.getElementById("fps") as HTMLSelectElement).value).toBe("60");
  document.getElementById("settings-form")!.dispatchEvent(new Event("submit"));await tick();
  expect(invoke.mock.calls.some(([name])=>name==="install_model")).toBe(false);
  expect(document.getElementById("settings-error")!.textContent).toContain("invalid model");
+});
+it("rejects an Inochi2D selection even if a file dialog returns one",async()=>{
+ await startSettings();
+ await choose("old.inp");
+ expect(document.getElementById("settings-error")!.textContent).toContain("本版本暂不支持 Inochi2D");
+ expect(invoke.mock.calls.some(([command])=>command==="inspect_model")).toBe(false);
+ expect(open).toHaveBeenCalledWith(expect.objectContaining({filters:[{name:"VRM",extensions:["vrm"]}]}));
 });
 it("keeps existing random pools and saves checkbox edits without modifier keys",async()=>{
  const animations=[{name:"Idle"},{name:"Click_1"},{name:"Click_2"},{name:"Ambient_1"}];

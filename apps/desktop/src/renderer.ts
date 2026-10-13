@@ -11,20 +11,20 @@ export async function createModelSlot(): Promise<ModelSlot> {
 }
 export function modelConfig(settings: DesktopSettings): Record<string, unknown> {
   const model = settings.model;
+  if (settings.preferences.modelEnabled === false) throw new Error("Model is disabled");
   if (!model) throw new Error("No installed model");
-  if (model.backend === "vrm" ? !model.vrm : !model.inochi2d) throw new Error("Model component is incomplete");
+  if (model.backend !== "vrm") throw new Error("Inochi2D is disabled in this version");
+  if (!model.vrm) throw new Error("Model component is incomplete");
   return {
     backend: model.backend, model: convertFileSrc(model.modelPath), fallback: TRANSPARENT_PIXEL,
     display: { width: 320, height: 480 },
-    render: { fps: settings.preferences.fps, maxDevicePixelRatio: settings.preferences.maxDevicePixelRatio, initialScale: settings.preferences.scale, autoFit: true, ...(model.backend === "vrm" ? {fitPadding:.92,viewportPadding:VRM_VIEWPORT_PADDING} : {}) },
+    render: { fps: settings.preferences.fps, maxDevicePixelRatio: settings.preferences.maxDevicePixelRatio, initialScale: settings.preferences.scale, autoFit: true, fitPadding:.92,viewportPadding:VRM_VIEWPORT_PADDING },
     mobile: { show: true }, interactions: { pointer: true, click: false, drag: false },
-    animations: model.backend === "inochi2d" ? model.inochi2d!.animations : model.vrm!.animations.map(({name,path}) => ({name,url:convertFileSrc(path)})),
-    ...(model.backend === "vrm" && model.vrm?.profilePath ? {profile:convertFileSrc(model.vrm.profilePath)} : {}),
-    ...(model.backend === "vrm" ? {
-      ambient: {animations:[model.mappings.idle]},
-      camera: {yawDegrees:0,pitchDegrees:5,fovDegrees:20,targetHeight:.54},
-      gaze: {maxYawDegrees:25,maxPitchDegrees:15,smoothingMs:100},
-    } : {}),
+    animations: model.vrm.animations.map(({name,path}) => ({name,url:convertFileSrc(path)})),
+    ...(model.vrm.profilePath ? {profile:convertFileSrc(model.vrm.profilePath)} : {}),
+    ambient: {animations:[model.mappings.idle]},
+    camera: {yawDegrees:0,pitchDegrees:5,fovDegrees:20,targetHeight:.54},
+    gaze: {maxYawDegrees:25,maxPitchDegrees:15,smoothingMs:100},
   };
 }
 export async function mountModel(host: HTMLElement, settings: DesktopSettings, signal: AbortSignal): Promise<WidgetController> {
@@ -47,7 +47,10 @@ export async function mountModel(host: HTMLElement, settings: DesktopSettings, s
   const cleanup = () => surface.remove();
   signal.addEventListener("abort", cleanup, {once:true});
   try {
-    const controller = await core.mountModelWidget(surface, config, {inochi2d: () => load("inochi2d"), vrm: () => load("vrm")}, {signal});
+    const controller = await core.mountModelWidget(surface, config, {
+      inochi2d: async () => { throw new Error("Inochi2D is disabled in this version"); },
+      vrm: () => load("vrm"),
+    }, {signal});
     if (controller.status === "fallback" || controller.status === "disabled") {controller.destroy(); throw new Error("Model failed to load");}
     return controller;
   } catch (error) { cleanup(); throw error; }

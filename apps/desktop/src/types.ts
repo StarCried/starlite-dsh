@@ -16,6 +16,7 @@ export interface AnimationMappings {
 export interface AnimationSource { name: string; path: string }
 
 export interface InstalledModel {
+  license?: { title: string; text: string };
   backend: ModelBackend;
   inochi2d?: { animations: AnimationClip[] };
   vrm?: { animations: AnimationSource[]; profilePath?: string };
@@ -26,6 +27,8 @@ export interface InstalledModel {
 }
 
 export interface DesktopPreferences {
+  /** Omitted only by older stored settings; native migration defaults to true. */
+  modelEnabled?: boolean;
   fps: 30 | 60;
   maxDevicePixelRatio: number;
   scale: number;

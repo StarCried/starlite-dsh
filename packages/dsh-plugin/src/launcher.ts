@@ -42,7 +42,7 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
     if (!localCache.startsWith("/") || /[\p{Cc}]/u.test(localCache)) throw new Error("invalid Windows local application cache");
     const roaming = (await execFileText("wslpath", ["-u", windowsDirectories[1]!], options.signal)).trim();
     if (!roaming.startsWith("/") || /[\p{Cc}]/u.test(roaming)) throw new Error("invalid Windows application settings directory");
-    const modelEnabled = await readModelEnabled(join(roaming, "com.starcried.dsh-inochi2d-pet", "settings.json"));
+    const acquireStarter = await shouldAcquireStarterCharacter(join(roaming, "com.starcried.dsh-inochi2d-pet", "settings.json"));
     const metadata: unknown = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
     if (typeof metadata !== "object" || metadata === null || !("version" in metadata) || typeof metadata.version !== "string") {
       throw new Error("invalid StarLite plugin package version");
@@ -51,11 +51,11 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
       assetDirectory: fileURLToPath(new URL("../assets/windows-x64/", import.meta.url)),
       cacheDirectory: join(localCache, "StarCried", "StarLite", "companions"),
       expectedVersion: metadata.version,
-      acquireStarter: modelEnabled,
+      acquireStarter,
       ...(options.signal ? {signal: options.signal} : {}),
     });
     executable = prepared.executable;
-    if (modelEnabled && !prepared.starterReady) options.onStarterFailure?.();
+    if (acquireStarter && !prepared.starterReady) options.onStarterFailure?.();
   }
   if (!executable.startsWith("/") || basename(executable).toLowerCase() !== "dsh-inochi2d-pet.exe") {
     throw new Error("StarLite for DSH executable is invalid");
@@ -87,8 +87,8 @@ function validWindowsDirectory(path: string): boolean {
     && !path.split(/[\\/]/u).some(part => part === "." || part === "..");
 }
 
-/** Read only the model opt-out; never transfer or log the companion settings. */
-export async function readModelEnabled(path: string): Promise<boolean> {
+/** Read only the selected-model policy; never transfer or log companion settings. */
+export async function shouldAcquireStarterCharacter(path: string): Promise<boolean> {
   const maximum = 4 * 1024 * 1024;
   try {
     const info = await lstat(path);
@@ -102,6 +102,13 @@ export async function readModelEnabled(path: string): Promise<boolean> {
       if (result.bytesRead !== info.size) return false;
       const value: unknown = JSON.parse(bytes.subarray(0, result.bytesRead).toString("utf8"));
       if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+      if (!("schemaVersion" in value)) return false;
+      if (value.schemaVersion === 4) {
+        return "activeModelId" in value && typeof value.activeModelId === "string"
+          && value.activeModelId.length > 0 && value.activeModelId.length <= 128
+          && !/[\p{Cc}]/u.test(value.activeModelId);
+      }
+      if (![1, 2, 3].includes(value.schemaVersion as number)) return false;
       const preferences = "preferences" in value ? value.preferences : undefined;
       if (typeof preferences === "object" && preferences !== null && "modelEnabled" in preferences) return preferences.modelEnabled === true;
       return true;

@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
-    <title>DSH Companion</title>
+    <title>StarLite for DSH</title>
   </head>
   <body>
-    <main id="pet-view" aria-label="DSH Companion">
+    <main id="pet-view" aria-label="StarLite for DSH">
       <output id="bubble" aria-live="polite" hidden></output>
       <div id="model" aria-label="模型"></div>
       <button id="empty-model" type="button" hidden>点击此处打开设置并导入模型。</button>
@@ -17,14 +17,18 @@
       <div class="settings-scroll">
       <header>
         <p class="eyebrow">本地桌面伙伴</p>
-        <h1>DSH Companion</h1>
+        <h1>StarLite for DSH</h1>
         <p>模型和会话内容仅保存在本机。</p>
       </header>
       <section>
         <h2>模型</h2>
+        <p>选择一次资源包，自动导入模型、动作、角色配置和状态映射。</p>
+        <p><button id="import-resource-pack" type="button" class="primary">导入资源包 ZIP · 自动配置</button></p>
+        <p id="model-path">尚未选择</p>
+        <details class="manual-model">
+        <summary>使用自己的模型与动作</summary>
         <div class="row">
           <button id="choose-model" type="button">选择 .inp / .vrm</button>
-          <span id="model-path">尚未选择</span>
         </div>
         <div id="vrm-resources" hidden>
           <p>VRM 动作独立导入；动作名称取自文件名。</p>
@@ -34,13 +38,16 @@
           <button id="clear-profile" type="button">使用标准 VRM</button>
           <span id="profile-file">标准 VRM</span></p>
         </div>
+        </details>
         <p id="inspection-status" role="status"></p>
       </section>
       <form id="settings-form">
         <section>
-          <h2>动画映射</h2>
+          <details id="mapping-details">
+          <summary>动作映射（进阶）</summary>
           <p id="animation-pool-help">只有待机持续循环，其他动作播放一次后回到待机。点击回应和偶发小动作可勾选多个，每次随机播放一个。</p>
           <div id="animation-mappings"></div>
+          </details>
         </section>
         <section class="preferences">
           <h2>显示</h2>

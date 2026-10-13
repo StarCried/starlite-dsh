@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { confirmResourceLicense, type ResourcePackInspection } from "./resource-pack-dialog.js";
 import type {
   AnimationSource,
   AnimationMappings,
@@ -30,8 +31,10 @@ export async function startSettings(): Promise<void> {
   let generation = 0;
   let checking = false;
   let saving = false;
+  let importing = false;
   let preferencesEdited = false;
   const choose = requiredElement<HTMLButtonElement>("choose-model");
+  const importPack = requiredElement<HTMLButtonElement>("import-resource-pack");
   const chooseAnimations = requiredElement<HTMLButtonElement>("choose-animations");
   const chooseProfile = requiredElement<HTMLButtonElement>("choose-profile");
   const clearProfile = requiredElement<HTMLButtonElement>("clear-profile");
@@ -49,13 +52,55 @@ export async function startSettings(): Promise<void> {
   const updateSave = () => {
     const valid = sourcePath ? inspection?.compatibilitySupported : Boolean(settings.model);
     const idle = mappings.querySelector<HTMLSelectElement>('select[data-state="idle"]')?.value;
-    save.disabled = saving || checking || !valid || !idle;
+    save.disabled = saving || importing || checking || !valid || !idle;
+    importPack.disabled = saving || importing || checking;
   };
   form.addEventListener("change", event => {
     if ((event.target as HTMLElement).closest(".preferences")) preferencesEdited = true;
     updateSave();
   });
   updateSave();
+  importPack.addEventListener("click", async () => {
+    if (importing || saving || checking) return;
+    importing = true;
+    error.textContent = "";
+    updateSave();
+    for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = true;
+    try {
+      const path = await open({title:"选择独立授权的资源包",multiple:false,directory:false,filters:[{name:"StarLite 资源包",extensions:["zip"]}]});
+      if (typeof path !== "string") return;
+      status.textContent = "正在检查资源包…";
+      const pack = await invoke<ResourcePackInspection>("inspect_resource_pack", {path});
+      if (!await confirmResourceLicense(pack)) {
+        status.textContent = "已取消导入。";
+        return;
+      }
+      status.textContent = "正在自动导入…";
+      const preferences = readPreferences();
+      if (!settings.model && !preferencesEdited) {
+        preferences.fps = 30;
+        preferences.maxDevicePixelRatio = 1.5;
+      }
+      settings = await invoke<DesktopSettings>("install_resource_pack", {
+        path, expectedSha256:pack.sha256, preferences, acceptLicense:true,
+      });
+      sourcePath = undefined; inspection = undefined; animationSources = []; profilePath = undefined;
+      resources.hidden = true;
+      populatePreferences(settings.preferences);
+      renderMappings(mappings, settings.model?.animations ?? [], settings.model?.mappings);
+      requiredElement<HTMLDetailsElement>("mapping-details").open = false;
+      pathLabel.textContent = pack.title;
+      status.textContent = "资源包已自动导入并保存，可以开始使用。";
+      save.textContent = "保存设置";
+    } catch (reason) {
+      status.textContent = "资源包导入失败，原模型和设置未改变。";
+      error.textContent = safeError(reason);
+    } finally {
+      importing = false;
+      for (const button of [choose, chooseAnimations, chooseProfile, clearProfile]) button.disabled = false;
+      updateSave();
+    }
+  });
   const inspect = async () => {
     if (!sourcePath) return;
     const ticket = ++generation;
@@ -72,6 +117,7 @@ export async function startSettings(): Promise<void> {
       }
       status.textContent = result.animations.length ? `检查通过：${result.animations.length} 个动画。请选择待机动作。` : "模型可预览；请添加动作并选择待机后保存。";
       renderMappings(mappings, result.animations, suggestMappings(result));
+      requiredElement<HTMLDetailsElement>("mapping-details").open = true;
       save.textContent = "导入并保存";
     } catch (reason) {
       if (ticket !== generation) return;
@@ -81,7 +127,7 @@ export async function startSettings(): Promise<void> {
   choose.addEventListener("click", async () => {
     try {
       const selected = await open({ title: "选择模型", multiple:false, directory:false, filters:[{name:"模型",extensions:["inp","vrm"]}] });
-      if (typeof selected !== "string" || saving) return;
+      if (typeof selected !== "string" || saving || importing) return;
       sourcePath = selected; animationSources = []; profilePath = undefined;
       resources.hidden = !selected.toLowerCase().endsWith(".vrm");
       requiredElement("animation-files").textContent = "尚未选择动作";
@@ -95,7 +141,7 @@ export async function startSettings(): Promise<void> {
     const ticket = generation;
     try {
       const selected = await open({title:"选择 VRMA 动作",multiple:true,directory:false,filters:[{name:"VRM Animation",extensions:["vrma"]}]});
-      if (!selected || saving || ticket !== generation) return;
+      if (!selected || saving || importing || ticket !== generation) return;
       animationSources = (Array.isArray(selected) ? selected : [selected]).map(path => ({path,name:path.split(/[\\/]/u).at(-1)!.replace(/\.vrma$/iu,"")}));
       requiredElement("animation-files").textContent = `${animationSources.length} 个动作`;
       await inspect();
@@ -105,7 +151,7 @@ export async function startSettings(): Promise<void> {
     const ticket = generation;
     try {
       const selected = await open({title:"选择角色配置",multiple:false,directory:false,filters:[{name:"角色配置",extensions:["json"]}]});
-      if (typeof selected !== "string" || saving || ticket !== generation) return;
+      if (typeof selected !== "string" || saving || importing || ticket !== generation) return;
       profilePath = selected;
       requiredElement("profile-file").textContent = selected.split(/[\\/]/u).at(-1) ?? "角色配置";
       await inspect();
@@ -114,7 +160,7 @@ export async function startSettings(): Promise<void> {
   clearProfile.addEventListener("click", () => { profilePath = undefined; requiredElement("profile-file").textContent = "标准 VRM"; void inspect(); });
   form.addEventListener("submit", async event => {
     event.preventDefault();
-    if (saving || checking || save.disabled) return;
+    if (saving || importing || checking || save.disabled) return;
     saving = true; error.textContent = ""; updateSave();
     for (const button of [choose,chooseAnimations,chooseProfile,clearProfile]) button.disabled = true;
     try {

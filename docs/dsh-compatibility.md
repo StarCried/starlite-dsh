@@ -7,15 +7,19 @@
 | 使用形态 | 实际版本 | 本地结果 |
 | --- | --- | --- |
 | Windows 原生 CLI/Web | npm `@deepseek-ai/dsh@0.2.1-alpha.2`、Node 24 | 本轮重打包通过隔离安装／启动、状态桥、认证首页、fail-open 及退出回收；实际 Chrome 首页和准确目标会话通过，标题一致、目标选中且片段已消费 |
-| 官方 Windows Desktop | 已安装官方签名版 `0.2.0-rc.2`，内置 Electron 44／Node 24、ASAR | 独立 DSH_HOME 中实际插件页安装／启用、自动微光、停用后 DSH 可用、× 隐藏保留 Host／桌宠、真正退出及重启恢复已过；用户确认无会话双击唤起主界面 |
-| WSL2 CLI/Web | `0.1.5-rc.1`、Node 22.22.1 | 本轮重打包通过官方 CLI 临时 home/profile 安装、认证首页、状态桥、缺失 EXE 继续运行及退出回收；不将 Windows Chrome 结果算作 WSL 浏览器实测 |
+| 官方 Windows Desktop | 已安装官方签名版 `0.2.0-rc.2`，内置 Electron 44／Node 24、ASAR | 既有安装／启停、自动微光、× 隐藏、退出及恢复结果保留；现已通过官方内置 CLI 安装准确的当前包，Host／client 文件逐字节匹配，重启及新包独立文本回答通过；当前包导航仍待实测 |
+| WSL2 CLI/Web | CLI `0.1.5-rc.1`、Node 22.22.1，主要运行包为 `0.1.5-rc.2` | 当前包隔离安装／启动、认证首页、状态桥、fail-open 与退出回收通过；WSL 系统打开器的实际 Chrome 首页和准确 Target 通过，其他会话未选、标题一致、片段已消费，退出后监听关闭且临时 home 已清理 |
 
-Desktop 已从仅解包 ASAR 扩展到实际安装及 GUI 验收，使用独立 DSH_HOME；日常 profile 和凭据没有作为测试输入。Desktop GUI 使用上一候选，只有原生 EXE 与当前包完全相同。profile 选择及 RPC 导航主逻辑未变，但当前包还修改了系统打开器的等待方式，须装入准确的当前候选复验 Desktop 导航，不能只将其视为 Web 客户端差异。普通单选已实际返回一项答案，多选与自定义输入仍待用户回答，Desktop 指定会话及转交答题仍待实测。未将全部 GUI、性能或最新包的完整矩阵标为通过。macOS/Linux 桌宠、远程 Host 和同时聚合多个 Host 不在本版支持范围。
+Desktop 使用独立 DSH_HOME；日常 profile 和凭据没有作为测试输入。上一候选完成生命周期及用户无会话双击验收；其原生 EXE 与当前包相同，但系统打开器等待方式已改变，旧导航结果不外推。当前已完全退出 DSH／桌宠，用官方内置 CLI 移除并安装准确的当前包，确认 Host／client 文件与包内哈希一致；正常重启、微光和原设置 SHA 保持通过。新包无会话双击、指定会话及转交答题仍待实测。
+
+普通单选已实际返回一项答案；用户已完成多选附加文字，后端接受一项回答、两个选项及一份自定义文字。新包独立文本也实际返回一项自定义回答、零选项。欢迎页未完成时的一次「转到 DSH 回答」超时实际保留了草稿；欢迎页完成后的再次交接仍待用户操作。未将全部 GUI、限时／continued、性能或多 Host 验收标为通过。
+
+WSL 浏览器结果对应混合版本组合：CLI 为 `0.1.5-rc.1`，`dsh-app-boot`、`dsh-agent`、`dsh-agent-loop`、`dsh-client-connection`、`dsh-api-session-controller`、`dsh-web-app` 实际均为 `0.1.5-rc.2`，不声称纯 `rc.1` 依赖树通过。macOS/Linux 桌宠、远程 Host 和同时聚合多个 Host 不在本版支持范围。
 
 ## 接口与自动回归
 
 - 官方源码固定核对到 [`d743267`](https://github.com/deepseek-ai/deepseek-harness/tree/d743267388641bc76f17c45ce8b4c231aed1d32c)，没有把源码版本当作实际安装包版本。
-- npm `0.2.1-alpha.2` 的完整状态、流式文字、迁移状态、问答、Desktop／Web 导航及只读费用契约通过。WSL `0.1.5-rc.1` 保持原有阻塞问题和 Web 导航；它不被标为 Desktop 合格版本。
+- npm `0.2.1-alpha.2` 的完整状态、流式文字、迁移状态、问答、Desktop／Web 导航及只读费用契约通过。上述 WSL `0.1.5-rc.1` CLI／`rc.2` 运行包组合保持原有阻塞问题和 Web 导航；它不被标为 Desktop 合格版本。
 - npm 与 ASAR 两版官方 Host／浏览器 Connection 实现通过真实认证 RPC 检查，包含导航先于 Connection 加载、服务撤销／重建、重载、取消、过期及重复确认、Origin 和 Cookie 认证限制。官方 `ClientSessions` 与真实 Cordis sibling service 挂载也已通过；observable store 和目录／界面动作使用内存 fixture，不能代替真实浏览器 store、界面及会话导航验收。
 - 官方安装器不携带完整 TypeScript 声明，因此未声称 ASAR 通过声明扫描；使用实际运行时检查补足证据。
 - 限时与 continued 问题服务的 `0.2.0-rc.2`／`0.2.1-alpha.2` 实现一致。回归覆盖官方剩余时间、claim 释放、晚答的原子接受／拒绝、非阻塞动画、前台优先、隐私、委托和随机引用隔离。
@@ -25,6 +29,6 @@ Desktop 已从仅解包 ASAR 扩展到实际安装及 GUI 验收，使用独立 
 
 ## 仍需人工确认
 
-按 [候选验收清单](release-candidate-review.md) 只补未完成项：多选／自定义回答、Desktop 指定会话及答题交接，以及尚未记录的 WSL 浏览器导航和 Host 排队。安装／启停、窗口生命周期、无会话唤起、当前包安装及 Windows 浏览器导航已有结果，不重复要求用户确认。既有模型、动画和博客验收保持有效；本次没有重测性能。
+按 [候选验收清单](release-candidate-review.md) 只补未完成项：当前包的 Desktop 无会话／指定会话导航及答题交接、限时／continued 实际界面和 Host 排队。单选、多选／自定义回答、安装／启停、窗口生命周期、当前包安装及 Windows／WSL 浏览器导航已有结果，不重复要求用户确认。既有模型、动画和博客验收保持有效；本次没有重测性能。
 
 安装入口见 [用户指南](user-guide.md)；开发者复验命令见 [开发说明](development.md)、[桌面导航](desktop-navigation.md) 和 [问答生命周期](dsh-questions-contract.md)。最终包哈希与详细本地结果保存在未跟踪的 `release-output/windows-host-qualification`，不包含认证 URL、API Key 或会话内容。

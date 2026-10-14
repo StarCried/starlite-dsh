@@ -72,7 +72,7 @@ dsh --profile web
 
 已有 DSH 无需重装或自动升级。WSL 验收基线为 `0.1.5-rc.1`；该版本的插件管理器需要环境中可用的 `pnpm`，按 DSH 自己的安装要求准备即可。StarLite 使用者不需要 Rust 或 Blender。
 
-2026-10-14，已验候选覆盖 Windows 原生 npm DSH `0.2.1-alpha.2`、官方 Windows Desktop `0.2.0-rc.2` 和 WSL `0.1.5-rc.1`。实际安装的 Desktop 已通过插件安装／启停、自动微光、窗口隐藏、退出及恢复；用户已确认无会话双击唤起主界面。最新重打候选的 CLI/Web／WSL、指定会话导航及部分问答仍在复验中。
+2026-10-14，已验候选覆盖 Windows 原生 npm DSH `0.2.1-alpha.2`、官方 Windows Desktop `0.2.0-rc.2` 和 WSL `0.1.5-rc.1`。当前重打包的 Windows／WSL 安装与启动、Windows Chrome 首页及准确会话导航已过。实际安装的 Desktop 已通过插件安装／启停、自动微光、窗口隐藏、退出及恢复；用户已确认无会话双击唤起主界面。Desktop 指定会话及部分问答仍待实测。
 
 桌面安装包与 npm/source 版本不一定同步。已通过范围与剩余项见 [兼容性记录](dsh-compatibility.md)；契约和 fixture 测试不代替真实界面验收，后续升级 DSH 应核对对应版本。
 

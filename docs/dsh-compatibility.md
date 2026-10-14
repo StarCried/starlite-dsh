@@ -6,11 +6,11 @@
 
 | 使用形态 | 实际版本 | 本地结果 |
 | --- | --- | --- |
-| Windows 原生 CLI/Web | npm `@deepseek-ai/dsh@0.2.1-alpha.2`、Node 24 | 已验候选通过隔离包安装、原生状态桥、认证首页、缺失 EXE 与不兼容订阅时继续运行、日志和退出回收；最新重打包及真实浏览器导航复验中 |
+| Windows 原生 CLI/Web | npm `@deepseek-ai/dsh@0.2.1-alpha.2`、Node 24 | 本轮重打包通过隔离安装／启动、状态桥、认证首页、fail-open 及退出回收；实际 Chrome 首页和准确目标会话通过，标题一致、目标选中且片段已消费 |
 | 官方 Windows Desktop | 已安装官方签名版 `0.2.0-rc.2`，内置 Electron 44／Node 24、ASAR | 独立 DSH_HOME 中实际插件页安装／启用、自动微光、停用后 DSH 可用、× 隐藏保留 Host／桌宠、真正退出及重启恢复已过；用户确认无会话双击唤起主界面 |
-| WSL2 CLI/Web | `0.1.5-rc.1`、Node 22.22.1 | 已验候选通过官方 CLI 临时 home/profile 安装、认证首页、状态桥、缺失 EXE 继续运行、SIGTERM 后监听关闭；最新重打包复验中 |
+| WSL2 CLI/Web | `0.1.5-rc.1`、Node 22.22.1 | 本轮重打包通过官方 CLI 临时 home/profile 安装、认证首页、状态桥、缺失 EXE 继续运行及退出回收；不将 Windows Chrome 结果算作 WSL 浏览器实测 |
 
-Desktop 已从仅解包 ASAR 扩展到实际安装及 GUI 验收，使用独立 DSH_HOME；日常 profile 和凭据没有作为测试输入。普通单选已实际返回一项答案，多选与自定义输入仍待用户回答，Desktop 指定会话及转交答题仍待实测。未将全部 GUI、性能或最新包的完整矩阵标为通过。macOS/Linux 桌宠、远程 Host 和同时聚合多个 Host 不在本版支持范围。
+Desktop 已从仅解包 ASAR 扩展到实际安装及 GUI 验收，使用独立 DSH_HOME；日常 profile 和凭据没有作为测试输入。Desktop GUI 使用上一候选，其 Windows 程序及 Host 导航代码与本轮重打包一致，本轮差异是 Web 客户端修复。普通单选已实际返回一项答案，多选与自定义输入仍待用户回答，Desktop 指定会话及转交答题仍待实测。未将全部 GUI、性能或最新包的完整矩阵标为通过。macOS/Linux 桌宠、远程 Host 和同时聚合多个 Host 不在本版支持范围。
 
 ## 接口与自动回归
 
@@ -25,6 +25,6 @@ Desktop 已从仅解包 ASAR 扩展到实际安装及 GUI 验收，使用独立 
 
 ## 仍需人工确认
 
-按 [候选验收清单](release-candidate-review.md) 只补未完成项：多选／自定义回答、Desktop 指定会话及答题交接、最新包的 CLI/Web／WSL 复验，以及尚未记录的 Host 排队。安装／启停、窗口生命周期和无会话唤起已有结果，不重复要求用户确认。既有模型、动画和博客验收保持有效；本次没有重测性能。
+按 [候选验收清单](release-candidate-review.md) 只补未完成项：多选／自定义回答、Desktop 指定会话及答题交接，以及尚未记录的 WSL 浏览器导航和 Host 排队。安装／启停、窗口生命周期、无会话唤起、当前包安装及 Windows 浏览器导航已有结果，不重复要求用户确认。既有模型、动画和博客验收保持有效；本次没有重测性能。
 
 安装入口见 [用户指南](user-guide.md)；开发者复验命令见 [开发说明](development.md)、[桌面导航](desktop-navigation.md) 和 [问答生命周期](dsh-questions-contract.md)。最终包哈希与详细本地结果保存在未跟踪的 `release-output/windows-host-qualification`，不包含认证 URL、API Key 或会话内容。

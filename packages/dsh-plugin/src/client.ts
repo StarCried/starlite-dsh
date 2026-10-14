@@ -242,10 +242,13 @@ export function apply(context: ClientContext): () => void {
   const start = (scope: ClientContext, workspace?: WorkspaceNavigation) => {
     const mount = () => {
       if (disposed) return () => undefined;
-      const rpc = scope.connection?.rpc;
+      const desktopPage = isDesktopPage();
+      // Web's child scope injects only uiWorkspace. Cordis rejects even an
+      // optional read of a sibling Connection service without that dependency.
+      const rpc = desktopPage ? scope.connection?.rpc : undefined;
       let stopped = false;
       let currentStop: () => void = () => undefined;
-      const desktop = isDesktopPage() && typeof rpc?.call === "function";
+      const desktop = desktopPage && typeof rpc?.call === "function";
       const restart = () => {
         if (stopped || disposed) return;
         currentStop();

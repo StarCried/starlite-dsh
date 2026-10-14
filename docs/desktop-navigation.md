@@ -46,6 +46,11 @@ node tools/check-dsh-contract.mjs <DSH包目录> --desktop
 cookie 认证、Origin 限制、取消、确认身份和释放。
 它不启动用户 profile、不注册系统协议，也不调用模型 API：
 
+同一工具还执行官方 `ClientSessions` 浏览器实现与真实 Cordis 的 sibling service
+挂载，验证列表的 pending/ready、延迟提供 `uiWorkspace`、准确选中和片段消费。
+Web 挂载不读取未注入的 Connection；该检查不能用 root.provide 的宽松 mock 替代。
+远程目录和 observable store 边界使用内存 fixture，不验证前端 store 引擎或窗口观感。
+
 ```powershell
 node tools/qualify-dsh-navigation.mjs <DSH包目录>
 ```

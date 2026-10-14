@@ -38,6 +38,7 @@ try {
   await build({entryPoints: [resolve("packages/dsh-plugin/src/navigation.ts")], outfile: join(temporary, "navigation.mjs"),
     bundle: true, platform: "node", format: "esm", external: ["open"], logLevel: "silent"});
   const {createDshNavigator} = await import(pathToFileURL(join(temporary, "navigation.mjs")).href);
+  await qualifyWebClient();
   class FixtureWebServer extends Service {
     host = "127.0.0.1";
     protocol = "http:";
@@ -122,7 +123,7 @@ try {
   await navigator.close();
   assert.equal((await fetch(url, {method: "POST", headers: {...headers, cookie}, body: JSON.stringify(envelope)})).status, 404);
   const version = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8")).version;
-  console.log(`DSH ${version}: cold dependency startup/replacement, official Host/browser RPC, cookie authentication, origin fence, opaque ACK, cancellation and disposal passed.`);
+  console.log(`DSH ${version}: official ClientSessions + sibling service lifecycle, Web target/fragment, cold dependency startup/replacement, official Host/browser RPC, cookie authentication, origin fence, opaque ACK, cancellation and disposal passed.`);
 } finally {
   await navigator?.close();
   await client.fiber.dispose(); await host.fiber.dispose();
@@ -131,4 +132,79 @@ try {
   assert.equal(dirname(temporary), resolve(tmpdir()));
   assert(basename(temporary).startsWith("starlite-navigation-"));
   await rm(temporary, {recursive: true, force: true});
+}
+
+/** Exercise our mount with the official ClientSessions, not a permissive root stub. */
+async function qualifyWebClient() {
+  const context = new Context();
+  const selected = [], replaced = [];
+  const window = {location: {href: "http://127.0.0.1/#companionSession=fixture-target"}, history: {state: null,
+    replaceState: (_state, _unused, url) => {replaced.push(url);}}, __ModuleLoader__: {load: () => undefined}};
+  const sandbox = {window, URL, URLSearchParams, AbortController, AbortSignal, Headers, Response, Request,
+    TextEncoder, TextDecoder, structuredClone, queueMicrotask, performance, crypto: globalThis.crypto, setTimeout, clearTimeout, console};
+  const modules = new Map([
+    ["@deepseek-ai/cordis", await official("@deepseek-ai/cordis")],
+    // The published Host omits Zustand/Immer (frontend build dependencies).
+    // Fixture only the public observable seam; ClientSessions and Cordis remain
+    // the installed official implementations, including list/phase projection.
+    ["@deepseek-ai/dsh-client-store", {
+      notifySubscribers: listeners => {for (const listener of listeners) listener();},
+      createSnapshotStore: initial => {
+        let value = initial; const listeners = new Set();
+        const notify = () => {for (const listener of listeners) listener();};
+        return {getSnapshot: () => value, subscribe: listener => {listeners.add(listener); return () => listeners.delete(listener);},
+          set: next => {value = next; notify();}, update: mutate => {mutate(value); notify();}};
+      },
+    }],
+  ]);
+  const browserModule = async specifier => {
+    let factory;
+    window.__ModuleLoader__.load = row => {factory = row.factory;};
+    runInNewContext(await readFile(requireOfficial.resolve(specifier), "utf8"), sandbox);
+    const exported = factory(name => {
+      const dependency = modules.get(name.replace(/\/client$/u, ""));
+      if (!dependency) throw Error(`unexpected official ClientSessions external: ${name}`);
+      return dependency;
+    });
+    modules.set(specifier.replace(/\/client$/u, ""), exported);
+    return exported;
+  };
+  try {
+    await browserModule("@deepseek-ai/dsh-api-gateway/client");
+    const sessionsPlugin = await browserModule("@deepseek-ai/dsh-api-session-controller/client");
+    const remote = {
+      $on: () => () => undefined,
+      $stream: () => ({restart: () => undefined, dispose: async () => undefined}),
+      session: {list: async () => ({ok: true, value: {items: [
+        {sessionId: "fixture-other", updatedAt: 1, agentAvailable: true, running: false, blank: false},
+        {sessionId: "fixture-target", updatedAt: 2, agentAvailable: true, running: false, blank: true},
+      ]}})}, commands: {}, subagents: {},
+    };
+    // Actual deployments provide Connection in its own plugin fiber. A root
+    // provide() would let undeclared child reads succeed and hide regressions.
+    await context.plugin(scope => scope.provide("connection", {generation: {getSnapshot: () => undefined, subscribe: () => () => undefined}}));
+    await context.plugin(scope => {
+      scope.provide("remote", remote);
+      for (const name of ["session", "commands", "subagents"]) scope.provide(`remote.${name}`, remote[name]);
+      scope.provide("fileUpload", {});
+      scope.provide("typert", {contexts: {registerClient: () => () => undefined}});
+    });
+    await context.plugin(sessionsPlugin);
+    const sessions = context.get("sessions");
+    assert.equal(sessions.list.getSnapshot().phase, "pending");
+    const built = await build({entryPoints: [resolve("packages/dsh-plugin/src/client.ts")], bundle: true,
+      platform: "browser", format: "cjs", write: false, logLevel: "silent"});
+    const companion = runInNewContext(`var module={exports:{}},exports=module.exports;\n${built.outputFiles[0].text}\nmodule.exports`, sandbox);
+    const mounted = await context.plugin(companion);
+    await sessions.refresh();
+    assert.equal(sessions.list.getSnapshot().phase, "ready");
+    assert(sessions.list.getSnapshot().ids.includes("fixture-target"));
+    assert.deepEqual(selected, []);
+    // Workspace appears later, exercising Cordis's actual dependency callback.
+    await context.plugin(scope => scope.provide("uiWorkspace", {openSession: id => {selected.push(id);}}));
+    for (const runtime of context.registry.values()) for (const fiber of runtime.fibers) await fiber.await();
+    assert.deepEqual(selected, ["fixture-target"]);
+    assert.deepEqual(replaced, ["http://127.0.0.1/"]);
+    await mounted.dispose();
+  } finally {await context.fiber.dispose();}
 }

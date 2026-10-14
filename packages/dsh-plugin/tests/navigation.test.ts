@@ -6,8 +6,21 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {pathToFileURL} from "node:url";
 import {browserEnvironment,browserWorkerScript,openDshSession} from "../src/navigation.js";
-import {followCompanionSession,type Sessions} from "../src/client.js";
+import {apply,followCompanionSession,type Sessions} from "../src/client.js";
 describe("exact companion navigation",()=>{
+  it("mounts Web navigation without reading an uninjected sibling Connection service",()=>{
+    const openSession = vi.fn(), replaceState = vi.fn();
+    vi.stubGlobal("window", {location: {href: "http://127.0.0.1/#companionSession=target"}, history: {state: null, replaceState}});
+    const sessions: Sessions = {list: {getSnapshot: () => ({ids: ["target"], phase: "ready"}), subscribe: () => () => undefined}, refresh: async () => undefined, refreshProjections: async () => undefined};
+    const scope = {sessions, uiWorkspace: {openSession}, get connection(): never {throw Error("cannot get property connection without inject");}};
+    try {
+      const stop = apply({sessions, inject: (names, callback) => {expect(names).toEqual(["uiWorkspace"]); callback(scope);}});
+      expect(openSession).toHaveBeenCalledExactlyOnceWith("target");
+      expect(replaceState).toHaveBeenCalledExactlyOnceWith(null, "", "http://127.0.0.1/");
+      stop();
+    } finally {vi.unstubAllGlobals();}
+  });
+
   it("uses Node mode to enter an opener worker but removes it before the launcher and its child",async()=>{
     const directory = await mkdtemp(join(tmpdir(), "starlite-opener-"));
     try {

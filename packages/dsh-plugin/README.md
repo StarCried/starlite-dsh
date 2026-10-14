@@ -25,7 +25,7 @@ dsh --profile web
 
 单击模型回应并查看费用；双击在桌面应用或浏览器打开当前会话，无会话时打开 DSH；拖动身体移动桌宠。右键或托盘打开设置。工作气泡可选精简／详细模式，普通问题可直接在气泡里选择或输入。
 
-在 DSH 侧栏「插件」查找 `dsh-starlite`；旧版 DSH 在设置的插件列表中查看。若同一 profile 装过 `dsh-inochi2d-pet`，先移除旧包。桌面版的插件安装与 CLI/Web profile 独立，需要分别安装；一次只连接一个 Host，切换前先退出原 DSH 并等待 StarLite 托盘退出。
+在 DSH 侧栏「插件」查找 `dsh-starlite`；旧版 DSH 在设置的插件列表中查看。若同一 profile 装过 `dsh-inochi2d-pet`，先移除旧包。桌面版的插件安装与 CLI/Web profile 独立，需要分别安装；一次只连接一个 Host，切换时停止原 Host（桌面版从 DSH 托盘退出），桌宠会在重连期结束后连接等待者。
 
 ## 进阶
 

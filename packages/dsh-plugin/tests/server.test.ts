@@ -20,6 +20,22 @@ function idleSource(): PetStateSource {
 }
 
 describe("status SSE server", () => {
+  it("rejects malformed or oversized question responses without terminating the Host",async()=>{
+    const source=new DshStateAggregator(),bridge=new QuestionBridge(source,async()=>undefined),server=await startStatusServer(source,{questions:bridge});
+    const read=vi.spyOn(bridge,"read"),id="123e4567-e89b-42d3-a456-426614174001",headers={Authorization:`Bearer ${server.token}`};
+    const request={interactionVersion:1 as const,requestId:id,sessionRef:"123e4567-e89b-42d3-a456-426614174000",questions:Array.from({length:4},(_,i)=>({id:String(i),question:"Choose",options:[],multiSelect:false,detail:"x".repeat(8192)}))};
+    const bytes=(value:unknown)=>new TextEncoder().encode(JSON.stringify(value)).byteLength;
+    request.questions[3]!.detail=request.questions[3]!.detail.slice(0,8192-(bytes(request)-32750));expect(bytes(request)).toBe(32750);
+    try{
+      for(const value of [{...request,wait:{state:"timed",deadline:1_800_000_012_000,issuedAt:1_800_000_000_000}},{...request,questions:[{id:"q",question:"Choose",options:[],multiSelect:false}],wait:{state:"timed",deadline:NaN,issuedAt:0}}]){
+        read.mockReturnValueOnce(value as ReturnType<QuestionBridge["read"]>);
+        const response=await fetch(`http://127.0.0.1:${server.port}/v1/interaction?request=${id}`,{headers});expect(response.status).toBe(409);expect(await response.text()).toBe("");
+      }
+      read.mockImplementationOnce(()=>{throw Error("PRIVATE request failure");});
+      expect((await fetch(`http://127.0.0.1:${server.port}/v1/interaction?request=${id}`,{headers})).status).toBe(409);
+      expect((await fetch(`http://127.0.0.1:${server.port}/v1/health`,{headers})).status).toBe(204);
+    }finally{await server.close();}
+  });
   it("waits for the official continued-answer result before acknowledging HTTP success",async()=>{
     const source=new DshStateAggregator(),bridge=new QuestionBridge(source,async()=>undefined);
     let reject!:(error:Error)=>void;

@@ -27,11 +27,17 @@ interface QuestionActions {
 export class WorkBubble {
   #generation=0;#key:string|undefined;#latest:PetSnapshot|undefined;#preferences:DesktopPreferences|undefined;
   #waitTimer:ReturnType<typeof setInterval>|undefined;
+  #hostFrame:{sequence:number;emittedAt:number;receivedAt:number}|undefined;
+  #refreshCountdown:((frame:{emittedAt:number;receivedAt:number})=>void)|undefined;
   constructor(readonly element:HTMLElement,readonly actions:QuestionActions){}
-  clear():void{this.#stopCountdown();++this.#generation;this.#key=undefined;this.element.hidden=true;this.element.replaceChildren();delete this.element.dataset.interactive;this.actions.changed()}
+  clear():void{this.#stopCountdown();this.#hostFrame=undefined;++this.#generation;this.#key=undefined;this.element.hidden=true;this.element.replaceChildren();delete this.element.dataset.interactive;this.actions.changed()}
   update(snapshot:PetSnapshot,preferences:DesktopPreferences):void{
     this.#latest=snapshot;this.#preferences=preferences;
     const key=!preferences.privacyMode&&snapshot.inputRequest&&snapshot.session?`${snapshot.session.ref}/${snapshot.inputRequest}`:undefined;
+    if(!this.#hostFrame||snapshot.sequence>this.#hostFrame.sequence){
+      this.#hostFrame={sequence:snapshot.sequence,emittedAt:snapshot.emittedAt,receivedAt:performance.now()};
+      if(key&&key===this.#key)this.#refreshCountdown?.(this.#hostFrame);
+    }
     if(key&&key===this.#key){const title=this.element.querySelector(".bubble-title");if(title)title.textContent=snapshot.session!.title;return;}
     this.#stopCountdown();++this.#generation;this.#key=key;
     if(!key){renderBubble(this.element,snapshot,preferences.privacyMode,preferences.bubbleMode);this.actions.changed();return;}
@@ -71,14 +77,20 @@ export class WorkBubble {
     }
     status.setAttribute("role","timer");
     const deadline=request.wait.deadline;
+    // Both wire times belong to the Host. Only local monotonic elapsed time
+    // advances the display; WSL and Windows wall clocks need not agree.
+    let endsAt=performance.now()+deadline-request.wait.issuedAt;
+    const shorten=(frame:{emittedAt:number;receivedAt:number})=>{endsAt=Math.min(endsAt,frame.receivedAt+deadline-frame.emittedAt);};
+    if(this.#hostFrame)shorten(this.#hostFrame);
     const tick=()=>{
       if(generation!==this.#generation){this.#stopCountdown();return;}
-      const seconds=Math.max(0,Math.ceil((deadline-Date.now())/1000));
+      const seconds=Math.max(0,Math.ceil((endsAt-performance.now())/1000));
       const text=seconds?`剩余 ${seconds} 秒；到时 DSH 将继续处理。`:"等待时间已结束，DSH 将继续处理。";
       if(status.textContent!==text){status.textContent=text;this.actions.changed();}
       if(seconds===0)this.#stopCountdown();
     };
-    tick();if(deadline>Date.now())this.#waitTimer=setInterval(tick,250);
+    this.#refreshCountdown=frame=>{shorten(frame);tick();};
+    tick();if(endsAt>performance.now())this.#waitTimer=setInterval(tick,250);
   }
-  #stopCountdown():void{clearInterval(this.#waitTimer);this.#waitTimer=undefined;}
+  #stopCountdown():void{clearInterval(this.#waitTimer);this.#waitTimer=undefined;this.#refreshCountdown=undefined;}
 }

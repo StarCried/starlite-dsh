@@ -2,7 +2,7 @@
 
 StarLite answers only `user-questions/request`; it never answers tool permission approvals.
 Real Session, Agent and tool-call identities remain in the Host. The companion receives
-validated question text and per-request random references only.
+validated question text, per-request random references and public wait metadata only.
 
 ## Blocking and timed foreground questions
 
@@ -17,6 +17,19 @@ can create its own pending result. No timeout or duration is invented.
 Disconnect, privacy/input unavailability and plugin disposal release the claim and
 delegate to the next official answerer. Invalid frames or missing public capabilities
 also delegate. Owner cancellation withdraws the request without reopening it elsewhere.
+
+Timed interactions carry `wait: {state: "timed", deadline, issuedAt}`. Both timestamps
+use the Host clock; `issuedAt` is refreshed when the interaction is read. The companion
+uses their difference and local `performance.now()` elapsed time, rather than comparing
+WSL and Windows wall clocks. Time spent loading after the opening status frame is
+deducted, and newer Host frames may only shorten the display countdown. Inbound
+transport or scheduling delay can make the display slightly late; it never grants
+extra answer time. The Host alone enforces expiry and rejects late answers.
+
+The complete interaction, including wait metadata, must fit the 32 KiB wire limit
+before publication. Oversized timed requests release their claim and delegate;
+oversized continued forms stay with DSH. Invalid or oversized interaction reads
+return a controlled HTTP rejection without terminating the Host.
 
 ## Continued questions
 

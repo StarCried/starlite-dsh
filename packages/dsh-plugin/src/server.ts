@@ -88,10 +88,13 @@ export async function startStatusServer(source: PetStateSource, options: {billin
       return;
     }
     if(path === "/v1/interaction" && request.method === "GET" && options.questions){
-      const query=new URL(request.url??"/","http://127.0.0.1").searchParams;
-      const id=query.get("request");const pending=isOpaqueRef(id)&&query.getAll("request").length===1?options.questions.read(id):undefined;
-      if(!pending){reject(response,409);return;}
-      jsonResponse(response,parsePetInteraction(pending),origin);return;
+      try{
+        const query=new URL(request.url??"/","http://127.0.0.1").searchParams;
+        const id=query.get("request");const pending=isOpaqueRef(id)&&query.getAll("request").length===1?options.questions.read(id):undefined;
+        if(!pending){reject(response,409);return;}
+        jsonResponse(response,parsePetInteraction(pending),origin);
+      }catch{reject(response,409);}
+      return;
     }
     if(options.questions && request.method === "POST" && ["/v1/interaction/answer","/v1/interaction/availability","/v1/session/open","/v1/web/open"].includes(path)){
       const bridge=options.questions;

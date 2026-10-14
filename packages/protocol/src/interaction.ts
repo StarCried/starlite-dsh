@@ -3,7 +3,7 @@ export const ACTIVITIES = ["thinking", "responding", "command", "editing", "read
 export type PetActivity = typeof ACTIVITIES[number];
 export interface PetSession { ref: string; title: string }
 export interface PetQuestion { id: string; question: string; header?: string; detail?: string; options: Array<{label: string; description?: string}>; multiSelect: boolean }
-export type PetQuestionWait = {state:"timed";deadline:number}|{state:"continued"};
+export type PetQuestionWait = {state:"timed";deadline:number;issuedAt:number}|{state:"continued"};
 export interface PetInteraction { interactionVersion: 1; requestId: string; sessionRef: string; questions: PetQuestion[]; wait?:PetQuestionWait }
 export interface PetAnswer { requestId: string; sessionRef: string; answers: Array<{id: string; selected: string[]; custom?: string}> }
 
@@ -34,7 +34,8 @@ export function parsePetInteraction(value: unknown): PetInteraction {
   if(row.wait!==undefined){
     const value=record(row.wait);
     if(value.state==="continued")wait={state:"continued"};
-    else if(value.state==="timed"&&Number.isSafeInteger(value.deadline)&&Number(value.deadline)>=0&&Number(value.deadline)<=8_640_000_000_000_000)wait={state:"timed",deadline:Number(value.deadline)};
+    else if(value.state==="timed"&&Number.isSafeInteger(value.deadline)&&Number(value.deadline)>=0&&Number(value.deadline)<=8_640_000_000_000_000
+      &&Number.isSafeInteger(value.issuedAt)&&Number(value.issuedAt)>=0&&Number(value.issuedAt)<=Number(value.deadline)&&Number(value.deadline)-Number(value.issuedAt)<=2_147_483_647)wait={state:"timed",deadline:Number(value.deadline),issuedAt:Number(value.issuedAt)};
     else throw Error("invalid question wait");
   }
   const result:PetInteraction={interactionVersion:1,requestId:row.requestId,sessionRef:row.sessionRef,questions,...(wait?{wait}:{})};

@@ -31,10 +31,11 @@ export class QuestionBridge {
   setEnabled(value:boolean):void{this.#enabled=value;if(!value)this.#delegateAll();else this.refresh();}
   close():void{this.#closed=true;this.#delegateAll();this.#unsubscribe?.();this.#unsubscribe=undefined;this.#suppressed.clear();}
   read(id:string):PetInteraction|undefined{
-    const pending=this.#pending.get(id);
-    if(pending?.deadline!==undefined&&Date.now()>=pending.deadline)pending.abort("ASK_TIMED_OUT");
+    const pending=this.#pending.get(id),issuedAt=Date.now();
+    if(pending?.deadline!==undefined&&issuedAt>=pending.deadline)pending.abort("ASK_TIMED_OUT");
     if(pending?.late&&!this.#currentLate(pending.late))pending.finish(undefined);
-    return this.#pending.get(id)?.request;
+    const current=this.#pending.get(id);
+    return current?.deadline===undefined?current?.request:{...current.request,wait:{state:"timed",deadline:current.deadline,issuedAt}};
   }
   async answer(raw:unknown):Promise<void>{
     const requestId=record(raw)?.requestId;
@@ -129,8 +130,10 @@ export class QuestionBridge {
           if(first.done||!Number.isSafeInteger(remaining)||Number(remaining)<0||Number(remaining)>MAX_TIMER){finish(undefined);return;}
           // Match the official Client: the Host duration starts at receipt of
           // the opening frame, without subtracting time spent obtaining it.
-          pending.deadline=Date.now()+Number(remaining);
-          request.wait={state:"timed",deadline:pending.deadline};
+          const issuedAt=Date.now();pending.deadline=issuedAt+Number(remaining);
+          // Adding public wait metadata must not bypass the complete wire bound.
+          try{request=parsePetInteraction({...request,wait:{state:"timed",deadline:pending.deadline,issuedAt}});pending.request=request;}
+          catch{finish(undefined);return;}
           if(Date.now()>=pending.deadline){abort("ASK_TIMED_OUT");return;}
           timer=setTimeout(()=>abort("ASK_TIMED_OUT"),pending.deadline-Date.now());timer.unref();publish();
           // The public stream holds the claim until cancellation or settlement.
@@ -140,7 +143,7 @@ export class QuestionBridge {
     });
     return answer?{answers:answer.answers}:next();
   }
-  #request(key:unknown,questions:unknown):PetInteraction{return parsePetInteraction({interactionVersion:1,requestId:randomUUID(),sessionRef:this.aggregator.sessionInfo(key).ref,questions});}
+  #request(key:unknown,questions:unknown,wait?:PetInteraction["wait"]):PetInteraction{return parsePetInteraction({interactionVersion:1,requestId:randomUUID(),sessionRef:this.aggregator.sessionInfo(key).ref,questions,...(wait?{wait}:{})});}
   #questionService():QuestionService|undefined{
     const service=this.#service("userQuestions");
     return typeof service?.attachWait==="function"&&typeof service.answer==="function"?service as unknown as QuestionService:undefined;
@@ -168,7 +171,7 @@ export class QuestionBridge {
         if(!Array.isArray(active)||active.length>MAX_PENDING)continue;
         for(const raw of active){
           const item=record(raw);if(item?.state!=="continued"||!validCallId(item.callId))continue;
-          try{const request=this.#request(key,item.questions);request.wait={state:"continued"};result.push({agent,key,callId:item.callId,request});}catch{continue;}
+          try{result.push({agent,key,callId:item.callId,request:this.#request(key,item.questions,{state:"continued"})});}catch{continue;}
           if(result.length>=MAX_PENDING)return result;
         }
       }

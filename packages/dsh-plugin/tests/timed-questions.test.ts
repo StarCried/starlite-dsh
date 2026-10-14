@@ -1,5 +1,5 @@
 import {afterEach,describe,expect,it,vi} from "vitest";
-import type {PetAnswer,PetInteraction,PetSnapshot} from "@starcried/starlite-dsh-protocol";
+import {parsePetInteraction,type PetAnswer,type PetInteraction,type PetSnapshot} from "@starcried/starlite-dsh-protocol";
 import {DshStateAggregator} from "../src/aggregator.js";
 import {QuestionBridge} from "../src/questions.js";
 const questions=[{id:"q",question:"Choose",detail:"Supporting detail",options:[{label:"Yes"},{label:"No"}],multiSelect:true}];
@@ -40,7 +40,7 @@ describe("official timed and continued user questions",()=>{
   it("claims the official wait, keeps details and answers once without exposing identities",async()=>{
     const f=await fixture();try{
       const wait=f.wait();await settle();const request=f.request();
-      expect(request.wait).toEqual({state:"timed",deadline:expect.any(Number)});
+      expect(request.wait).toEqual({state:"timed",deadline:expect.any(Number),issuedAt:expect.any(Number)});
       expect(f.claims()).toBe(1);expect(f.attachWait).toHaveBeenCalledExactlyOnceWith(f.agent,"PRIVATE-call",expect.any(AbortSignal));
       expect(f.snapshots.at(-1)).toMatchObject({state:"approval",activity:"waiting"});
       expect(request.questions[0]?.detail).toBe("Supporting detail");expect(JSON.stringify([request,f.snapshots])).not.toContain("PRIVATE");
@@ -78,7 +78,7 @@ describe("official timed and continued user questions",()=>{
       const wait=f.wait();const expired=expect(wait.result).rejects.toMatchObject({code:"ASK_TIMED_OUT"});
       await settle();await vi.advanceTimersByTimeAsync(500);await settle();
       const request=f.request();expect(request).toBeDefined();
-      expect(request.wait).toEqual({state:"timed",deadline:Date.now()+750});
+      expect(request.wait).toEqual({state:"timed",deadline:Date.now()+750,issuedAt:Date.now()});
       await vi.advanceTimersByTimeAsync(749);expect(f.bridge.read(request.requestId)).toBeDefined();
       await vi.advanceTimersByTimeAsync(1);await expired;
       expect(f.bridge.read(request.requestId)).toBeUndefined();expect(wait.next).not.toHaveBeenCalled();
@@ -203,6 +203,27 @@ describe("official timed and continued user questions",()=>{
       const wait=f.wait();await settle();const request=f.request();f.open.mockRejectedValueOnce(Error("navigation failed"));
       await expect(f.bridge.open(request.sessionRef)).rejects.toThrow();expect(f.claims()).toBe(1);expect(wait.next).not.toHaveBeenCalled();
       await f.bridge.answer(reply(request));await expect(wait.result).resolves.toEqual({answers:reply(request).answers});await settle();expect(f.claims()).toBe(0);
+    }finally{await f.close();}
+  });
+  it("refreshes Host issue time on each read without extending the authoritative deadline",async()=>{
+    vi.useFakeTimers();const f=await fixture(750);try{
+      const wait=f.wait();await settle();const first=f.request();
+      await vi.advanceTimersByTimeAsync(100);const second=f.bridge.read(first.requestId)!;
+      expect(first.wait).toEqual({state:"timed",deadline:Date.now()+650,issuedAt:Date.now()-100});
+      expect(second.wait).toEqual({state:"timed",deadline:Date.now()+650,issuedAt:Date.now()});
+      f.bridge.setEnabled(false);await wait.result;
+    }finally{await f.close();}
+  });
+  it("delegates complete timed requests and skips continued questions that exceed the wire bound after metadata",async()=>{
+    const f=await fixture();try{
+      const wide={interactionVersion:1,requestId:"123e4567-e89b-42d3-a456-426614174001",sessionRef:"123e4567-e89b-42d3-a456-426614174000",questions:Array.from({length:4},(_,i)=>({id:String(i),question:"Choose",options:[],multiSelect:false,detail:"x".repeat(8192)}))};
+      const bytes=(value:unknown)=>new TextEncoder().encode(JSON.stringify(value)).byteLength;
+      wide.questions[3]!.detail=wide.questions[3]!.detail.slice(0,8192-(bytes(wide)-32750));
+      expect(bytes(parsePetInteraction(wide))).toBe(32750);
+      const next=vi.fn(async()=>"official answer");
+      await expect(f.bridge.ask(f.session,{agent:f.agent,questions:wide.questions,wait:{callId:"PRIVATE-call",timed:true}},next)).resolves.toBe("official answer");
+      await settle();expect(f.claims()).toBe(0);expect(next).toHaveBeenCalledOnce();expect(f.snapshots.at(-1)?.inputRequest).toBeUndefined();
+      f.project("continued","PRIVATE-call",wide.questions);await settle();expect(f.snapshots.at(-1)?.inputRequest).toBeUndefined();expect(f.answer).not.toHaveBeenCalled();
     }finally{await f.close();}
   });
 });

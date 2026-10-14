@@ -19,8 +19,8 @@ it("bounds identities, arrays, Unicode wire size and control bytes",()=>{
  expect(MAX_INTERACTION_BYTES).toBe(32768);expect(()=>parsePetSnapshot({protocolVersion:1,state:"working",sequence:1,emittedAt:1,inputRequest:requestId})).toThrow();
 });
 it("preserves bounded public wait metadata without exposing the Host call identity",()=>{
- const deadline=1_800_000_012_000;
- expect(parsePetInteraction({...request,wait:{state:"timed",deadline,callId:"PRIVATE-call"}})).toEqual({...request,wait:{state:"timed",deadline}});
+ const issuedAt=1_800_000_000_000,deadline=issuedAt+12_000;
+ expect(parsePetInteraction({...request,wait:{state:"timed",deadline,issuedAt,callId:"PRIVATE-call"}})).toEqual({...request,wait:{state:"timed",deadline,issuedAt}});
  expect(parsePetInteraction({...request,wait:{state:"continued",callId:"PRIVATE-call",deadline}})).toEqual({...request,wait:{state:"continued"}});
- for(const wait of [null,{}, {state:"waiting"},{state:"timed"},{state:"timed",deadline:NaN},{state:"timed",deadline:Infinity},{state:"timed",deadline:-1},{state:"timed",deadline:1.5},{state:"timed",deadline:8_640_000_000_000_001}])expect(()=>parsePetInteraction({...request,wait})).toThrow("invalid");
+ for(const wait of [null,{}, {state:"waiting"},{state:"timed"},{state:"timed",deadline},{state:"timed",deadline:NaN,issuedAt},{state:"timed",deadline:Infinity,issuedAt},{state:"timed",deadline:-1,issuedAt},{state:"timed",deadline:1.5,issuedAt},{state:"timed",deadline:8_640_000_000_000_001,issuedAt},{state:"timed",deadline,issuedAt:NaN},{state:"timed",deadline,issuedAt:Infinity},{state:"timed",deadline,issuedAt:-1},{state:"timed",deadline,issuedAt:issuedAt+.5},{state:"timed",deadline,issuedAt:deadline+1},{state:"timed",deadline:issuedAt+2_147_483_648,issuedAt}])expect(()=>parsePetInteraction({...request,wait})).toThrow("invalid");
 });

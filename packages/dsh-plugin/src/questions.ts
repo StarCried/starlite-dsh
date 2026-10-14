@@ -130,6 +130,7 @@ export class QuestionBridge {
           // Match the official Client: the Host duration starts at receipt of
           // the opening frame, without subtracting time spent obtaining it.
           pending.deadline=Date.now()+Number(remaining);
+          request.wait={state:"timed",deadline:pending.deadline};
           if(Date.now()>=pending.deadline){abort("ASK_TIMED_OUT");return;}
           timer=setTimeout(()=>abort("ASK_TIMED_OUT"),pending.deadline-Date.now());timer.unref();publish();
           // The public stream holds the claim until cancellation or settlement.
@@ -167,7 +168,7 @@ export class QuestionBridge {
         if(!Array.isArray(active)||active.length>MAX_PENDING)continue;
         for(const raw of active){
           const item=record(raw);if(item?.state!=="continued"||!validCallId(item.callId))continue;
-          try{result.push({agent,key,callId:item.callId,request:this.#request(key,item.questions)});}catch{continue;}
+          try{const request=this.#request(key,item.questions);request.wait={state:"continued"};result.push({agent,key,callId:item.callId,request});}catch{continue;}
           if(result.length>=MAX_PENDING)return result;
         }
       }

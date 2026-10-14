@@ -40,6 +40,7 @@ describe("official timed and continued user questions",()=>{
   it("claims the official wait, keeps details and answers once without exposing identities",async()=>{
     const f=await fixture();try{
       const wait=f.wait();await settle();const request=f.request();
+      expect(request.wait).toEqual({state:"timed",deadline:expect.any(Number)});
       expect(f.claims()).toBe(1);expect(f.attachWait).toHaveBeenCalledExactlyOnceWith(f.agent,"PRIVATE-call",expect.any(AbortSignal));
       expect(f.snapshots.at(-1)).toMatchObject({state:"approval",activity:"waiting"});
       expect(request.questions[0]?.detail).toBe("Supporting detail");expect(JSON.stringify([request,f.snapshots])).not.toContain("PRIVATE");
@@ -54,6 +55,7 @@ describe("official timed and continued user questions",()=>{
       await settle();const request=f.request();await vi.advanceTimersByTimeAsync(749);expect(f.bridge.read(request.requestId)).toBeDefined();
       await vi.advanceTimersByTimeAsync(1);await expired;expect(f.claims()).toBe(0);expect(wait.next).not.toHaveBeenCalled();
       f.project();await settle();const late=f.request();expect(late.requestId).not.toBe(request.requestId);
+      expect(late.wait).toEqual({state:"continued"});
       await expect(f.bridge.answer(reply(request))).rejects.toThrow();await f.bridge.answer(reply(late));
       expect(f.answer).toHaveBeenCalledExactlyOnceWith(f.agent,"PRIVATE-call",{answers:reply(late).answers});
       expect(f.snapshots.at(-1)?.state).toBe("idle");
@@ -76,6 +78,7 @@ describe("official timed and continued user questions",()=>{
       const wait=f.wait();const expired=expect(wait.result).rejects.toMatchObject({code:"ASK_TIMED_OUT"});
       await settle();await vi.advanceTimersByTimeAsync(500);await settle();
       const request=f.request();expect(request).toBeDefined();
+      expect(request.wait).toEqual({state:"timed",deadline:Date.now()+750});
       await vi.advanceTimersByTimeAsync(749);expect(f.bridge.read(request.requestId)).toBeDefined();
       await vi.advanceTimersByTimeAsync(1);await expired;
       expect(f.bridge.read(request.requestId)).toBeUndefined();expect(wait.next).not.toHaveBeenCalled();

@@ -3,7 +3,8 @@ export const ACTIVITIES = ["thinking", "responding", "command", "editing", "read
 export type PetActivity = typeof ACTIVITIES[number];
 export interface PetSession { ref: string; title: string }
 export interface PetQuestion { id: string; question: string; header?: string; detail?: string; options: Array<{label: string; description?: string}>; multiSelect: boolean }
-export interface PetInteraction { interactionVersion: 1; requestId: string; sessionRef: string; questions: PetQuestion[] }
+export type PetQuestionWait = {state:"timed";deadline:number}|{state:"continued"};
+export interface PetInteraction { interactionVersion: 1; requestId: string; sessionRef: string; questions: PetQuestion[]; wait?:PetQuestionWait }
 export interface PetAnswer { requestId: string; sessionRef: string; answers: Array<{id: string; selected: string[]; custom?: string}> }
 
 export function isOpaqueRef(value: unknown): value is string {
@@ -29,7 +30,14 @@ export function parsePetInteraction(value: unknown): PetInteraction {
     return {id,question:text(item.question,4096),options,multiSelect:item.multiSelect===true,
       ...(item.header===undefined?{}:{header:text(item.header,128)}),...(item.detail===undefined?{}:{detail:text(item.detail,8192)})};
   });
-  const result:PetInteraction={interactionVersion:1,requestId:row.requestId,sessionRef:row.sessionRef,questions};
+  let wait:PetQuestionWait|undefined;
+  if(row.wait!==undefined){
+    const value=record(row.wait);
+    if(value.state==="continued")wait={state:"continued"};
+    else if(value.state==="timed"&&Number.isSafeInteger(value.deadline)&&Number(value.deadline)>=0&&Number(value.deadline)<=8_640_000_000_000_000)wait={state:"timed",deadline:Number(value.deadline)};
+    else throw Error("invalid question wait");
+  }
+  const result:PetInteraction={interactionVersion:1,requestId:row.requestId,sessionRef:row.sessionRef,questions,...(wait?{wait}:{})};
   bound(result);return result;
 }
 export function parsePetAnswer(value: unknown, request?: PetInteraction): PetAnswer {

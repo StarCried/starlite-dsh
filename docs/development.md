@@ -9,6 +9,8 @@
 - Ubuntu WSL2 中的 DSH。已有契约验收记录对应 `0.1.5-rc.1`；CI 跟踪 latest，不能把每日检查理解为永远兼容未来版本。
 - 单独的 StarLite 组件 checkout：core 和 VRM 共用一个源码 revision。
 
+启动器接受 Windows x64 和 WSL2 x64 Host，共用插件内的 Windows GUI 程序、校验缓存及独立模型下载。原生 Windows 直接启动 EXE，WSL2 使用 Windows 互操作和 `wslpath`；Windows Known Folder 由固定 PowerShell 查询取得。普通 Node 与 Electron Node-mode Host 均不需要额外系统 Node。子进程仅接收启动所需的 OS 环境变量，不继承服务商凭据、`NODE_OPTIONS` 或 `ELECTRON_RUN_AS_NODE`。其他操作系统或架构会在创建桥接前禁用插件，不影响 DSH 启动。
+
 源码、包元数据和本地 checkout 统一使用 `StarCried/starlite` 与 `StarCried/starlite-dsh`。本机路径为 `/home/pc/StarCried/starlite` 和 `E:/StarCried/starlite-dsh`。alpha 源码候选位于 `feat/dual-model-backends` 分支；公开 npm 与安装器发布是后续独立步骤。
 
 ## 1. 在 WSL 构建共享运行时

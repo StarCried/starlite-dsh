@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DshStateAggregator, type AgentRunStatus, type DshEventLike } from "./aggregator.js";
-import { isWslEnvironment, launchWindowsPet } from "./launcher.js";
+import { detectCompanionHost, launchWindowsPet, type WindowsCompanionHost } from "./launcher.js";
 import { startStatusServer, type StatusServer } from "./server.js";
 import { DeepSeekBilling, type BillingContext } from "./billing.js";
 import {QuestionBridge} from "./questions.js";
@@ -20,7 +20,7 @@ export interface CordisContextLike extends BillingContext {
 }
 
 export interface AdapterDependencies {
-  readonly isWsl?: () => boolean;
+  readonly host?: () => WindowsCompanionHost | undefined;
   readonly startServer?: typeof startStatusServer;
   readonly launch?: typeof launchWindowsPet;
   readonly openBrowser?: (url:string)=>Promise<void>;
@@ -33,8 +33,9 @@ export async function startDshAdapter(
   if (!context || typeof context.on !== "function") {
     throw new Error("incompatible DSH context: event subscription is unavailable");
   }
-  if (!(dependencies.isWsl ?? isWslEnvironment)()) {
-    throw new Error("this alpha requires DSH to run inside WSL2");
+  const host = (dependencies.host ?? detectCompanionHost)();
+  if (!host) {
+    throw new Error("StarLite requires a Windows x64 or WSL2 x64 DSH Host");
   }
 
   const aggregator = new DshStateAggregator();
@@ -125,6 +126,7 @@ export async function startDshAdapter(
     token: server.token,
     instanceId: randomUUID(),
   }, {
+    host,
     signal: launchAbort.signal,
     onDefaultModelFailure: () => {
       if (!launchAbort.signal.aborted) context.logger?.warn?.(

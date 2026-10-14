@@ -4,6 +4,19 @@ import { startDshAdapter, type CordisContextLike } from "../src/adapter.js";
 import type { BillingSource } from "../src/billing.js";
 
 describe("DSH compatibility adapter", () => {
+  it("starts one native Windows bridge and contains companion launch failures", async () => {
+    const warn=vi.fn(),close=vi.fn(async()=>undefined);
+    const launch=vi.fn(async()=>{throw Error("PRIVATE launch details")});
+    const stop=await startDshAdapter({on:()=>()=>undefined,logger:{warn}}, {
+      host:()=>"windows",
+      startServer:async()=>({port:41234,token:"a".repeat(43),close}),
+      launch,
+    });
+    await vi.waitFor(()=>expect(warn).toHaveBeenCalledOnce());
+    expect(launch).toHaveBeenCalledWith(expect.objectContaining({port:41234}),expect.objectContaining({host:"windows",signal:expect.any(AbortSignal)}));
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("PRIVATE");
+    await stop();expect(close).toHaveBeenCalledOnce();
+  });
   it("refreshes 0.2 billing on live settings changes without aborting describe's initial notification", async () => {
     const listeners = new Map<string, (...arguments_: unknown[]) => unknown>();
     let reference = "FIRST_DEEPSEEK_KEY", announced = false;
@@ -18,7 +31,7 @@ describe("DSH compatibility adapter", () => {
     let stop: (() => void | Promise<void>) | undefined;
     try {
       stop = await startDshAdapter({get:name => services[name],on(event,listener){listeners.set(event,listener);return () => listeners.delete(event);}}, {
-        isWsl:() => true,
+        host:() => "wsl",
         startServer:async (_source,options) => {billing = options?.billing;return {port:41234,token:"a".repeat(43),close:async()=>undefined};},launch:async()=>undefined,
       });
       expect((await billing!.read()).balance.status).toBe("ready");
@@ -41,7 +54,7 @@ describe("DSH compatibility adapter", () => {
     let stop: (() => void | Promise<void>) | undefined;
     try {
       stop = await startDshAdapter({get:name => services[name],on(event,listener){listeners.set(event,listener);return () => listeners.delete(event);}}, {
-        isWsl:() => true,
+        host:() => "wsl",
         startServer:async (_source,options) => {billing = options?.billing;return {port:41234,token:"a".repeat(43),close:async()=>undefined};},
         launch:async()=>undefined,
       });
@@ -69,7 +82,7 @@ describe("DSH compatibility adapter", () => {
     const launch = vi.fn(async () => undefined);
 
     const stop = await startDshAdapter(context, {
-      isWsl: () => true,
+      host: () => "wsl",
       startServer: async (candidate) => {
         source = candidate;
         await candidate.start((snapshot) => snapshots.push(snapshot));
@@ -115,10 +128,10 @@ describe("DSH compatibility adapter", () => {
     ]));
   });
 
-  it("fails before opening the bridge outside WSL", async () => {
+  it("fails before opening the bridge on an unsupported Host", async () => {
     const startServer = vi.fn();
     await expect(startDshAdapter({ on: vi.fn() }, {
-      isWsl: () => false,
+      host: () => undefined,
       startServer,
     })).rejects.toThrow(/WSL2/);
     expect(startServer).not.toHaveBeenCalled();
@@ -129,7 +142,7 @@ describe("DSH compatibility adapter", () => {
     let signal: AbortSignal | undefined;
     let reportDefaultModelFailure: (() => void) | undefined;
     const stop = await startDshAdapter({on:() => () => undefined,logger:{warn}}, {
-      isWsl:() => true,
+      host:() => "wsl",
       startServer:async () => ({port:41234,token:"a".repeat(43),close}),
       launch:async (_connection,options) => {
         signal = options?.signal;
@@ -161,7 +174,7 @@ describe("DSH compatibility adapter", () => {
         return () => listeners.delete(event);
       },
     }, {
-      isWsl: () => true,
+      host: () => "wsl",
       startServer: async (source) => {
         await source.start((snapshot) => snapshots.push(snapshot));
         close.mockImplementation(() => source.stop());
@@ -227,7 +240,7 @@ describe("DSH compatibility adapter", () => {
         return () => disposed.push(event);
       },
     }, {
-      isWsl: () => true,
+      host: () => "wsl",
       startServer: async () => ({ port: 41234, token: "a".repeat(43), close }),
       launch,
     })).rejects.toThrow("incompatible stream subscription");

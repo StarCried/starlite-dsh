@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { release } from "node:os";
-import { basename, join, win32 } from "node:path";
+import { posix, win32 } from "node:path";
 import { execFile, spawn } from "node:child_process";
 import { lstat, open, readFile } from "node:fs/promises";
 import { constants } from "node:fs";
@@ -16,21 +16,47 @@ export interface PetConnection {
 export interface LaunchOptions {
   readonly signal?: AbortSignal;
   readonly onDefaultModelFailure?: () => void;
+  readonly host?: WindowsCompanionHost;
 }
+
+export type WindowsCompanionHost = "wsl" | "windows";
 
 export function isWslEnvironment(environment: NodeJS.ProcessEnv = process.env): boolean {
   return Boolean(environment.WSL_INTEROP || environment.WSL_DISTRO_NAME)
     || release().toLowerCase().includes("microsoft");
 }
 
+export function detectCompanionHost(
+  platform: NodeJS.Platform = process.platform,
+  architecture: string = process.arch,
+  inWsl: boolean = isWslEnvironment(),
+): WindowsCompanionHost | undefined {
+  if (architecture !== "x64") return undefined;
+  if (platform === "win32") return "windows";
+  return platform === "linux" && inWsl ? "wsl" : undefined;
+}
+
+/** Child processes need OS launch variables, never provider or Electron/Node options. */
+export function companionEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const result: NodeJS.ProcessEnv = {};
+  for (const name of ["PATH", "Path", "HOME", "LANG", "LC_ALL", "SYSTEMROOT", "SystemRoot", "WINDIR", "TEMP", "TMP", "LOCALAPPDATA", "APPDATA", "USERPROFILE", "WSL_INTEROP", "WSL_DISTRO_NAME"]) {
+    if (source[name] !== undefined) result[name] = source[name];
+  }
+  return result;
+}
+
 /** Start the embedded Windows companion; no installer, registry lookup or elevation. */
 export async function launchWindowsPet(connection: PetConnection, options: LaunchOptions = {}): Promise<void> {
   const url = buildConnectionUrl(connection);
+  const host = options.host ?? detectCompanionHost();
+  if (!host) throw new Error("StarLite requires a Windows x64 or WSL2 x64 DSH Host");
+  const paths = host === "windows" ? win32 : posix;
   options.signal?.throwIfAborted();
   let executable: string;
   const override = process.env.DSH_INOCHI2D_PET_EXE;
   if (override !== undefined) {
-    executable = (await execFileText("wslpath", ["-u", validateExecutableOverride(override)], options.signal)).trim();
+    const local = validateExecutableOverride(override);
+    executable = host === "windows" ? local : (await execFileText("wslpath", ["-u", local], options.signal)).trim();
   } else {
     const windowsDirectories = (await execFileText("powershell.exe", [
       "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
@@ -38,18 +64,17 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
     ], options.signal)).trim().split(/\r?\n/u);
     if (windowsDirectories.length !== 2 || windowsDirectories.some(path => !validWindowsDirectory(path))) throw new Error("Windows application directories are unavailable");
     const windowsCache = windowsDirectories[0]!;
-    const localCache = (await execFileText("wslpath", ["-u", windowsCache], options.signal)).trim();
-    if (!localCache.startsWith("/") || /[\p{Cc}]/u.test(localCache)) throw new Error("invalid Windows local application cache");
-    const roaming = (await execFileText("wslpath", ["-u", windowsDirectories[1]!], options.signal)).trim();
-    if (!roaming.startsWith("/") || /[\p{Cc}]/u.test(roaming)) throw new Error("invalid Windows application settings directory");
-    const acquireDefaultModel = await shouldAcquireDefaultModel(join(roaming, "com.starcried.dsh-inochi2d-pet", "settings.json"));
+    const localCache = host === "windows" ? windowsCache : (await execFileText("wslpath", ["-u", windowsCache], options.signal)).trim();
+    const roaming = host === "windows" ? windowsDirectories[1]! : (await execFileText("wslpath", ["-u", windowsDirectories[1]!], options.signal)).trim();
+    if (host === "wsl" && (!validPosixDirectory(localCache) || !validPosixDirectory(roaming))) throw new Error("invalid Windows application directories");
+    const acquireDefaultModel = await shouldAcquireDefaultModel(paths.join(roaming, "com.starcried.dsh-inochi2d-pet", "settings.json"));
     const metadata: unknown = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
     if (typeof metadata !== "object" || metadata === null || !("version" in metadata) || typeof metadata.version !== "string") {
       throw new Error("invalid StarLite plugin package version");
     }
     const prepared = await prepareEmbeddedCompanion({
       assetDirectory: fileURLToPath(new URL("../assets/windows-x64/", import.meta.url)),
-      cacheDirectory: join(localCache, "StarCried", "StarLite", "companions"),
+      cacheDirectory: paths.join(localCache, "StarCried", "StarLite", "companions"),
       expectedVersion: metadata.version,
       acquireDefaultModel,
       ...(options.signal ? {signal: options.signal} : {}),
@@ -57,7 +82,8 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
     executable = prepared.executable;
     if (acquireDefaultModel && !prepared.defaultModelReady) options.onDefaultModelFailure?.();
   }
-  if (!executable.startsWith("/") || basename(executable).toLowerCase() !== "dsh-inochi2d-pet.exe") {
+  if ((host === "windows" && validateExecutableOverride(executable) !== executable)
+    || (host === "wsl" && (!validPosixDirectory(executable) || posix.basename(executable).toLowerCase() !== "dsh-inochi2d-pet.exe"))) {
     throw new Error("StarLite for DSH executable is invalid");
   }
   options.signal?.throwIfAborted();
@@ -68,6 +94,7 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
       shell: false,
       stdio: "ignore",
       windowsHide: true,
+      env: companionEnvironment(process.env),
     });
     let settled = false;
     const finish = (error?: Error) => {
@@ -85,6 +112,10 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
 function validWindowsDirectory(path: string): boolean {
   return /^[a-z]:[\\/]/iu.test(path) && win32.isAbsolute(path) && !/[\p{Cc}"<>|]/u.test(path)
     && !path.split(/[\\/]/u).some(part => part === "." || part === "..");
+}
+
+function validPosixDirectory(path: string): boolean {
+  return posix.isAbsolute(path) && !/[\p{Cc}]/u.test(path) && !path.split("/").some(part => part === "." || part === "..");
 }
 
 /** Read only the selected-model policy; never transfer or log companion settings. */
@@ -155,6 +186,7 @@ function execFileText(file: string, arguments_: string[], signal?: AbortSignal):
       maxBuffer: 8_192,
       timeout: 3_000,
       windowsHide: true,
+      env: companionEnvironment(process.env),
       ...(signal ? {signal} : {}),
     }, (error, stdout) => {
       if (error) reject(error);

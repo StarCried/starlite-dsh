@@ -7,6 +7,8 @@ const LIMIT = 64 * 1024 * 1024;
 const NOTICE_LIMIT = 8 * 1024 * 1024;
 const EXECUTABLE = "dsh-inochi2d-pet.exe";
 const NOTICES = ["LICENSE", "THIRD_PARTY_LICENSES.txt"] as const;
+const RELEASE_REDIRECT_LIMIT = 3;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 export interface CompanionManifest {
   readonly schemaVersion: 2;
@@ -130,7 +132,7 @@ export function assertWindowsGuiExecutable(bytes: Buffer): void {
 async function downloadCharacter(source: CompanionManifest["defaultModel"], directory: string, request: typeof fetch, signal?: AbortSignal): Promise<void> {
   const timeout = AbortSignal.timeout(30_000);
   const downloadSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
-  const response = await request(source.url, {method: "GET", redirect: "error", signal: downloadSignal});
+  const response = await characterResponse(source.url, request, downloadSignal);
   if (!response.ok || response.redirected || !response.body) {
     await response.body?.cancel();
     throw new Error("starter character download failed");
@@ -172,6 +174,34 @@ async function downloadCharacter(source: CompanionManifest["defaultModel"], dire
     reader.releaseLock();
     await file?.close();
     await rm(temporary, {force: true});
+  }
+}
+
+async function characterResponse(source: string, request: typeof fetch, signal: AbortSignal): Promise<Response> {
+  const initial = new URL(source);
+  const githubRelease = initial.protocol === "https:" && initial.hostname === "github.com"
+    && !initial.port && !initial.username && !initial.password && !initial.search && !initial.hash
+    && /^\/[a-zA-Z0-9-]+\/[a-zA-Z0-9_.-]+\/releases\/download\/[^/]+\/[^/]+\.vrm$/u.test(initial.pathname);
+  let current = source;
+  const visited = new Set([current]);
+  for (let redirects = 0; ; ++redirects) {
+    signal.throwIfAborted();
+    // No cookies, Authorization, or other request headers cross origins. Signed
+    // asset URLs exist only for this download and never enter cached metadata.
+    const response = await request(current, {method: "GET", redirect: githubRelease ? "manual" : "error", credentials: "omit", signal});
+    if (!REDIRECT_STATUSES.has(response.status)) return response;
+    await response.body?.cancel();
+    const location = response.headers.get("location");
+    if (!githubRelease || redirects >= RELEASE_REDIRECT_LIMIT || !location) throw new Error("starter character redirect rejected");
+    let next: URL;
+    try { next = new URL(location, current); }
+    catch { throw new Error("starter character redirect rejected"); }
+    if (next.protocol !== "https:" || next.hostname !== "release-assets.githubusercontent.com"
+      || next.port || next.username || next.password || next.hash || visited.has(next.href)) {
+      throw new Error("starter character redirect rejected");
+    }
+    current = next.href;
+    visited.add(current);
   }
 }
 

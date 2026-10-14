@@ -34,7 +34,7 @@ async function fixture() {
     writeFile(join(assets, "THIRD_PARTY_LICENSES.txt"), "generated dependency notice"),
     writeFile(join(assets, "manifest.json"), JSON.stringify(manifest)),
   ]);
-  const request = vi.fn(async () => new Response(archive, {headers: {"Content-Length": String(archive.length)}}));
+  const request = vi.fn<typeof fetch>(async () => new Response(archive, {headers: {"Content-Length": String(archive.length)}}));
   return {root, assets, cache, manifest, executable, archive, request,
     options: {assetDirectory: assets, cacheDirectory: cache, expectedVersion: VERSION, fetch: request as typeof fetch}};
 }
@@ -99,6 +99,114 @@ describe("embedded Windows companion and separate character bootstrap", () => {
     const prepared = await prepareEmbeddedCompanion(f.options);
     expect(prepared.defaultModelReady).toBe(false);
     expect((await readdir(join(prepared.executable, ".."))).some(name => name === "default-model.vrm" || name.startsWith(".download-"))).toBe(false);
+  });
+
+  const releaseUrl = "https://github.com/StarCried/starlite/releases/download/weiguang-v3.0/Weiguang.vrm";
+  const assetUrl = "https://release-assets.githubusercontent.com/github-production-release-asset/123/fixture?sig=test-signed-asset";
+
+  async function releaseFixture(url = releaseUrl) {
+    const f = await fixture();
+    f.manifest.defaultModel.url = url;
+    await writeFile(join(f.assets, "manifest.json"), JSON.stringify(f.manifest));
+    return f;
+  }
+
+  it("follows a canonical GitHub Release to its official asset with one shared timeout and no credentials", async () => {
+    const f = await releaseFixture();
+    const redirect = new Response("redirect body", {status: 302, headers: {Location: assetUrl}});
+    f.request.mockResolvedValueOnce(redirect);
+    const prepared = await prepareEmbeddedCompanion(f.options);
+    expect(prepared.defaultModelReady).toBe(true);
+    expect(f.request).toHaveBeenCalledTimes(2);
+    expect(f.request.mock.calls.map(([url]) => url)).toEqual([releaseUrl, assetUrl]);
+    const signal = f.request.mock.calls[0]![1]!.signal;
+    for (const [, init] of f.request.mock.calls) {
+      expect(init).toEqual({method: "GET", redirect: "manual", credentials: "omit", signal});
+      expect(signal).toBeInstanceOf(AbortSignal);
+    }
+    expect(redirect.body?.locked).toBe(false);
+    expect((await redirect.body?.getReader().read())?.done).toBe(true);
+    const directory = join(prepared.executable, "..");
+    expect(await readFile(join(directory, "default-model.vrm"))).toEqual(f.archive);
+    const descriptor = await readFile(join(directory, "default-model.json"), "utf8");
+    expect(descriptor).not.toContain("sig=");
+    expect(descriptor).not.toContain("url");
+    expect((await readdir(directory)).some(name => name.startsWith(".download-"))).toBe(false);
+    expect((await prepareEmbeddedCompanion(f.options)).defaultModelReady).toBe(true);
+    expect(f.request).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    "http://release-assets.githubusercontent.com/fixture",
+    "https://127.0.0.1/fixture",
+    "https://[::1]/fixture",
+    "https://user:password@release-assets.githubusercontent.com/fixture",
+    "https://release-assets.githubusercontent.com:444/fixture",
+    "https://other.test/fixture",
+    "https://release-assets.githubusercontent.com.other.test/fixture",
+    "https://objects.githubusercontent.com/fixture",
+    "https://github.com/StarCried/starlite/releases/download/other/Weiguang.vrm",
+    "https://release-assets.githubusercontent.com/fixture#fragment",
+  ])("rejects an unapproved GitHub Release redirect: %s", async location => {
+    const f = await releaseFixture();
+    f.request.mockResolvedValueOnce(new Response(null, {status: 302, headers: {Location: location}}));
+    const prepared = await prepareEmbeddedCompanion(f.options);
+    expect(prepared.defaultModelReady).toBe(false);
+    expect(await readFile(prepared.executable)).toEqual(f.executable);
+    expect(f.request).toHaveBeenCalledOnce();
+    expect((await readdir(join(prepared.executable, ".."))).some(name => name === "default-model.vrm" || name.startsWith(".download-"))).toBe(false);
+  });
+
+  it.each([
+    "https://example.test/character.vrm",
+    "https://github.com/StarCried/starlite/blob/main/character.vrm",
+    "https://github.com/StarCried/starlite/releases/latest/download/character.vrm",
+    "https://github.com:444/StarCried/starlite/releases/download/v1/character.vrm",
+    `${releaseUrl}?download=1`,
+  ])("does not grant redirect permission to a noncanonical source: %s", async source => {
+    const f = await releaseFixture(source);
+    f.request.mockResolvedValueOnce(new Response(null, {status: 302, headers: {Location: assetUrl}}));
+    expect((await prepareEmbeddedCompanion(f.options)).defaultModelReady).toBe(false);
+    expect(f.request).toHaveBeenCalledOnce();
+    expect(f.request.mock.calls[0]![1]!.redirect).toBe("error");
+  });
+
+  it("bounds GitHub asset hops and rejects redirect loops without leaving partial files", async () => {
+    const f = await releaseFixture();
+    f.request.mockImplementation(async () => new Response(null, {status: 302, headers: {Location: `${assetUrl}&hop=${f.request.mock.calls.length}`}}));
+    const prepared = await prepareEmbeddedCompanion(f.options);
+    expect(prepared.defaultModelReady).toBe(false);
+    expect(f.request).toHaveBeenCalledTimes(4); // Initial request plus at most three asset hops.
+    expect((await readdir(join(prepared.executable, ".."))).some(name => name.startsWith(".download-"))).toBe(false);
+    f.request.mockReset().mockResolvedValue(new Response(null, {status: 307, headers: {Location: assetUrl}}));
+    expect((await prepareEmbeddedCompanion(f.options)).defaultModelReady).toBe(false);
+    expect(f.request).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps atomic cache and digest validation after an approved GitHub redirect", async () => {
+    const f = await releaseFixture(), prepared = await prepareEmbeddedCompanion(f.options);
+    const model = join(prepared.executable, "..", "default-model.vrm");
+    await writeFile(model, "corrupt ordinary cache");
+    f.request.mockResolvedValueOnce(new Response(null, {status: 302, headers: {Location: assetUrl}}));
+    f.request.mockResolvedValueOnce(new Response(Buffer.alloc(f.archive.length)));
+    expect((await prepareEmbeddedCompanion(f.options)).defaultModelReady).toBe(false);
+    expect(await readFile(model, "utf8")).toBe("corrupt ordinary cache");
+    expect((await readdir(join(model, ".."))).some(name => name.startsWith(".download-"))).toBe(false);
+    f.request.mockResolvedValueOnce(new Response(null, {status: 302, headers: {Location: assetUrl}}));
+    expect((await prepareEmbeddedCompanion(f.options)).defaultModelReady).toBe(true);
+    expect(await readFile(model)).toEqual(f.archive);
+  });
+
+  it("honors cancellation between GitHub hops before requesting a signed asset", async () => {
+    const f = await releaseFixture(), controller = new AbortController();
+    f.request.mockImplementationOnce(async () => {
+      controller.abort();
+      return new Response(null, {status: 302, headers: {Location: assetUrl}});
+    });
+    await expect(prepareEmbeddedCompanion({...f.options, signal: controller.signal})).rejects.toThrow();
+    expect(f.request).toHaveBeenCalledOnce();
+    const [directory] = await readdir(f.cache);
+    expect((await readdir(join(f.cache, directory!))).some(name => name === "default-model.vrm" || name.startsWith(".download-"))).toBe(false);
   });
 
   it("repairs a corrupt ordinary cache archive only after a replacement passes its pinned digest", async () => {

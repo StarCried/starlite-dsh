@@ -26,7 +26,7 @@ pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.0.tg
 
 资源描述只包含 `title`、固定 HTTPS `url`、VRM 的 `sha256` 和 `bytes`；程序清单 schema 为 2，使用 `defaultModel` 字段。首次元数据命令提供 staging 所需的依赖通知，打包后再生成最终 SHA256SUMS、CycloneDX SBOM 和第三方许可证。
 
-模型地址必须直接返回 VRM 文件及 HTTP 200；当前下载器拒绝重定向，不能直接使用会跳转到其他下载地址的分享链接。正式打包前在全新缓存中验证该 URL 的实际下载、长度与 SHA-256，再验证离线缓存；仅通过 URL 格式检查不代表资源可用。
+模型地址可使用直接返回 VRM 的固定 HTTPS 来源，或规范的 `https://github.com/{owner}/{repo}/releases/download/{tag}/{file}.vrm` Release 资产地址。只有后者允许手动跟随最多 3 次跳转，且每次目标必须是 `release-assets.githubusercontent.com` 的 HTTPS 地址，无用户信息、非 443 端口或片段；不携带 Cookie、Authorization 等请求头。其他来源仍拒绝重定向，不使用泛用分享链接。所有请求和内容下载共用一次 30 秒超时，最终仍严格校验长度及 SHA-256；临时签名地址不写入缓存或日志。正式打包前在全新缓存中验证实际下载，再验证离线缓存；仅通过 URL 格式检查不代表资源可用。
 
 本地验收来源使用 `localTest: true` 及只监听 `127.0.0.1` 的资源服务，可执行 `pnpm check:release -- --local-test` 检查其余发布门。默认发布门拒绝本机来源，该开关不构成发布批准。CI 仅用无角色、不可下载的测试清单检查结构，产物为 `local-only-windows-validation`，不能公开发行。私有模型不进入 CI。
 

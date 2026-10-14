@@ -1,6 +1,6 @@
 # StarLite for DSH alpha 发布检查
 
-当前是本地候选，未发布 npm 或公开模型。统一插件包含 Windows 程序、通知及下载清单；程序仅内嵌已批准的基础待机，微光角色及其他动作仍作为独立授权的单文件 VRM 下载。源码推送、npm、Windows Release、模型分发和博客部署分别需要批准，本地脚本不执行这些外部动作。
+本指南描述 `0.1.0-alpha.0` 的 alpha 发布流程。统一插件包含 Windows 程序、通知及下载清单；程序仅内嵌已批准的基础待机，微光角色及其他动作仍作为独立授权的单文件 VRM 下载。本地脚本只构建和校验，不自动推送、发布或部署博客。
 
 ## 构建来源
 
@@ -8,7 +8,7 @@
 
 当前 DSH 不包含 Inochi2D 或 WASM。程序基础待机来源见 [记录](../apps/desktop/src-tauri/assets/default-idle.md)，包含第三方呼吸层，不称为完全原创。程序源码 BSD-2-Clause 与模型、动作的许可分别处理。
 
-## 程序候选
+## 构建与校验
 
 1. 构建并验证共享运行时，更新 pin，再同步其 revision 和哈希。
 2. 通过 `pnpm check`、Rust fmt／clippy／test、DSH 契约检查及隔离 profile 的实际 tarball 安装和 fail-open 检查。
@@ -54,7 +54,13 @@ pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.0.tg
 
 ## 发布顺序
 
-先公开并验证共享运行时及相关依赖，再在模型分发获准后核验固定 HTTPS 来源。重新 staging 统一插件，通过默认发布门，最后发布固定运行时 revision 的桌宠源码和同版本插件。npm alpha 使用 `--tag alpha`，不覆盖 latest。没有公开模型来源时只验证本地候选。
+先公开并验证固定 pin 的共享源码，单独发布获准分发的微光 VRM 与许可，再核验固定 HTTPS 来源的全新缓存下载和离线复用。推送同版本 DSH 源码并确认 CI，通过默认发布门后发布已校验的 tarball：
+
+```sh
+npm publish packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.0.tgz --tag alpha --access public
+```
+
+发布后核对 `npm view dsh-starlite@alpha version` 为 `0.1.0-alpha.0`，验证 registry tarball 与本地包一致，并在隔离 profile 安装 `dsh-starlite@alpha`。这些是发布后的验证步骤，不以文档中的安装命令代替实际结果。npm 使用 `alpha` 标签，不覆盖 `latest`；升级必须使用新版本。Windows Release 随附匹配的安装器、可选免安装包、SHA256SUMS、SBOM 和依赖许可；微光作为独立授权资产分发，不夹进程序包。没有公开模型来源时仍只能验证本地候选。
 
 安装见 [用户指南](user-guide.md)，模型约定见 [模型导入](model-import.md)。发布检查失败不得阻止 DSH 本身运行。
 

@@ -2,30 +2,30 @@
 
 需要 Windows 11 x64、WebView2，以及以下任一种 DSH：官方 Windows 桌面版、Windows 原生 CLI/Web、WSL2 CLI/Web。只安装一个 `dsh-starlite` 插件：桌宠由插件准备和启动，不需要安装器、管理员权限或手动设置 EXE 路径。
 
-当前是本地测试候选，尚未发布 npm 包或公开微光下载地址。候选包中的本机下载地址只用于作者安排的本地验收，不能复制给其他设备作为正式版本。
+本文对应 `0.1.0-alpha.0`。安装使用 alpha 渠道 `dsh-starlite@alpha`；需要固定版本时可换为 `dsh-starlite@0.1.0-alpha.0`。
 
 ## 安装
 
 ### 官方 Windows 桌面版
 
-在侧栏打开「插件 → 添加插件」，输入候选 `.tgz` 的 Windows 绝对路径，点击安装并启用。若提示需要重启，从 DSH 托盘完全退出后重新启动。桌面版自带运行时和包管理器，不要求另外安装 Node.js 或 pnpm。
+在侧栏打开「插件 → 添加插件」，输入 `dsh-starlite@alpha`，点击安装并启用。若提示需要重启，从 DSH 托盘完全退出后重新启动。桌面版自带运行时和包管理器，不要求另外安装 Node.js 或 pnpm。
 
 桌面版使用独立的 `desktop` profile。CLI/Web 或 WSL 中已安装的插件不会自动出现在桌面版，需要在桌面版再安装一次；两边沿用同一 Windows 用户的 StarLite 模型与偏好。Windows 与 WSL 的 DSH 主目录通常也不同，不会自动同步会话或凭据。
 
 若通过命令行管理桌面插件，先启动一次 Desktop 初始化 profile，再完全退出 Desktop。使用 Desktop「管理 dsh 命令」注册的内置命令：
 
 ```powershell
-dsh plugin --profile desktop add 'C:\Downloads\dsh-starlite-0.1.0-alpha.0.tgz'
+dsh plugin --profile desktop add dsh-starlite@alpha
 ```
 
 安装后重新打开 Desktop。独立 npm 安装的 `dsh` 不能管理受管 `desktop` profile，也不能用 `dsh --profile desktop` 启动桌面应用。
 
 ### Windows 原生 CLI/Web
 
-在 PowerShell 为日常 profile 安装候选包，再启动：
+在 PowerShell 为日常 profile 安装插件，再启动：
 
 ```powershell
-dsh plugin --profile web add 'C:\Downloads\dsh-starlite-0.1.0-alpha.0.tgz'
+dsh plugin --profile web add dsh-starlite@alpha
 dsh --profile web
 ```
 
@@ -34,11 +34,11 @@ dsh --profile web
 在 WSL 终端安装并启动：
 
 ```bash
-dsh plugin --profile web add /path/to/dsh-starlite-0.1.0-alpha.0.tgz
+dsh plugin --profile web add dsh-starlite@alpha
 dsh --profile web
 ```
 
-将路径换成当前终端可用的候选包绝对路径，将 `web` 换成自己使用的 profile。WSL 需要启用 Windows 互操作。正式 npm 发布后，才可使用 `dsh plugin --profile web add dsh-starlite@alpha`；桌面版插件页可直接填 `dsh-starlite@alpha`。
+将 `web` 换成自己使用的 profile。WSL 需要启用 Windows 互操作。
 
 如果同一 profile 曾安装旧名桥接，先移除旧包，避免同时运行两份：
 
@@ -56,7 +56,7 @@ dsh plugin --profile web remove dsh-inochi2d-pet
 
 已经配置的 VRM 模型、映射、显示、隐私和气泡偏好保留。当前版本关闭 Inochi2D 导入与显示；旧模型文件和偏好保留，微光准备成功后可使用默认微光。
 
-程序和微光独立授权、独立传输；npm 插件不包含微光角色及其其他动作，仅随 Windows 程序提供一段基础待机。Windows 程序使用系统 WebView2，不打包浏览器。目前程序未签名，请核对候选包来源与作者提供的 SHA-256，不关闭系统防护。
+程序和微光独立授权、独立传输；npm 插件不包含微光角色及其其他动作，仅随 Windows 程序提供一段基础待机。Windows 程序使用系统 WebView2，不打包浏览器。目前程序未签名；单独下载 Windows 程序时请核对项目 Release 来源与 SHA-256，不关闭系统防护。
 
 日常只需：
 
@@ -120,11 +120,10 @@ dsh plugin --profile web remove dsh-starlite
 ## 常见情况
 
 - **没有自动出现**：确认当前 Host/profile 已安装并启用插件、系统已有 WebView2；WSL 还需 Windows 互操作。检查 DSH 的插件提示或从托盘打开设置；有另一 Host 正连接时先退出它。
-- **首次下载失败**：本地候选需要作者的本机资源服务仍在运行。正式包需要可访问清单中固定的 HTTPS 地址；检查失败不会导入，DSH 可以继续使用。
+- **首次下载失败**：检查能否访问清单中固定的 HTTPS 模型地址，稍后重启 DSH 可重试。检查失败不会导入或替换模型，DSH 可以继续使用。
 - **微光显示「待下载」**：选择微光后重启 DSH，插件会自动下载资源。选择「不显示模型」时不会下载。
 - **动作、眼球或眨眼不正确**：检查 VRM humanoid、lookAt 和 blink 映射及导出结果。只有文件或骨骼名字正确并不足够，VRM 内必须实际配置对应映射。
-- **候选安装后仍是旧代码**：同版本同路径可能命中包缓存，应核对 tarball 内容哈希；正式升级使用新版本，不编辑插件缓存。
 - **程序缓存损坏、重装后仍不出现**：先完全退出所有 DSH 和 StarLite。在 Windows 文件资源管理器打开 `%LOCALAPPDATA%\StarCried\StarLite\companions`，只删除出错的「版本号－哈希」子目录，再启动 DSH，插件会重新准备程序；默认模型尚未缓存时需要重新下载。不要删除 `%APPDATA%\com.starcried.dsh-inochi2d-pet`，那里保存导入模型、映射和偏好。WSL 也使用同一个 Windows 程序缓存，无需重配模型。
 - **余额未配置／不可用**：检查 DSH 的官方 DeepSeek API Key、端点与网络；仅登录桌面账号、网关或不支持的契约不会触发 API 余额请求。
 
-开发者构建与本地资源服务见 [开发说明](development.md)。
+开发者构建、本地 tarball 验收与本机资源服务见 [开发说明](development.md)。

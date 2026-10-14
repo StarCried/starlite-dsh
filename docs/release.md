@@ -12,7 +12,7 @@
 
 1. 构建并验证共享运行时，更新 pin，再同步其 revision 和哈希。
 2. 通过 `pnpm check`、Rust fmt／clippy／test、DSH 契约检查及隔离 profile 的实际 tarball 安装和 fail-open 检查。
-3. `pnpm desktop:build` 生成 Windows x64 GUI EXE 和可选未签名 NSIS。生成依赖通知后，用明确的单文件 VRM 来源描述 staging，再打包。tarball 必须恰好包含 11 个允许文件，EXE 的版本、GUI 子系统、长度和 SHA-256 匹配，不夹带角色资源。
+3. `pnpm desktop:build` 生成 Windows x64 GUI EXE 和可选未签名 NSIS。生成依赖通知后，用明确的单文件 VRM 来源描述 staging，再打包。tarball 必须恰好包含 11 个允许文件，EXE 的版本、GUI 子系统、长度和 SHA-256 匹配，不夹带角色资源。发布门直接检查 tarball 的模型来源；内含的程序、清单和通知必须与 staging 逐字节一致，重新 staging 后须重新打包。安装器时效检查也包含内嵌的基础待机文件。
 4. 运行安装 CI，检查新装、合成基线升级、重装、卸载及用户数据保留；该结果不代替真实旧设置迁移和 Windows 人工验收。
 5. 保持 workspace、desktop、protocol、plugin、Cargo、Tauri 版本一致。正式升级使用新版本。
 

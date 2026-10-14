@@ -11,6 +11,7 @@ export const INSTALLER_INPUTS = [
   "apps/desktop/src-tauri/Cargo.toml", "apps/desktop/src-tauri/Cargo.lock",
   "apps/desktop/src-tauri/build.rs", "apps/desktop/src-tauri/tauri.conf.json",
   "apps/desktop/src-tauri/src", "apps/desktop/src-tauri/capabilities",
+  "apps/desktop/src-tauri/assets/default-idle.vrma",
   "apps/desktop/src-tauri/icons/32x32.png", "apps/desktop/src-tauri/icons/128x128.png",
   "apps/desktop/src-tauri/icons/128x128@2x.png", "apps/desktop/src-tauri/icons/icon.ico",
 ];

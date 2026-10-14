@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkProgramAssets } from "./release-assets.mjs";
 import { checkReleaseInstaller } from "./release-installer.mjs";
+import { checkPluginPackage } from "./check-plugin-package.mjs";
 import { assertDesktopExecutable, assertDesktopManifest, ordinaryBuildFile } from "./plugin-desktop-assets.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -59,7 +60,7 @@ try {
   assertDesktopExecutable(embedded, manifest.executable);
   const built = await ordinaryBuildFile(root, "apps/desktop/src-tauri/target/release/dsh-inochi2d-pet.exe");
   if (!embedded.equals(built)) throw Error("embedded Windows program differs from this release build");
-  execFileSync(process.execPath, [resolve(root, "tools/check-plugin-package.mjs")], { cwd: root, encoding: "utf8", windowsHide: true });
+  await checkPluginPackage(root, { allowLocalTest: localTest });
 } catch (error) {
   failures.push(`starter character delivery is not ready: ${String(error)}`);
 }

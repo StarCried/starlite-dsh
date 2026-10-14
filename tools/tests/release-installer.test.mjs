@@ -35,9 +35,9 @@ it("rejects an empty current installer", async () => {
 });
 it("rejects changes to frontend, native, dependencies and runtime contents", async () => {
   const root = await fixture();
-  const changed = ["apps/desktop/src/pet.ts", "apps/desktop/src-tauri/src/hit_test.rs", "pnpm-lock.yaml", "apps/desktop/public/runtime/vrm/index.js"];
+  const changed = ["apps/desktop/src/pet.ts", "apps/desktop/src-tauri/src/hit_test.rs", "pnpm-lock.yaml", "apps/desktop/public/runtime/vrm/index.js", "apps/desktop/src-tauri/assets/default-idle.vrma"];
   for (const path of changed) await file(root, path, 3000);
-  const failures = await checkReleaseInstaller(root, "StarLite for DSH", "0.1.0-alpha.0", ["apps/desktop/src", "apps/desktop/src-tauri/src", "pnpm-lock.yaml", "apps/desktop/public/runtime"]);
+  const failures = await checkReleaseInstaller(root, "StarLite for DSH", "0.1.0-alpha.0", ["apps/desktop/src", "apps/desktop/src-tauri/src", "pnpm-lock.yaml", "apps/desktop/public/runtime", "apps/desktop/src-tauri/assets/default-idle.vrma"]);
   expect(failures).toHaveLength(changed.length);
   for (const path of changed) expect(failures).toContain(`the NSIS installer is older than release input: ${path}`);
 });
@@ -47,5 +47,5 @@ it("accepts inputs older than the current installer but rejects missing build in
   expect(await checkReleaseInstaller(root, "StarLite for DSH", "0.1.0-alpha.0", ["apps/desktop/src-tauri/Cargo.lock"])).toEqual(["release build input is missing or unsafe: apps/desktop/src-tauri/Cargo.lock"]);
 });
 it("covers native packaging, desktop permissions, sources and locked dependencies", () => {
-  for (const path of ["pnpm-lock.yaml", "packages/protocol/src", "apps/desktop/src", "apps/desktop/public/runtime", "apps/desktop/src-tauri/src", "apps/desktop/src-tauri/capabilities", "apps/desktop/src-tauri/Cargo.lock", "apps/desktop/src-tauri/tauri.conf.json"]) expect(INSTALLER_INPUTS).toContain(path);
+  for (const path of ["pnpm-lock.yaml", "packages/protocol/src", "apps/desktop/src", "apps/desktop/public/runtime", "apps/desktop/src-tauri/src", "apps/desktop/src-tauri/capabilities", "apps/desktop/src-tauri/assets/default-idle.vrma", "apps/desktop/src-tauri/Cargo.lock", "apps/desktop/src-tauri/tauri.conf.json"]) expect(INSTALLER_INPUTS).toContain(path);
 });

@@ -9,9 +9,9 @@ it("answers the exact pending request once without forwarding identity or argume
  const next=vi.fn(async()=>({answers:[]}));const answer=f.bridge.ask(key,{questions,agent:{id:"PRIVATE-ID"},arguments:{secret:"PRIVATE"}},next);
  const snapshot=f.snapshots.at(-1)!;expect(snapshot.activity).toBe("waiting");expect(snapshot.session?.title).toBe("Named task");
  const request=f.bridge.read(snapshot.inputRequest!)!;expect(JSON.stringify(request)).not.toContain("PRIVATE");
- f.bridge.answer({requestId:request.requestId,sessionRef:request.sessionRef,answers:[{id:"q",selected:["Yes"]}]});
+ await f.bridge.answer({requestId:request.requestId,sessionRef:request.sessionRef,answers:[{id:"q",selected:["Yes"]}]});
  expect(await answer).toEqual({answers:[{id:"q",selected:["Yes"]}]});expect(next).not.toHaveBeenCalled();
- expect(()=>f.bridge.answer({requestId:request.requestId,sessionRef:request.sessionRef,answers:[]})).toThrow();await f.aggregator.stop();
+ await expect(f.bridge.answer({requestId:request.requestId,sessionRef:request.sessionRef,answers:[]})).rejects.toThrow();await f.aggregator.stop();
 });
 it("delegates when unavailable, privacy-disabled or disconnected without stranding DSH",async()=>{
  const f=await fixture(),next=vi.fn(async()=>"web-answer");f.bridge.setEnabled(false);expect(await f.bridge.ask("A",{questions},next)).toBe("web-answer");
@@ -20,8 +20,8 @@ it("delegates when unavailable, privacy-disabled or disconnected without strandi
 it("cancels an aborted question and rejects stale or cross-session answers",async()=>{
  const f=await fixture(),abort=new AbortController();const waiting=f.bridge.ask("A",{questions,signal:abort.signal},async()=>"wrong");const caught=waiting.catch(()=>"cancelled");
  const a=f.bridge.read(f.snapshots.at(-1)!.inputRequest!)!;const b=f.bridge.ask("B",{questions},async()=>"web");const br=f.bridge.read(f.snapshots.at(-1)!.inputRequest!)!;
- expect(()=>f.bridge.answer({...a,sessionRef:br.sessionRef,answers:[{id:"q",selected:["Yes"]}]})).toThrow();abort.abort();expect(await caught).toBe("cancelled");expect(f.bridge.read(a.requestId)).toBeUndefined();
- f.bridge.answer({requestId:br.requestId,sessionRef:br.sessionRef,answers:[{id:"q",selected:[],custom:"custom"}]});expect(await b).toEqual({answers:[{id:"q",selected:[],custom:"custom"}]});await f.aggregator.stop();
+ await expect(f.bridge.answer({...a,sessionRef:br.sessionRef,answers:[{id:"q",selected:["Yes"]}]})).rejects.toThrow();abort.abort();expect(await caught).toBe("cancelled");expect(f.bridge.read(a.requestId)).toBeUndefined();
+ await f.bridge.answer({requestId:br.requestId,sessionRef:br.sessionRef,answers:[{id:"q",selected:[],custom:"custom"}]});expect(await b).toEqual({answers:[{id:"q",selected:[],custom:"custom"}]});await f.aggregator.stop();
 });
 it("uses the selected reference for navigation and retires it on disposal",async()=>{
  const f=await fixture(),a={},b={};const ref=f.aggregator.sessionInfo(a,"A").ref;f.aggregator.sessionInfo(b,"B");await f.bridge.open(ref);expect(f.open).toHaveBeenCalledWith(a);

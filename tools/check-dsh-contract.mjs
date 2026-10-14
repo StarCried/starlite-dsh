@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { navigationContract } from "./dsh-navigation-contract.mjs";
 import { desktopNavigationContract } from "./dsh-desktop-contract.mjs";
+import { questionLifecycleContract } from "./dsh-questions-contract.mjs";
 
 const dshRoot = resolve(
   process.argv[2]
@@ -29,6 +30,13 @@ const nestedTools = await source("dsh-tools/lib/types/types.d.ts");
 const llmTypes = await source("dsh-llm/lib/types/types.d.ts");
 const llmMessages = await source("dsh-llm/lib/types/message.d.ts");
 const questions = await source("dsh-user-questions/lib/types/types.d.ts");
+const questionLifecycle = questionLifecycleContract({
+  questions,
+  service: await source("dsh-user-questions/lib/types/index.d.ts"),
+  fold: await optionalSource("dsh-user-questions/lib/types/projection.d.ts"),
+  projections: await optionalSource("dsh-session-projection/lib/types/index.d.ts"),
+  agents: await source("dsh-agent/lib/types/index.d.ts"),
+});
 const titles = await source("dsh-session-title/lib/types/index.d.ts");
 const clientSessions = await source("dsh-api-session-controller/lib/types/client/contract/sessions.d.ts");
 const navigation = navigationContract({
@@ -88,7 +96,7 @@ const requirements = [
 
 const missing = requirements
   .filter(([, contents, pattern]) => !pattern.test(contents))
-  .map(([name]) => name).concat(navigation.missing);
+  .map(([name]) => name).concat(navigation.missing,questionLifecycle.missing);
 
 if (missing.length > 0) {
   throw new Error(
@@ -98,6 +106,7 @@ if (missing.length > 0) {
 
 console.log(`DSH ${String(packageJson.version)} exposes every required desktop-pet contract.`);
 console.log(`DSH client navigation: ${navigation.kind}.`);
+console.log(`DSH ordinary questions: ${questionLifecycle.kind}.`);
 
 const desktopNavigation = desktopNavigationContract({
   profile: await optionalSource("dsh-app-boot/lib/types/profile-context.d.ts"),

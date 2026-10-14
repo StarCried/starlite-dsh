@@ -20,6 +20,19 @@ function idleSource(): PetStateSource {
 }
 
 describe("status SSE server", () => {
+  it("waits for the official continued-answer result before acknowledging HTTP success",async()=>{
+    const source=new DshStateAggregator(),bridge=new QuestionBridge(source,async()=>undefined);
+    let reject!:(error:Error)=>void;
+    const answer=vi.spyOn(bridge,"answer").mockImplementation(()=>new Promise<void>((_resolve,fail)=>{reject=fail;}));
+    const server=await startStatusServer(source,{questions:bridge});
+    try{
+      let settled=false;
+      const response=fetch(`http://127.0.0.1:${server.port}/v1/interaction/answer`,{method:"POST",
+        headers:{Authorization:`Bearer ${server.token}`,"Content-Type":"application/json"},body:"{}"}).then(value=>{settled=true;return value;});
+      await vi.waitFor(()=>expect(answer).toHaveBeenCalledOnce());expect(settled).toBe(false);
+      reject(Error("PRIVATE owner rejection"));const failed=await response;expect(failed.status).toBe(409);expect(await failed.text()).toBe("");
+    }finally{await server.close();}
+  });
   it("requires a distinct authenticated empty action to open the Web UI home",async()=>{
     const source=new DshStateAggregator(),open=vi.fn(async()=>undefined),bridge=new QuestionBridge(source,open);
     const server=await startStatusServer(source,{questions:bridge});const base=`http://127.0.0.1:${server.port}`;

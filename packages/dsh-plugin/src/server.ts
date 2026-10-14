@@ -99,7 +99,7 @@ export async function startStatusServer(source: PetStateSource, options: {billin
         if(closed||response.destroyed)return;
         if(!body||typeof body!=="object"||Array.isArray(body))throw Error("invalid action");
         const row=body as Record<string,unknown>;
-        if(path==="/v1/interaction/answer")bridge.answer(row);
+        if(path==="/v1/interaction/answer")await bridge.answer(row);
         else if(path==="/v1/interaction/availability"){
           if(typeof row.enabled!=="boolean"||Object.keys(row).some(k=>k!=="enabled"))throw Error("invalid availability");bridge.setEnabled(row.enabled);
         }else if(path==="/v1/web/open"){

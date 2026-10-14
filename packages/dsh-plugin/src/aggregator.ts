@@ -46,7 +46,7 @@ interface SessionState {
   ref: string;
   title: string;
   compacting: boolean;
-  inputs: Map<string, number>;
+  inputs: Map<string, {at:number;blocking:boolean}>;
   activityAt: number;
   running: boolean;
   turnActive: boolean;
@@ -127,8 +127,8 @@ export class DshStateAggregator implements PetStateSource {
     return {ref:session.ref,title:session.title};
   }
   sessionKey(ref: string): unknown {return [...this.#sessions].find(([,session])=>session.ref===ref)?.[0]}
-  handleInputRequested(key: unknown, requestId: string): void {
-    const session=this.#session(key);session.inputs.set(requestId,this.#clock.now());this.#changed();
+  handleInputRequested(key: unknown, requestId: string, blocking=true): void {
+    const session=this.#session(key);session.inputs.set(requestId,{at:this.#clock.now(),blocking});this.#changed();
   }
   handleInputResolved(key: unknown, requestId: string): void {
     if(this.#sessions.get(key)?.inputs.delete(requestId))this.#changed();
@@ -470,8 +470,8 @@ function selectCandidate(sessions: Iterable<SessionState>, now: number): Candida
     if (session.errorUntil && session.errorUntil > now) {
       error = newest(error, wrap(notice("error", "发生错误，请查看 DSH", session.errorAt ?? now),"error"));
     }
-    const input=[...session.inputs].at(-1);
-    if(input)approval=newest(approval,{...wrap(notice("approval","等待输入…",input[1]),"waiting"),inputRequest:input[0]});
+    const input=[...session.inputs].filter(([,item])=>item.blocking).at(-1);
+    if(input)approval=newest(approval,{...wrap(notice("approval","等待输入…",input[1].at),"waiting"),inputRequest:input[0]});
     const currentApproval = newestMapValue(session.approvals);
     if (currentApproval) {
       if(!input)approval = newest(approval, wrap(notice("approval", QUESTION_TOOLS.has(currentApproval.name)?"等待输入…":`等待批准：${currentApproval.name}`, currentApproval.at),"waiting"));
@@ -510,9 +510,18 @@ function selectCandidate(sessions: Iterable<SessionState>, now: number): Candida
   }
 
   const selected=error ?? approval ?? blocked ?? working ?? thinking ?? completed;
-  if(selected)return selected;
+  // Continued questions no longer block the Host's turn. Keep its real state
+  // and animation, and expose an answer form only for the selected session.
+  // Foreground questions and tool permissions always take precedence.
+  if(selected){
+    if(selected.state==="approval"||selected.state==="error")return selected;
+    const session=all.find(item=>item.ref===selected.session?.ref);
+    const late=session&&[...session.inputs].filter(([,item])=>!item.blocking).at(-1);
+    return late?{...selected,inputRequest:late[0]}:selected;
+  }
   const last=all.sort((a,b)=>b.activityAt-a.activityAt)[0];
-  return {state:"idle",at:now,activity:"idle",...(last?{session:{ref:last.ref,title:last.title}}:{})};
+  const late=last&&[...last.inputs].filter(([,item])=>!item.blocking).at(-1);
+  return {state:"idle",at:now,activity:"idle",...(last?{session:{ref:last.ref,title:last.title}}:{}),...(late?{inputRequest:late[0]}:{})};
 }
 
 function notice(state: PetState, text: string, at: number): Candidate {

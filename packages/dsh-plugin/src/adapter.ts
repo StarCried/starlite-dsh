@@ -41,7 +41,7 @@ export async function startDshAdapter(
   const navigator = createDshNavigator(context, dependencies.openBrowser);
   const aggregator = new DshStateAggregator();
   const billing = new DeepSeekBilling(context);
-  const questions = new QuestionBridge(aggregator,key=>navigator.open(key));
+  const questions = new QuestionBridge(aggregator,key=>navigator.open(key),context);
   let server: StatusServer;
   try {server = await (dependencies.startServer ?? startStatusServer)(aggregator, {billing,questions});}
   catch (error) {questions.close(); billing.close(); await navigator.close(); throw error;}
@@ -61,6 +61,7 @@ export async function startDshAdapter(
       if ((status === "idle" || status === "running") && agent) {
         refreshTitle(subjectKey(agent));
         aggregator.handleAgentStatus(subjectKey(agent), status as AgentRunStatus);
+        questions.refresh();
       }
     });
     subscribeRequired(context, disposers, "agent/error", (...arguments_) => {
@@ -79,8 +80,9 @@ export async function startDshAdapter(
       const event = asRecord(arguments_[1]);
       if (session && typeof event?.type === "string") {
         const key=subjectKey(session);refreshTitle(key);
-        if(event.type==="turn/end")questions.cancelSession(key);
+        if(event.type==="turn/end")questions.cancelForeground(key);
         aggregator.handleSessionEvent(subjectKey(session), event as unknown as DshEventLike);
+        questions.refresh();
         if (event.type === "assistant/message" || event.type === "assistant/attempt") billing.invalidate();
       }
     });

@@ -22,6 +22,12 @@ describe("complete DSH navigation declaration contracts", () => {
   it("accepts workspace navigation only with the authoritative projection contract", () => {
     expect(navigationContract(projected)).toEqual({kind: "projected", missing: []});
   });
+  it("accepts the 0.2.1 migration state without accepting unknown lifecycle states", () => {
+    const declarations = projected.projections.replace("'ready' | 'error'", "'ready' | 'migration-required' | 'error'");
+    expect(navigationContract({...projected, projections: declarations})).toEqual({kind: "projected", missing: []});
+    expect(navigationContract({...projected, projections: declarations.replace("'migration-required'", "'unexpected'")}).missing)
+      .toContain("projected: projection readiness");
+  });
   it.each(["workspace", "projections", "catalog"])("rejects an incomplete modern %s seam", key => {
     const result = navigationContract({...projected, [key]: ""});
     expect(result.kind).toBeUndefined();

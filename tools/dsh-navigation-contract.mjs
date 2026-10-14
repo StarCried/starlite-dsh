@@ -19,7 +19,7 @@ export function navigationContract(sources) {
     ["projection catalog refresh", sources.sessions, /refreshProjections\(sessionId:\s*SessionId\):\s*Promise<void>;/u],
     ["authoritative session projections", sources.list, /projectionsBySession:\s*Readonly<Record<SessionId,\s*SessionProjectionSnapshot>>;/u],
     ["projection values", sources.projections, /readonly\s+values:\s*Readonly<Partial<SessionProjectionMap>>;/u],
-    ["projection readiness", sources.projections, /readonly\s+state:\s*'idle'\s*\|\s*'loading'\s*\|\s*'ready'\s*\|\s*'error';/u],
+    ["projection readiness", sources.projections, /readonly\s+state:\s*'idle'\s*\|\s*'loading'\s*\|\s*'ready'\s*\|\s*(?:'migration-required'\s*\|\s*)?'error';/u],
     ["subagent catalog projection", sources.catalog, /subagentCatalog:\s*SubagentCatalogEntry\[\];/u],
     ["subagent catalog identity", sources.catalog, /type\s+SubagentCatalogEntry\s*=\s*\{\s*readonly\s+id:\s*SessionId;/u],
     ["one-shot subagent mode", sources.catalog, /readonly\s+mode:\s*'one-shot';/u],

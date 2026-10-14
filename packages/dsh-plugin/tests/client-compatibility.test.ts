@@ -44,10 +44,10 @@ describe("DSH client navigation compatibility", () => {
     stop();
   });
 
-  it("waits for a ready authoritative projection before selecting a child", async () => {
+  it.each(["loading", "migration-required"])("waits for a ready projection while %s before selecting a child", async state => {
     const pending = deferred();
     const {sessions, workspace, update} = projected({ids: ["root"], phase: "ready", projectionsBySession: {
-      root: {state: "loading", values: {subagentCatalog: [{id: "target", mode: "continuable"}]}},
+      root: {state, values: {subagentCatalog: [{id: "target", mode: "continuable"}]}},
     }});
     sessions.refreshProjections = vi.fn(() => pending.promise);
     const stop = followCompanionSession(sessions, location(), history(), workspace);

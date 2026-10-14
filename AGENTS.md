@@ -2,15 +2,17 @@
 
 ## Product boundary
 
-- The product is a Windows 11 x64 companion for one DeepSeek Harness process
-  running in WSL2. It is not a general desktop-pet framework.
+- The product is a Windows 11 x64 companion for one DeepSeek Harness Host:
+  WSL2 CLI/Web, native Windows CLI/Web, or the official Windows Desktop app.
+  It is not a general desktop-pet framework. Do not silently replace a live
+  Host connection when another profile or installation starts.
 - Keep the Cordis bundle, cross-process protocol, and Tauri desktop app in this
   repository. Reusable Inochi2D/VRM rendering and model preparation stay in the
   StarLite component repository (`StarCried/starlite`). Local checkout paths use
   `starlite` and `starlite-dsh`. The GitHub repositories have been renamed to
   `StarCried/starlite` and `StarCried/starlite-dsh` with user approval.
   Pushing source and publishing releases require explicit user approval.
-- Do not add native-Windows DSH, Linux/macOS desktop targets, voice, chat,
+- Do not add Linux/macOS desktop targets, remote Hosts, voice, chat,
   memory, telemetry, or auto-update without an approved
   scope change.
 - Model-only alpha hit testing and transparent background passthrough are approved.
@@ -26,7 +28,8 @@
 - User-authorized companion interactions additionally allow the session title,
   fixed activity codes, ephemeral random references, structured user questions
   and their explicit answers. Keep real session identities and Web credentials
-  in WSL. Answers must target one still-pending request; do not add general
+  in the DSH Host (WSL or Windows), never in the companion. Answers must target
+  one still-pending request; do not add general
   agent control or intercept tool permission approvals.
 - Render bubble content as plain text. Do not persist or log bubble text or the
   bearer token.

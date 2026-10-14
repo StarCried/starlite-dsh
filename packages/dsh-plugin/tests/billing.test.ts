@@ -58,6 +58,22 @@ describe("official DeepSeek billing", () => {
     expect((await f.source.read()).balance.status).toBe("unconfigured");
     expect(f.credentials.resolve).not.toHaveBeenCalled();expect(f.credentials.readRecord).not.toHaveBeenCalled();expect(f.request).not.toHaveBeenCalled();f.source.close();
   });
+  it.each([false,true])("isolates the API-key route from account login in a mixed provider directory (reversed=%s)",async reversed=>{
+    const entries=[{provider:"deepseek-account",settingsNs:"account",settingsPath:[]},{provider:"deepseek-official",settingsNs:"native",settingsPath:[]}];
+    const f=directoryFixture([
+      {ns:"account",value:{apiKeyEnv:"ACCOUNT_LOGIN_TOKEN",baseURL:"https://api.deepseek.com/anthropic"}},
+      {ns:"native",value:{apiKeyEnv:"PUBLIC_API_REFERENCE",baseURL:"https://api.deepseek.com/anthropic"}},
+    ],reversed?entries.toReversed():entries);
+    try{
+      f.credentials.resolve.mockResolvedValue({value:"PRIVATE-api-key"});
+      expect((await f.source.read()).balance).toMatchObject({status:"ready",source:"deepseek-official"});
+      expect(f.credentials.resolve).toHaveBeenCalledExactlyOnceWith("PUBLIC_API_REFERENCE");expect(f.credentials.readRecord).not.toHaveBeenCalled();
+      f.credentials.resolve.mockResolvedValue(undefined);f.source.invalidate(true);
+      expect((await f.source.read()).balance.status).toBe("unconfigured");
+      expect(f.credentials.resolve.mock.calls).toEqual([["PUBLIC_API_REFERENCE"],["PUBLIC_API_REFERENCE"]]);
+      expect(f.credentials.readRecord).not.toHaveBeenCalled();expect(f.request).toHaveBeenCalledOnce();
+    }finally{f.source.close();}
+  });
   it.each([
     {descriptors:[{ns:"native",value:{}}],entries:[{provider:"deepseek-official",settingsNs:"native",settingsPath:[]},{provider:"deepseek-official",settingsNs:"other",settingsPath:[]}]},
     {descriptors:[{ns:"native",value:{}},{ns:"native",value:{}}],entries:[{provider:"deepseek-official",settingsNs:"native",settingsPath:[]}]},

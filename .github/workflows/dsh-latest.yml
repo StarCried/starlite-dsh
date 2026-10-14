@@ -43,7 +43,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: npm install --prefix "$DSH_LATEST_INSTALL" --no-audit --no-fund @deepseek-ai/dsh@latest
-      - run: node tools/check-dsh-contract.mjs "$DSH_LATEST_INSTALL/node_modules/@deepseek-ai/dsh"
+      - run: node tools/check-dsh-contract.mjs "$DSH_LATEST_INSTALL/node_modules/@deepseek-ai/dsh" --desktop
+      - name: Verify official Desktop RPC authentication and cold service startup
+        run: node tools/qualify-dsh-navigation.mjs "$DSH_LATEST_INSTALL/node_modules/@deepseek-ai/dsh"
       - name: Stage artwork-free package inputs for contract installation only
         # These header-only PE bytes are never executed. The smoke uses a missing EXE override.
         run: node tools/stage-dsh-contract-fixture.mjs

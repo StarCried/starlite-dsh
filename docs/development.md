@@ -102,7 +102,7 @@ cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
 git diff --check
 ```
 
-每日 `DSH latest compatibility` 在 Ubuntu 与 Windows 上安装 **npm 已发布 latest**，执行声明契约和实际 tarball 的隔离安装／启动／fail-open／销毁检查；不把 GitHub main 的新 API 当成已发布客户端，也不发布任何产物。Windows 检查原生 Host 桥接，普通 Ubuntu 检查不支持的 Host 会禁用桌宠但不妨碍 DSH。
+每日 `DSH latest compatibility` 在 Ubuntu 与 Windows 上安装 **npm 已发布 latest**，强制检查 Desktop 声明契约、真实官方认证 RPC 与服务冷启动，以及实际 tarball 的隔离安装／启动／fail-open／销毁；不把 GitHub main 的新 API 当成已发布客户端，也不发布任何产物。Windows 检查原生 Host 桥接，普通 Ubuntu 检查不支持的 Host 会禁用桌宠但不妨碍 DSH。
 
 本机可对明确的官方 DSH 包目录和最终插件 tarball 运行同一检查：
 

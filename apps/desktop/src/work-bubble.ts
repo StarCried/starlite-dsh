@@ -39,14 +39,17 @@ export class WorkBubble {
   #load(snapshot:PetSnapshot):void{
     const generation=this.#generation,requestId=snapshot.inputRequest!,sessionRef=snapshot.session!.ref;
     renderPlainBubble(this.element,"正在加载输入…","notice",snapshot.session!.title);this.element.dataset.interactive="true";
-    const body=this.element.querySelector(".bubble-content")!,open=document.createElement("button"),retry=document.createElement("button");
+    const body=this.element.querySelector(".bubble-content")!,open=document.createElement("button"),retry=document.createElement("button"),status=document.createElement("span");
     body.className="question-body";open.type="button";open.textContent="转到 DSH 回答";retry.type="button";retry.textContent="重试";retry.hidden=true;
+    status.className="question-status question-navigation-status";status.setAttribute("role","status");status.hidden=true;
     open.addEventListener("click",async()=>{
-      open.disabled=true;
-      try{await this.actions.delegate();await this.actions.open(sessionRef)}catch{if(generation===this.#generation){body.textContent="暂时无法打开 DSH；请从浏览器进入会话。";open.disabled=false;}}
+      if(generation!==this.#generation)return;
+      open.disabled=true;status.hidden=true;status.textContent="";this.actions.changed();
+      try{await this.actions.open(sessionRef);if(generation!==this.#generation)return;await this.actions.delegate();}
+      catch{if(generation===this.#generation){status.textContent="暂时无法转到 DSH 回答。请重试，或继续在气泡中回答。";status.hidden=false;open.disabled=false;this.actions.changed();}}
     });
     retry.addEventListener("click",()=>{if(this.#latest&&this.#preferences){this.#key=undefined;this.update(this.#latest,this.#preferences)}});
-    this.element.append(open,retry);this.actions.changed();
+    this.element.append(open,retry,status);this.actions.changed();
     void this.actions.read(requestId).then(request=>{
       if(generation!==this.#generation)return;
       if(request.sessionRef!==sessionRef)throw Error("question changed");

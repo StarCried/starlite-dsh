@@ -92,7 +92,6 @@ export async function startPet(): Promise<void> {
   const workBubble=new WorkBubble(bubble,{
     read:id=>connection!.readInteraction(id),answer:value=>connection!.answerInteraction(value),
     open:ref=>connection!.openSession(ref),
-    delegate:async()=>{await connection!.setInputAvailable(false);syncInputAvailable();},
     changed:updateRegion,
   });
   const bubbleObserver=new ResizeObserver(updateRegion);bubbleObserver.observe(bubble);

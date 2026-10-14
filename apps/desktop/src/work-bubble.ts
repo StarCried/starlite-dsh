@@ -22,7 +22,7 @@ export function renderBubble(element:HTMLElement,snapshot:PetSnapshot,privacy:bo
 
 interface QuestionActions {
   read(id:string):Promise<PetInteraction>;answer(value:PetAnswer):Promise<void>;
-  open(ref:string):Promise<void>;delegate():Promise<void>;changed():void;
+  open(ref:string):Promise<void>;changed():void;
 }
 export class WorkBubble {
   #generation=0;#key:string|undefined;#latest:PetSnapshot|undefined;#preferences:DesktopPreferences|undefined;
@@ -45,7 +45,7 @@ export class WorkBubble {
     open.addEventListener("click",async()=>{
       if(generation!==this.#generation)return;
       open.disabled=true;status.hidden=true;status.textContent="";this.actions.changed();
-      try{await this.actions.open(sessionRef);if(generation!==this.#generation)return;await this.actions.delegate();}
+      try{await this.actions.open(sessionRef);}
       catch{if(generation===this.#generation){status.textContent="暂时无法转到 DSH 回答。请重试，或继续在气泡中回答。";status.hidden=false;open.disabled=false;this.actions.changed();}}
     });
     retry.addEventListener("click",()=>{if(this.#latest&&this.#preferences){this.#key=undefined;this.update(this.#latest,this.#preferences)}});

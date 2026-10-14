@@ -109,6 +109,7 @@ console.log(`DSH client navigation: ${navigation.kind}.`);
 console.log(`DSH ordinary questions: ${questionLifecycle.kind}.`);
 
 const desktopNavigation = desktopNavigationContract({
+  context: await optionalSource("cordis/lib/types/context.d.ts"),
   registry: await optionalSource("cordis/lib/types/registry.d.ts"),
   fiber: await optionalSource("cordis/lib/types/fiber.d.ts"),
   profile: await optionalSource("dsh-app-boot/lib/types/profile-context.d.ts"),

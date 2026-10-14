@@ -4,6 +4,8 @@ import {NAVIGATION_CHANNEL, object, sessionIdentity, type HostNavigationRpc} fro
 
 interface Services {
   get?(name:string):unknown;
+  webServer?: unknown;
+  extend?(metadata: {webServer: unknown}): Services;
   inject?(dependencies: string[], callback: (scope: Services) => (() => Promise<void>) | undefined): {dispose(): Promise<void>};
 }
 export interface DshNavigator {open(key: unknown): Promise<void>; close(): Promise<void>}
@@ -36,8 +38,15 @@ export function createDshNavigator(context: Services, openUrl = openLocalBrowser
   // Cordis mounts profile bundles in parallel. The Connection service is not
   // necessarily ready when this plugin starts; own the route through its public
   // dependency lifecycle so withdrawal/replacement also revokes pending targets.
-  const injected = context.inject?.(["connection"], scope => {
-    try {return attach(scope);} catch {return undefined;} // Navigation must not stop DSH boot.
+  const injected = context.inject?.(["connection", "webServer"], scope => {
+    try {
+      // Connection's public RPC getter captures a Cordis shadow context. Bind
+      // the declared carrier as public context metadata so that getter retains
+      // this fiber's WebServer instead of reading an uninjected provider scope.
+      // extend() leaves the parent and official service untouched.
+      if (!scope.extend) return undefined;
+      return attach(scope.extend({webServer: scope.webServer}));
+    } catch {return undefined;} // Navigation must not stop DSH boot.
   });
   const detach = context.inject ? undefined : attach(context);
   return {

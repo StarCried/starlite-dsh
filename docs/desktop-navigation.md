@@ -11,9 +11,16 @@ Desktop 自带的 CLI 也使用 Electron，因此不能根据可执行文件或
 `/starlite-navigation` 通道。DSH 的 Host/Origin 检查、浏览器 cookie 认证和请求取消
 继续由官方 Connection 执行。客户端的 `dsh.client.platform` 保持 `web`。
 
-Host 的各个插件并行启动。导航注册通过公开的 `ctx.inject(["connection"], ...)`
-等待服务就绪，并随该服务撤销和重新注册；不会因为冷启动时 Connection 尚未提供
+Host 的各个插件并行启动。导航注册通过公开的 `ctx.inject(["connection", "webServer"], ...)`
+等待两项服务就绪，并随任一服务撤销和重新注册；不会因为冷启动时 Connection 尚未提供
 而停用整个桌宠插件。撤销服务或禁用插件会取消旧目标，禁止迟到确认继续导航。
+
+Connection 的公开 RPC getter 会捕获 Cordis shadow context；当前官方运行时中，直接
+读取它可能按提供者的依赖校验 WebServer，导致路由未注册，POST 落到静态页面处理器
+并返回 405。导航在已声明两项依赖的作用域中使用公开的
+`scope.extend({webServer: scope.webServer})` 绑定当前 carrier，再读取 `connection.rpc`。
+该操作不修改父 context 或官方服务，注册与销毁仍属于当前依赖 fiber；HTTP 路径、
+认证、请求处理及 RPC 格式全部使用官方实现。
 
 只有 `dsh-app://app/` 中具有官方 Desktop 标记的客户端会订阅导航。它通过
 `uiWorkspace.openSession` 选择准确会话，再确认临时请求。Host 通过官方
@@ -47,8 +54,11 @@ node tools/check-dsh-contract.mjs <DSH包目录> --desktop
 ```
 
 真实 RPC 验证直接加载指定安装中官方的 Host 和浏览器实现，使用临时回环 HTTP
-服务与内存凭据，从 Connection 尚未提供的冷启动开始，检查服务撤销和重建、
+服务与内存凭据，从两项服务尚未提供的冷启动开始，检查服务撤销和重建、
 cookie 认证、Origin 限制、取消、确认身份和释放。
+Host 的 WebServer 和 Connection 都由真实官方插件在兄弟 fiber 中提供，禁止以
+root-provided 假 WebServer 代替；未匹配的 POST 返回 405，确保遗漏路由会令验证失败。
+分别撤销和替换 WebServer、Connection，检查旧请求取消、旧确认拒绝和新路由可用。
 它不启动用户 profile、不注册系统协议，也不调用模型 API：
 
 同一工具还执行官方 `ClientSessions` 浏览器实现与真实 Cordis 的 sibling service

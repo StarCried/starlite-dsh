@@ -219,7 +219,7 @@ describe("Desktop client target delivery", () => {
 });
 
 describe("Host surface selection", () => {
-  it("waits for Connection during cold startup and revokes requests on dependency replacement", async () => {
+  it("waits for both carrier services, binds a child context, and revokes requests on dependency replacement", async () => {
     let mount: ((scope: {get(name: string): unknown}) => (() => Promise<void>) | undefined) | undefined;
     let unmount: (() => Promise<void>) | undefined;
     const dispose = vi.fn(async () => {await unmount?.();});
@@ -228,13 +228,17 @@ describe("Host surface selection", () => {
     const handle = vi.fn((_channel: string, callback: NonNullable<typeof handler>) => {handler = callback; return remove;});
     const navigator = createDshNavigator({
       get: name => name === "profileContext" ? {name: "desktop"} : undefined,
-      inject: (dependencies, callback) => {expect(dependencies).toEqual(["connection"]); mount = callback; return {dispose};},
+      inject: (dependencies, callback) => {expect(dependencies).toEqual(["connection", "webServer"]); mount = callback; return {dispose};},
     }, open);
     expect(handle).not.toHaveBeenCalled();
     await expect(navigator.open({id: "target"})).rejects.toThrow("unavailable");
     expect(open).not.toHaveBeenCalled();
-    const scope = {get: () => ({rpc: {handle}})};
+    const carrier = {}, bound = {get: () => ({rpc: {handle}})};
+    const extend = vi.fn(() => bound);
+    const scope = {get: () => undefined, webServer: carrier, extend};
     unmount = mount!(scope);
+    expect(extend).toHaveBeenCalledExactlyOnceWith({webServer: carrier});
+    expect(scope.get()).toBeUndefined();
     const firstHandler = handler!;
     const pending = navigator.open({id: "target"});
     const rejected = expect(pending).rejects.toThrow("unavailable");

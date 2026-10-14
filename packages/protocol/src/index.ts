@@ -57,7 +57,7 @@ export interface PetConnectionDescriptor {
   readonly instanceId: string;
 }
 
-/** Strictly validates the one deep-link shape emitted by the WSL bridge. */
+/** Strictly validates the one deep-link shape emitted by a local DSH Host. */
 export function parsePetConnectionUrl(rawUrl: string): PetConnectionDescriptor {
   let url: URL;
   try {
@@ -71,7 +71,8 @@ export function parsePetConnectionUrl(rawUrl: string): PetConnectionDescriptor {
     (url.pathname !== "" && url.pathname !== "/") ||
     url.username !== "" ||
     url.password !== "" ||
-    url.hash !== ""
+    url.port !== "" ||
+    rawUrl.includes("#")
   ) {
     throw new Error("pet connection URL target is invalid");
   }

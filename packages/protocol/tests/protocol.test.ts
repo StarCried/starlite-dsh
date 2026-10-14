@@ -48,6 +48,9 @@ describe("parsePetConnectionUrl", () => {
   it.each([
     "https://connect/?port=4192",
     `dsh-inochi2d-pet://other?port=4192&token=${token}&instance=${instance}`,
+    `dsh-inochi2d-pet://connect:1234?port=4192&token=${token}&instance=${instance}`,
+    `dsh-inochi2d-pet://connect?port=4192&token=${token}&instance=${instance}#`,
+    `dsh-inochi2d-pet://connect?port=4192&token=${token}&instance=${instance}#fragment`,
     `dsh-inochi2d-pet://connect?port=0&token=${token}&instance=${instance}`,
     `dsh-inochi2d-pet://connect?port=4192&token=short&instance=${instance}`,
     `dsh-inochi2d-pet://connect?port=4192&token=${token}&instance=${instance}&extra=x`,

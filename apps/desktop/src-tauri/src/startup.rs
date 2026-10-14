@@ -102,6 +102,7 @@ mod tests {
             url.replace("//connect?", "//connect:1234?"),
             url.replace("//connect?", "//connect/path?"),
             format!("{url}#fragment"),
+            format!("{url}#"),
             format!("{url}&unknown=1"),
             format!("{url}&port=1234"),
             url.replace("port=41234", "port=0"),

@@ -10,7 +10,7 @@
 | 官方 Windows Desktop | 已安装官方签名版 `0.2.0-rc.2`，内置 Electron 44／Node 24、ASAR | 独立 DSH_HOME 中实际插件页安装／启用、自动微光、停用后 DSH 可用、× 隐藏保留 Host／桌宠、真正退出及重启恢复已过；用户确认无会话双击唤起主界面 |
 | WSL2 CLI/Web | `0.1.5-rc.1`、Node 22.22.1 | 本轮重打包通过官方 CLI 临时 home/profile 安装、认证首页、状态桥、缺失 EXE 继续运行及退出回收；不将 Windows Chrome 结果算作 WSL 浏览器实测 |
 
-Desktop 已从仅解包 ASAR 扩展到实际安装及 GUI 验收，使用独立 DSH_HOME；日常 profile 和凭据没有作为测试输入。Desktop GUI 使用上一候选，其 Windows 程序及 Host 导航代码与本轮重打包一致，本轮差异是 Web 客户端修复。普通单选已实际返回一项答案，多选与自定义输入仍待用户回答，Desktop 指定会话及转交答题仍待实测。未将全部 GUI、性能或最新包的完整矩阵标为通过。macOS/Linux 桌宠、远程 Host 和同时聚合多个 Host 不在本版支持范围。
+Desktop 已从仅解包 ASAR 扩展到实际安装及 GUI 验收，使用独立 DSH_HOME；日常 profile 和凭据没有作为测试输入。Desktop GUI 使用上一候选，只有原生 EXE 与当前包完全相同。profile 选择及 RPC 导航主逻辑未变，但当前包还修改了系统打开器的等待方式，须装入准确的当前候选复验 Desktop 导航，不能只将其视为 Web 客户端差异。普通单选已实际返回一项答案，多选与自定义输入仍待用户回答，Desktop 指定会话及转交答题仍待实测。未将全部 GUI、性能或最新包的完整矩阵标为通过。macOS/Linux 桌宠、远程 Host 和同时聚合多个 Host 不在本版支持范围。
 
 ## 接口与自动回归
 

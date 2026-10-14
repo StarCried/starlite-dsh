@@ -53,8 +53,8 @@ function edit(id:string,value:string) {
 describe("settings model library",() => {
  it("shows every model, switches by card and keeps add model last",async () => {
   await launch({...installed,models:[model,custom]});
-  expect([...document.querySelectorAll(".model-choice strong")].map(item => item.textContent)).toEqual(["微光","自定义角色"]);
-  expect(document.querySelector("#model-library")!.lastElementChild!.id).toBe("add-model");
+  expect([...document.querySelectorAll(".model-choice[data-model-id] strong")].map(item => item.textContent)).toEqual(["微光","自定义角色"]);
+  expect(document.querySelector("#model-library")!.lastElementChild!.contains(button())).toBe(true);
   expect(document.getElementById("model-enabled")).toBeNull();expect(document.getElementById("save-settings")).toBeNull();
   document.querySelector<HTMLButtonElement>('[data-model-id="custom"]')!.click();
   await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledWith("select_model",{modelId:"custom"}));

@@ -85,10 +85,34 @@ it("rejects ZIP and Inochi2D even when returned by the picker", async () => {
   expect(invoke.mock.calls.some(([command]) => command === "inspect_model")).toBe(false);
 });
 
-it("blocks duplicate imports and explains actual VRM mappings", async () => {
+it("blocks duplicate imports", async () => {
   await startSettings();let finish!:(value:null)=>void;
   open.mockImplementation(() => new Promise(resolve => {finish=resolve;}));add().click();add().click();
   expect(open).toHaveBeenCalledOnce();
-  expect(add().textContent).toContain("Humanoid");expect(add().textContent).toContain("Blink");expect(add().textContent).toContain("lookAt");
   finish(null);await vi.waitFor(() => expect(add().disabled).toBe(false));
+});
+
+it("keeps import instructions behind a formatted, read-only document dialog", async () => {
+  await startSettings();invoke.mockClear();
+  expect(add().textContent).toBe("＋ 添加 VRM 模型");
+  expect(document.body.textContent).not.toContain("Humanoid");
+  const help = document.getElementById("model-import-help") as HTMLButtonElement;
+  expect(help.closest("button")).toBe(help);
+  expect(help.parentElement).toBe(add().parentElement);
+  help.click();
+  const dialog = document.querySelector<HTMLDialogElement>(".model-import-dialog")!;
+  expect(dialog.open).toBe(true);
+  expect(dialog.getAttribute("aria-label")).toBe("VRM 模型导入说明");
+  expect([...dialog.querySelectorAll(".license-content h3")].map(item => item.textContent)).toContain("人形骨骼");
+  expect(dialog.textContent).toContain("Humanoid");
+  expect(dialog.textContent).toContain("blinkLeft");
+  expect(dialog.textContent).toContain("lookAt");
+  expect(dialog.querySelector("pre code")!.textContent).toContain("rightLowerLeg");
+  expect(dialog.textContent).not.toContain("**");
+  expect(open).not.toHaveBeenCalled();expect(invoke).not.toHaveBeenCalled();
+  dialog.querySelector<HTMLButtonElement>("button")!.click();
+  expect(document.querySelector("dialog")).toBeNull();
+  help.click();
+  document.querySelector<HTMLDialogElement>("dialog")!.close();
+  expect(document.querySelector("dialog")).toBeNull();
 });

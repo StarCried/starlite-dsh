@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { showModelLicense } from "./model-license-dialog.js";
+import { showModelImportHelp } from "./model-import-dialog.js";
 import type { AnimationMappings, AnimationState, DesktopPreferences, DesktopSettings, LibraryModel, ModelInspection, ModelInstallRequest } from "./types.js";
 
 const STATES: ReadonlyArray<{ key: AnimationState; label: string; required: boolean }> = [
@@ -214,13 +215,15 @@ function renderLibrary(host: HTMLElement, models: LibraryModel[], activeModelId:
   none.type = "button"; none.className = "model-card model-none"; none.dataset.modelId = "";
   none.setAttribute("aria-pressed", String(activeModelId === null)); none.dataset.active = String(activeModelId === null);
   none.textContent = "不显示模型"; none.addEventListener("click", () => select(null)); host.append(none);
+  const addCard = document.createElement("article"); addCard.className = "model-card model-add";
   const addButton = document.createElement("button");
-  addButton.type = "button"; addButton.className = "model-card model-add"; addButton.id = "add-model"; addButton.setAttribute("aria-label", "添加 VRM 模型");
+  addButton.type = "button"; addButton.className = "model-choice"; addButton.id = "add-model"; addButton.setAttribute("aria-label", "添加 VRM 模型");
   const addTitle = document.createElement("strong"); addTitle.textContent = "＋ 添加 VRM 模型";
-  const requirements = document.createElement("span"); requirements.id = "vrm-import-requirements";
-  requirements.textContent = "VRM 0 / 1 · 按 Humanoid 映射识别骨骼，无需改骨骼对象名。\n必需：髋、脊柱、头、双臂和手、双腿和脚；手指、颈、胸、眼骨可选。\n眨眼：在 VRM 中注册 Blink（0）或 blink（1）表达，仅重命名形态键不够。\n眼球跟随：配置 VRM lookAt，并绑定眼骨或视线表达。\n自动列出内嵌动作；无动作时使用自带待机和轻呼吸。";
-  addButton.setAttribute("aria-describedby", requirements.id); addButton.append(addTitle, requirements);
-  addButton.addEventListener("click", add); host.append(addButton);
+  addButton.append(addTitle); addButton.addEventListener("click", add);
+  const help = document.createElement("button");
+  help.type = "button"; help.className = "model-license"; help.id = "model-import-help"; help.textContent = "查看导入说明";
+  help.setAttribute("aria-haspopup", "dialog"); help.addEventListener("click", showModelImportHelp);
+  addCard.append(addButton, help); host.append(addCard);
 }
 
 function renderMappings(host: HTMLElement, animations: ReadonlyArray<{ name: string }>, current: AnimationMappings | undefined, helpId: string): void {

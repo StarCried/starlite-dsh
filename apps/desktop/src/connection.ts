@@ -39,6 +39,7 @@ export class StatusConnection {
   readonly #fetch: typeof fetch;
   readonly #timers: ConnectionTimers;
   #descriptor: PetConnectionDescriptor | undefined;
+  #pendingDescriptor: PetConnectionDescriptor | undefined;
   #abort: AbortController | undefined;
   readonly #requests = new Set<AbortController>();
   #connected = false;
@@ -62,19 +63,32 @@ export class StatusConnection {
       const current = this.#descriptor;
       if (current.instanceId === descriptor.instanceId && current.port === descriptor.port && current.token === descriptor.token) return "unchanged";
       // A transient disconnection does not release this Host's ownership.
-      // The companion's existing reconnect/exit period ends the ownership.
+      // Retain only the first successor, without changing the current lease.
+      this.#pendingDescriptor ??= descriptor;
       if (!this.#conflictReported) {
         this.#conflictReported = true;
         this.#callbacks.onConflict?.();
       }
       return "conflict";
     }
+    this.#start(descriptor);
+    return "accepted";
+  }
+
+  /** Called only when the original Host's offline lease has expired. */
+  connectPending(): boolean {
+    if (this.#connected || !this.#pendingDescriptor) return false;
+    const descriptor = this.#pendingDescriptor;
+    this.#start(descriptor);
+    return true;
+  }
+
+  #start(descriptor: PetConnectionDescriptor): void {
     this.stop();
     this.#descriptor = descriptor;
     this.#lastSequence = -1;
     const run = ++this.#run;
     void this.#connectionLoop(descriptor, run);
-    return "accepted";
   }
 
   stop(): void {
@@ -82,6 +96,7 @@ export class StatusConnection {
     this.#abort?.abort();
     this.#abort = undefined;
     this.#descriptor = undefined;
+    this.#pendingDescriptor = undefined;
     this.#connected = false;
     this.#conflictReported = false;
     this.#cancelRequests();
@@ -183,6 +198,10 @@ export class StatusConnection {
       headers: { Authorization: `Bearer ${descriptor.token}` },
       signal: abort.signal,
     });
+    if (abort.signal.aborted || this.#descriptor !== descriptor) {
+      await response.body?.cancel();
+      throw new Error("status connection superseded");
+    }
     if (
       !response.ok
       || !response.body
@@ -199,6 +218,7 @@ export class StatusConnection {
     try {
       while (true) {
         const { done, value } = await reader.read();
+        if (abort.signal.aborted || this.#descriptor !== descriptor) throw new Error("status connection superseded");
         if (done) break;
         this.#timers.clearTimeout(heartbeat);
         heartbeat = this.#armHeartbeat(abort);
@@ -218,6 +238,7 @@ export class StatusConnection {
       throw new Error("status stream ended");
     } finally {
       this.#timers.clearTimeout(heartbeat);
+      await reader.cancel().catch(() => undefined);
       reader.releaseLock();
     }
   }

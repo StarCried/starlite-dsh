@@ -109,6 +109,11 @@ fn set_connection_state(app: AppHandle, connected: bool) {
 }
 
 #[tauri::command]
+fn get_initial_connection(app: AppHandle) -> Option<String> {
+    app.state::<startup::InitialConnection>().first_url()
+}
+
+#[tauri::command]
 fn open_settings(app: AppHandle) {
     tray::show_settings(&app);
 }
@@ -122,10 +127,15 @@ fn exit_app(app: AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(startup::InitialConnection::from_arguments(
+            std::env::args_os(),
+        ))
         // Deep links on Windows arrive through a second process, so this must
         // remain the first plugin and forward only to the existing instance.
         .plugin(tauri_plugin_single_instance::init(
             |app, arguments, _cwd| {
+                app.state::<startup::InitialConnection>()
+                    .remember_first_valid(&arguments);
                 if !startup::is_connection_launch(arguments) {
                     tray::show_settings(app);
                 }
@@ -152,6 +162,7 @@ pub fn run() {
             install_model,
             update_model_mappings,
             set_connection_state,
+            get_initial_connection,
             open_settings,
             exit_app,
             hit_test::set_model_hit_mask,

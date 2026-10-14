@@ -112,4 +112,54 @@ describe("single Host ownership",()=>{
       expect(test.request.mock.calls.at(-1)![1]).toMatchObject({headers:{Authorization:`Bearer ${"a".repeat(43)}`}});
     }finally{test.connection.stop();}
   });
+
+  it("queues only the first valid successor, never takes a live Host, and preserves the queue for duplicate launches",async()=>{
+    const test=fixture(); test.connection.connect(CONNECTION_URL);
+    await vi.waitFor(()=>expect(test.callbacks.onConnected).toHaveBeenCalledOnce());
+    const first=other.replace("45678","45679"),later=other.replace("45678","45680");
+    try {
+      expect(()=>test.connection.connect("dsh-inochi2d-pet://connect?invalid=1")).toThrow();
+      test.connection.connect(first); test.connection.connect(later);
+      expect(test.connection.connect(CONNECTION_URL)).toBe("unchanged");
+      expect(test.connection.connectPending()).toBe(false);
+      expect(test.request).toHaveBeenCalledOnce();
+      test.stream.error(Error("original Host stopped"));
+      await vi.waitFor(()=>expect(test.callbacks.onDisconnected).toHaveBeenCalledOnce());
+      test.request.mockImplementation(async()=>new Response(new ReadableStream(),{headers:{"Content-Type":"text/event-stream"}}));
+      expect(test.connection.connectPending()).toBe(true);
+      await vi.waitFor(()=>expect(test.callbacks.onConnected).toHaveBeenCalledTimes(2));
+      expect(test.request.mock.calls.at(-1)![0]).toBe("http://127.0.0.1:45679/v1/events");
+      expect(test.connection.connectPending()).toBe(false);
+    } finally {test.connection.stop();}
+  });
+
+  it("clears a queued credential on stop instead of retaining it for a later manual connection",async()=>{
+    const test=fixture();test.connection.connect(CONNECTION_URL);
+    await vi.waitFor(()=>expect(test.callbacks.onConnected).toHaveBeenCalledOnce());
+    test.connection.connect(other);test.connection.stop();
+    expect(test.connection.connectPending()).toBe(false);
+  });
+
+  it("does not accept late headers from a superseded Host",async()=>{
+    let finishOld!: (response: Response)=>void;
+    const old = new Promise<Response>(resolve=>{finishOld=resolve;});
+    const request=vi.fn<typeof fetch>().mockImplementationOnce(()=>old).mockImplementation(async()=>new Response(new ReadableStream(),{headers:{"Content-Type":"text/event-stream"}}));
+    const callbacks={onSnapshot:vi.fn(),onConnected:vi.fn(),onDisconnected:vi.fn()};
+    const connection=new StatusConnection(callbacks,request);
+    connection.connect(CONNECTION_URL); connection.connect(other); expect(connection.connectPending()).toBe(true);
+    await vi.waitFor(()=>expect(callbacks.onConnected).toHaveBeenCalledOnce());
+    finishOld(new Response(new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('event: snapshot\ndata: {"protocolVersion":1,"sequence":1,"emittedAt":1,"state":"error"}\n\n'));}}),{headers:{"Content-Type":"text/event-stream"}}));
+    await Promise.resolve();await Promise.resolve();
+    expect(callbacks.onConnected).toHaveBeenCalledOnce();expect(callbacks.onSnapshot).not.toHaveBeenCalled();connection.stop();
+  });
+
+  it("does not publish a queued old frame after stop and a new connection",async()=>{
+    const test=fixture();test.connection.connect(CONNECTION_URL);
+    await vi.waitFor(()=>expect(test.callbacks.onConnected).toHaveBeenCalledOnce());
+    test.frame(1); test.connection.stop();
+    test.request.mockImplementation(async()=>new Response(new ReadableStream(),{headers:{"Content-Type":"text/event-stream"}}));
+    test.connection.connect(other);
+    await vi.waitFor(()=>expect(test.callbacks.onConnected).toHaveBeenCalledTimes(2));
+    expect(test.callbacks.onSnapshot).not.toHaveBeenCalled();test.connection.stop();
+  });
 });

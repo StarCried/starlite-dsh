@@ -40,6 +40,7 @@ let finishTraySubscription: (() => void) | undefined;
 let trayListener: ((event: {payload: string}) => void) | undefined;
 let settingsListener: ((event: {payload: DesktopSettings}) => void) | undefined;
 let deepLinkListener: ((urls:string[])=>void) | undefined;
+const INITIAL_URL = `dsh-inochi2d-pet://connect?port=41234&token=${"a".repeat(43)}&instance=12345678-1234-4234-8234-123456789abc`;
 
 function changeVisibility(value: DocumentVisibilityState) {
   visibility = value;
@@ -67,7 +68,7 @@ beforeEach(() => {
     onMoved: vi.fn(async () => () => undefined), outerPosition: vi.fn(async () => ({x: 400, y: 400})),
     outerSize: vi.fn(async () => ({width: 320, height: 480})), setPosition: vi.fn(async () => undefined),
   });
-  native.invoke.mockImplementation(async command => command === "get_settings" || command === "prepare_model" ? structuredClone(settings) : undefined);
+  native.invoke.mockImplementation(async command => command === "get_settings" || command === "prepare_model" ? structuredClone(settings) : command === "get_initial_connection" ? INITIAL_URL : undefined);
   native.listen.mockImplementation(async (event, listener) => {
     if (event === "tray-action") {
       trayListener = listener;
@@ -76,7 +77,7 @@ beforeEach(() => {
     if (event === "settings-changed") settingsListener = listener;
     return () => undefined;
   });
-  native.getCurrent.mockResolvedValue(["dsh-inochi2d-pet://connect?fixture=memory-only"]);
+  native.getCurrent.mockResolvedValue([INITIAL_URL]);
   native.onOpenUrl.mockImplementation(listener => {deepLinkListener=listener;return new Promise<() => void>(resolve => {finishDeepLinks = () => resolve(() => undefined);});});
   native.message.mockResolvedValue(undefined);
   native.createModelSlot.mockResolvedValue({
@@ -84,13 +85,15 @@ beforeEach(() => {
     destroy: vi.fn(() => controller.destroy()),
   });
   native.mountModel.mockResolvedValue(controller);
-  native.connection.mockImplementation((callbacks: ConnectionCallbacks) => ({
-    connect: vi.fn(() => {queueMicrotask(() => {
+  native.connection.mockImplementation((callbacks: ConnectionCallbacks) => {
+    let first: string | undefined;
+    return {
+    connect: vi.fn((url: string) => {if (first) return url === first ? "unchanged" : "conflict"; first = url; queueMicrotask(() => {
       callbacks.onConnected();
       callbacks.onSnapshot({protocolVersion: 1, sequence: 1, emittedAt: 1, state: "idle"});
     });return "accepted";}),
-    stop: vi.fn(), setInputAvailable: vi.fn(async () => undefined),
-  }));
+    connectPending: vi.fn(() => false), stop: vi.fn(), setInputAvailable: vi.fn(async () => undefined),
+  };});
 });
 
 afterEach(async () => {
@@ -102,6 +105,73 @@ afterEach(async () => {
 });
 
 describe("desktop hidden-window startup", () => {
+  it("keeps the immutable native launch ahead of a newer plugin current URL during cold startup",async()=>{
+    const other=INITIAL_URL.replace("41234","41235");
+    native.getCurrent.mockResolvedValue([other]);
+    const ready=startPet();
+    await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());
+    const bridge=native.connection.mock.results[0]!.value;
+    expect(bridge.connect).toHaveBeenCalledExactlyOnceWith(INITIAL_URL);
+    finishDeepLinks!();await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    expect(bridge.connect.mock.calls.at(-1)![0]).toBe(other);
+    expect(bridge.connect.mock.calls[0]![0]).toBe(INITIAL_URL);
+  });
+
+  it("buffers the first valid runtime launches during model preparation without invalid URLs occupying the buffer",async()=>{
+    let finishModel!: (value:DesktopSettings)=>void;
+    native.invoke.mockImplementation(async command=>command==="get_settings"?structuredClone(settings):command==="prepare_model"?new Promise(resolve=>{finishModel=resolve;}):command==="get_initial_connection"?INITIAL_URL:undefined);
+    const ready=startPet();
+    await vi.waitFor(()=>expect(finishModel).toBeDefined());
+    const first=INITIAL_URL.replace("41234","41235"),later=INITIAL_URL.replace("41234","41236");
+    deepLinkListener!(["invalid",first,later]);
+    finishModel(structuredClone(settings));
+    await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    const bridge=native.connection.mock.results[0]!.value;
+    expect(bridge.connect.mock.calls.map((row:string[])=>row[0])).toEqual([INITIAL_URL,INITIAL_URL,first,later,INITIAL_URL]);
+  });
+
+  it("automatically connects a waiting Host only when the original offline lease expires",async()=>{
+    const ready=startPet();
+    await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    const bridge=native.connection.mock.results[0]!.value;
+    const callbacks=native.connection.mock.calls[0]![0] as ConnectionCallbacks;
+    callbacks.onDisconnected();await vi.advanceTimersByTimeAsync(30_000);
+    bridge.connect.mockReturnValue("conflict");deepLinkListener!([INITIAL_URL.replace("41234","41235")]);
+    bridge.connectPending.mockImplementationOnce(()=>{queueMicrotask(()=>callbacks.onConnected());return true;});
+    await vi.advanceTimersByTimeAsync(29_999);expect(bridge.connectPending).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);expect(bridge.connectPending).toHaveBeenCalledOnce();
+    expect(native.invoke).not.toHaveBeenCalledWith("exit_app");
+    await vi.advanceTimersByTimeAsync(60_000);expect(native.invoke).not.toHaveBeenCalledWith("exit_app");
+  });
+
+  it("retains the original Host when it recovers before expiry and does not connect the waiting Host",async()=>{
+    const ready=startPet();
+    await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    const bridge=native.connection.mock.results[0]!.value;
+    const callbacks=native.connection.mock.calls[0]![0] as ConnectionCallbacks;
+    callbacks.onDisconnected();bridge.connect.mockReturnValue("conflict");deepLinkListener!([INITIAL_URL.replace("41234","41235")]);
+    await vi.advanceTimersByTimeAsync(30_000);callbacks.onConnected();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(bridge.connectPending).not.toHaveBeenCalled();expect(native.invoke).not.toHaveBeenCalledWith("exit_app");
+  });
+
+  it("keeps the successor's own bounded failure period without letting duplicate launches extend it",async()=>{
+    const ready=startPet();
+    await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    const bridge=native.connection.mock.results[0]!.value;
+    const callbacks=native.connection.mock.calls[0]![0] as ConnectionCallbacks;
+    callbacks.onDisconnected();bridge.connectPending.mockReturnValueOnce(true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(native.invoke).not.toHaveBeenCalledWith("exit_app");
+    await vi.advanceTimersByTimeAsync(30_000);bridge.connect.mockReturnValue("unchanged");deepLinkListener!([INITIAL_URL]);
+    await vi.advanceTimersByTimeAsync(29_999);expect(native.invoke).not.toHaveBeenCalledWith("exit_app");
+    await vi.advanceTimersByTimeAsync(1);expect(native.invoke).toHaveBeenCalledWith("exit_app");
+  });
+
   it.each(["unchanged","conflict"])("does not hide or reset the model for a %s launch",async admission=>{
     const ready=startPet();
     await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
@@ -117,7 +187,7 @@ describe("desktop hidden-window startup", () => {
     expect(hide).toHaveBeenCalledTimes(previousHides);expect(native.mountModel).toHaveBeenCalledTimes(previousMounts);
     expect(bubble.hidden).toBe(false);expect(bubble.textContent).toBe("Original Host");expect(controller.status).toBe("running");
     expect(vi.getTimerCount()).toBe(0);
-    if(admission==="conflict")expect(native.message).toHaveBeenCalledWith(expect.stringContaining("等待 StarLite 托盘图标退出"),expect.objectContaining({kind:"info"}));
+    if(admission==="conflict")expect(native.message).toHaveBeenCalledWith(expect.stringContaining("无需重新启动 DSH"),expect.objectContaining({kind:"info"}));
     else expect(native.message).not.toHaveBeenCalled();
   });
   it("does not extend the original Host's reconnect period for a refused launch",async()=>{

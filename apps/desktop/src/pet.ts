@@ -10,6 +10,7 @@ import {
 } from "@tauri-apps/api/window";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { message } from "@tauri-apps/plugin-dialog";
+import {parsePetConnectionUrl} from "@starcried/starlite-dsh-protocol";
 import type { PetSnapshot, WidgetController } from "./vendor-types.js";
 import type { DesktopSettings } from "./types.js";
 import { StatusConnection } from "./connection.js";
@@ -26,6 +27,24 @@ export {renderBubble} from "./work-bubble.js";
 const OFFLINE_EXIT_MS = 60_000;
 
 export async function startPet(): Promise<void> {
+  let closing = false;
+  let connectLive: ((urls: string[]) => void) | undefined;
+  const earlyUrls = new Map<string, string>();
+  let removeDeepLinks: (() => void) | undefined;
+  // Subscribe before model preparation. Native state separately preserves the
+  // first valid launch even before this WebView exists.
+  const deepLinksReady = onOpenUrl(urls => {
+    if (closing) return;
+    if (connectLive) {connectLive(urls); return;}
+    for (const url of urls) {
+      try {
+        const descriptor = parsePetConnectionUrl(url);
+        const identity = `${descriptor.instanceId}:${descriptor.port}:${descriptor.token}`;
+        if (!earlyUrls.has(identity) && earlyUrls.size < 2) earlyUrls.set(identity, url);
+      } catch { /* Invalid launches cannot occupy the bounded startup buffer. */ }
+    }
+  }).then(remove => {if (closing) remove(); else removeDeepLinks = remove;});
+  void deepLinksReady.catch(() => undefined);
   const window = getCurrentWindow();
   const host = requiredElement("model");
   const bubble = requiredElement<HTMLOutputElement>("bubble");
@@ -41,7 +60,6 @@ export async function startPet(): Promise<void> {
   let offlineTimer: ReturnType<typeof setTimeout> | undefined;
   let pausedByTray = false;
   let connected = false;
-  let closing = false;
   let connection: StatusConnection | undefined;
   let cancelClick=()=>{};
   let geometryQueue:Promise<unknown>=Promise.resolve();
@@ -147,6 +165,8 @@ export async function startPet(): Promise<void> {
     void window.hide();
     if (offlineTimer) return;
     offlineTimer = setTimeout(() => {
+      offlineTimer = undefined;
+      if (!closing && connection?.connectPending()) {beginOfflineCountdown(); return;}
       void invoke("exit_app");
     }, OFFLINE_EXIT_MS);
   };
@@ -190,7 +210,7 @@ export async function startPet(): Promise<void> {
       empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-  globalThis.addEventListener("pagehide", () => { closing=true; ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { closing=true; if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
   let preparing = true;
   await listen<DesktopSettings>("settings-changed", ({ payload }) => {
@@ -253,12 +273,12 @@ export async function startPet(): Promise<void> {
       beginOfflineCountdown();
     },
     onConflict() {
-      void message("桌宠已连接另一个 DSH Host，本次不会切换。\n\n要切换到当前 Host，请先停止原 DSH，等待 StarLite 托盘图标退出后，再重新启动当前 DSH。断线检测最多 45 秒，随后保留 60 秒重连期。", {title:"StarLite for DSH · 连接未切换",kind:"info"}).catch(()=>{});
+      void message("桌宠已连接另一个 DSH Host，当前不会切换。\n\n已保留第一个等待连接的 Host。原 Host 停止且 60 秒重连期结束后会自动连接，无需重新启动 DSH；原 Host 恢复则继续使用原连接。停滞连接最多需要 45 秒检测。后续启动不会覆盖等待中的 Host。", {title:"StarLite for DSH · 等待连接",kind:"info"}).catch(()=>{});
     },
   });
 
   const connectUrls = (urls: string[] | null | undefined) => {
-    if (!urls) return;
+    if (closing || !urls) return;
     for (const url of urls) {
       try {
         const admission = connection?.connect(url);
@@ -274,8 +294,17 @@ export async function startPet(): Promise<void> {
       }
     }
   };
+  const initial = await invoke<string | null>("get_initial_connection");
+  if (initial) connectUrls([initial]);
+  await deepLinksReady;
+  if (closing) return;
+  // A manual initial launch may acquire its first URL during listener setup.
+  const remembered = await invoke<string | null>("get_initial_connection");
+  if (remembered) connectUrls([remembered]);
+  for (const url of earlyUrls.values()) connectUrls([url]);
+  earlyUrls.clear();
+  connectLive = connectUrls;
   connectUrls(await getCurrent());
-  await onOpenUrl(connectUrls);
 
   await listen<string>("tray-action", ({ payload }) => {
     if (payload === "pause") pausedByTray = true;

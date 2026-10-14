@@ -1,4 +1,36 @@
 use std::ffi::OsStr;
+use std::sync::Mutex;
+
+/// Immutable first valid launch, retained only in this process's memory.
+#[derive(Default)]
+pub struct InitialConnection(Mutex<Option<String>>);
+
+impl InitialConnection {
+    pub fn from_arguments<S: AsRef<OsStr>>(arguments: impl IntoIterator<Item = S>) -> Self {
+        let state = Self::default();
+        state.remember_first_valid(arguments);
+        state
+    }
+
+    pub fn remember_first_valid<S: AsRef<OsStr>>(&self, arguments: impl IntoIterator<Item = S>) {
+        let arguments: Vec<_> = arguments
+            .into_iter()
+            .map(|value| value.as_ref().to_owned())
+            .collect();
+        if !is_connection_launch(&arguments) {
+            return;
+        }
+        if let (Some(url), Ok(mut current)) = (arguments[1].to_str(), self.0.lock()) {
+            if current.is_none() {
+                *current = Some(url.to_owned());
+            }
+        }
+    }
+
+    pub fn first_url(&self) -> Option<String> {
+        self.0.lock().ok().and_then(|current| current.clone())
+    }
+}
 
 /// Only the bridge's supported connection launch should keep settings hidden.
 /// Arguments are inspected in memory and never logged or persisted.
@@ -64,13 +96,35 @@ pub fn is_connection_launch<S: AsRef<OsStr>>(arguments: impl IntoIterator<Item =
 
 #[cfg(test)]
 mod tests {
-    use super::is_connection_launch;
+    use super::{is_connection_launch, InitialConnection};
 
     fn connection() -> String {
         format!(
             "dsh-inochi2d-pet://connect?port=41234&token={}&instance=12345678-1234-4234-8234-123456789abc",
             "a".repeat(43)
         )
+    }
+
+    #[test]
+    fn the_first_valid_cold_launch_cannot_be_replaced() {
+        let first = connection();
+        let second = first.replace("port=41234", "port=41235");
+        let state = InitialConnection::from_arguments(["pet.exe", first.as_str()]);
+        state.remember_first_valid(["pet.exe", second.as_str()]);
+        assert_eq!(state.first_url().as_deref(), Some(first.as_str()));
+    }
+
+    #[test]
+    fn a_manual_launch_remembers_only_its_first_later_valid_connection() {
+        let first = connection();
+        let second = first.replace("port=41234", "port=41235");
+        let state = InitialConnection::from_arguments(["pet.exe"]);
+        state.remember_first_valid(["pet.exe", "dsh-inochi2d-pet://connect?invalid=1"]);
+        state.remember_first_valid(["pet.exe", first.as_str(), "--unexpected"]);
+        assert!(state.first_url().is_none());
+        state.remember_first_valid(["pet.exe", first.as_str()]);
+        state.remember_first_valid(["pet.exe", second.as_str()]);
+        assert_eq!(state.first_url().as_deref(), Some(first.as_str()));
     }
 
     #[test]

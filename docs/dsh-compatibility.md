@@ -5,7 +5,8 @@
 - 当前公开源码为 [`ee86d39`](https://github.com/StarCried/starlite-dsh/commit/ee86d3984d300621812f16016b08450ec860ec13)。产品运行代码自 `cf3db8f` 的 GitHub 资源重定向修复后未变；后续提交仅涉及文档、CI、测试和打包检查工具。共享运行时固定到已公开的 [`986443cc`](https://github.com/StarCried/starlite/commit/986443cc07018ba99240b0dd217bbdf31484b57d)。
 - 微光已作为[独立授权模型发行](https://github.com/StarCried/starlite/releases/tag/weiguang-v3.0.0-starlite.1)。正式候选使用固定的 [HTTPS 模型地址](https://github.com/StarCried/starlite/releases/download/weiguang-v3.0.0-starlite.1/Weiguang-StarLite.vrm)，已验证下载长度、SHA-256 和正式发布门；模型不包含在程序包中。本机资源服务仅用于下方历史本地验收。
 - [托管 DSH latest 兼容检查 #38590434662](https://github.com/StarCried/starlite-dsh/actions/runs/38590434662) 的 Windows 与 Ubuntu 作业均通过，实际官方 npm 版本为 `0.2.0-rc.2`。覆盖契约、真实认证 Desktop RPC、打包隔离安装、认证首页、fail-open 和退出回收；Ubuntu 的宿主检查确认不支持的平台安全停用，并不提供 Linux 桌宠。
-- 主 CI 的 Windows／Rust 作业仍在执行，尚不记为通过。公开 npm 包和软件 GitHub Release **尚未发布**，等待发布身份的 2FA 授权及剩余发布步骤；模型发行与程序发行分别记录。
+- [发布源码主 CI #38590434865](https://github.com/StarCried/starlite-dsh/actions/runs/38590434865) 全部通过：45 个测试文件、445 项测试；Rust 50 项通过、1 项既有私有模型测试跳过，fmt 与 debug／release 严格 Clippy 通过。Windows GUI 构建、新装、合成旧版本升级、重装、卸载及合成用户数据保留检查通过；合成升级不代替真实旧版迁移验收。
+- 公开 npm 包和软件 GitHub Release **尚未发布**，等待发布身份的 2FA 授权及公开 registry 安装复验；软件 Release 文件和校验值已准备为草稿。模型发行与程序发行分别记录。
 
 ## 历史本地候选与人工验收
 

@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { get } from "node:http";
 import { spawn } from "node:child_process";
@@ -13,12 +13,13 @@ const temporary = [], servers = [];
 afterEach(async () => {
   for (const server of servers.splice(0)) { server.closeAllConnections(); await new Promise(accept => server.close(accept)); }
   for (const path of temporary.splice(0)) {
-    if (dirname(path) !== resolve(tmpdir()) || !path.startsWith(resolve(tmpdir(), "starlite-character-server-"))) throw Error("unsafe temporary directory");
+    const base = await realpath(tmpdir());
+    if (dirname(path) !== base || !path.startsWith(join(base, "starlite-character-server-"))) throw Error("unsafe temporary directory");
     await rm(path, { recursive: true, force: true });
   }
 });
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "starlite-character-server-")); temporary.push(root);
+  const root = await mkdtemp(join(await realpath(tmpdir()), "starlite-character-server-")); temporary.push(root);
   const modelPath = join(root, "synthetic.vrm"), descriptorPath = join(root, "descriptor.json");
   await writeFile(modelPath, "artwork-free fixture, native importer validates VRM contents");
   return { modelPath, descriptorPath };

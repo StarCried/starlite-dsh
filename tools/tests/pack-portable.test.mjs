@@ -1,14 +1,15 @@
 import { crc32, inflateRawSync } from "node:zlib";
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { assertPortableExecutable, packPortable } from "../pack-portable.mjs";
 
 const temporary = [];
 afterEach(async () => {
   for (const path of temporary.splice(0)) {
-    if (dirname(path) !== resolve(tmpdir()) || !path.startsWith(resolve(tmpdir(), "starlite-portable-"))) throw Error("unsafe temporary directory");
+    const base = await realpath(tmpdir());
+    if (dirname(path) !== base || !path.startsWith(join(base, "starlite-portable-"))) throw Error("unsafe temporary directory");
     await rm(path, {recursive: true, force: true});
   }
 });
@@ -25,7 +26,7 @@ async function file(root, path, bytes) {
   await writeFile(join(root, path), bytes);
 }
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "starlite-portable-")); temporary.push(root);
+  const root = await mkdtemp(join(await realpath(tmpdir()), "starlite-portable-")); temporary.push(root);
   await file(root, "package.json", JSON.stringify({version: "0.1.0-alpha.0"}));
   await file(root, "apps/desktop/src-tauri/tauri.conf.json", JSON.stringify({productName: "StarLite for DSH", version: "0.1.0-alpha.0"}));
   await file(root, binary, executable());

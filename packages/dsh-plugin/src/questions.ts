@@ -114,11 +114,13 @@ export class QuestionBridge {
       void (async()=>{
         try{
           iterator=service!.attachWait(source!.agent,callId!,claim.signal)[Symbol.asyncIterator]();
-          const started=Date.now(),first=await iterator.next();
+          const first=await iterator.next();
           if(settled)return;
           const remaining=record(first.value)?.remainingMs;
           if(first.done||!Number.isSafeInteger(remaining)||Number(remaining)<0||Number(remaining)>MAX_TIMER){finish(undefined);return;}
-          pending.deadline=started+Number(remaining);
+          // Match the official Client: the Host duration starts at receipt of
+          // the opening frame, without subtracting time spent obtaining it.
+          pending.deadline=Date.now()+Number(remaining);
           if(Date.now()>=pending.deadline){abort("ASK_TIMED_OUT");return;}
           timer=setTimeout(()=>abort("ASK_TIMED_OUT"),pending.deadline-Date.now());timer.unref();publish();
           // The public stream holds the claim until cancellation or settlement.

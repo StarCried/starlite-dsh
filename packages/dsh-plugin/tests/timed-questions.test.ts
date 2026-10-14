@@ -66,6 +66,21 @@ describe("official timed and continued user questions",()=>{
       expect(f.answer).not.toHaveBeenCalled();expect(f.claims()).toBe(0);
     }finally{await f.close();}
   });
+  it("starts the authoritative remaining duration after a delayed opening frame arrives",async()=>{
+    vi.useFakeTimers();const f=await fixture();try{
+      f.attachWait.mockImplementation((_agent,_id,signal)=>(async function*(){
+        await new Promise<void>(resolve=>setTimeout(resolve,500));
+        yield {remainingMs:750};
+        await new Promise<void>(resolve=>signal.addEventListener("abort",()=>resolve(),{once:true}));
+      })());
+      const wait=f.wait();const expired=expect(wait.result).rejects.toMatchObject({code:"ASK_TIMED_OUT"});
+      await settle();await vi.advanceTimersByTimeAsync(500);await settle();
+      const request=f.request();expect(request).toBeDefined();
+      await vi.advanceTimersByTimeAsync(749);expect(f.bridge.read(request.requestId)).toBeDefined();
+      await vi.advanceTimersByTimeAsync(1);await expired;
+      expect(f.bridge.read(request.requestId)).toBeUndefined();expect(wait.next).not.toHaveBeenCalled();
+    }finally{await f.close();}
+  });
   it.each(["disconnect","privacy","close"])("releases a live claim and delegates on %s",async reason=>{
     const f=await fixture();try{
       const wait=f.wait();await settle();expect(f.claims()).toBe(1);

@@ -138,6 +138,13 @@ export async function startPet(): Promise<void> {
   const stopMovement = await window.onMoved(() => {
     void hostPosition.sync().catch(()=>{});
   });
+  const syncWindowGeometry = () => {
+    if (closing) return;
+    if (modelAvailable()) interaction.resizeFixedViewport(innerWidth,innerHeight);
+    updateRegion();
+    void hostPosition.sync().catch(()=>{});
+  };
+  globalThis.addEventListener("resize",syncWindowGeometry);
 
   empty.addEventListener("click", () => {
     void invoke("open_settings");
@@ -209,7 +216,7 @@ export async function startPet(): Promise<void> {
       empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-  globalThis.addEventListener("pagehide", () => { closing=true; if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { closing=true; if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
   let preparing = true;
   await listen<DesktopSettings>("settings-changed", ({ payload }) => {

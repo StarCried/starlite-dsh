@@ -18,6 +18,16 @@ export class InteractionMaskBridge {
     this.#hasPending = true;
     void this.#flush();
   }
+  /** The VRM portrait and canvas keep fixed CSS bounds when only the native
+   * surface changes. Reuse its alpha coverage while paused, updating only the
+   * full-window coordinate space; never revive invalidated model coverage. */
+  resizeFixedViewport(width: number, height: number): void {
+    const mask = this.#mask;
+    if (!mask || !Number.isFinite(width) || !Number.isFinite(height)
+      || width <= 0 || height <= 0 || width > 16384 || height > 16384
+      || width === mask.viewportWidth && height === mask.viewportHeight) return;
+    this.update({...mask,viewportWidth:width,viewportHeight:height});
+  }
   /** Native viewport resizing clears its coverage while preserving an active drag. */
   invalidateForViewport(): void {
     this.#mask = undefined;

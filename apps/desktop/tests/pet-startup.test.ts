@@ -105,6 +105,31 @@ afterEach(async () => {
 });
 
 describe("desktop hidden-window startup", () => {
+  it("resynchronizes a paused portrait and static question region after DPI resize without remounting",async()=>{
+    vi.stubGlobal("innerWidth",576);vi.stubGlobal("innerHeight",720);
+    let report:Parameters<WidgetController["observeInteractionMask"]>[0];
+    vi.mocked(controller.observeInteractionMask).mockImplementation(listener=>{report=listener;});
+    controller.setHostPosition=vi.fn();
+    try{
+      const ready=startPet();
+      await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+      await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+      report!({width:4,height:2,left:0,top:468,displayWidth:576,displayHeight:736,viewportWidth:576,viewportHeight:720,bits:new Uint8Array([6])});
+      const bubble=document.querySelector<HTMLOutputElement>("#bubble")!;
+      bubble.hidden=false;bubble.dataset.interactive="true";
+      vi.spyOn(bubble,"getBoundingClientRect").mockReturnValue({left:144,top:100,right:432,bottom:200,width:288,height:100} as DOMRect);
+      trayListener!({payload:"pause"});
+      const mounts=native.mountModel.mock.calls.length,destroys=vi.mocked(controller.destroy).mock.calls.length;
+      vi.mocked(controller.resume).mockClear();vi.mocked(controller.setHostPosition).mockClear();
+      vi.stubGlobal("innerHeight",1204);globalThis.dispatchEvent(new Event("resize"));
+      await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("set_model_hit_mask",{mask:expect.objectContaining({viewportWidth:576,viewportHeight:1204,bits:[6]})}));
+      await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("set_bubble_interaction_region",{region:{left:144,top:100,width:288,height:100,viewportWidth:576,viewportHeight:1204}}));
+      await vi.waitFor(()=>expect(controller.setHostPosition).toHaveBeenCalled());
+      expect(controller.status).toBe("paused");expect(controller.resume).not.toHaveBeenCalled();
+      expect(native.mountModel).toHaveBeenCalledTimes(mounts);expect(controller.destroy).toHaveBeenCalledTimes(destroys);
+    }finally{vi.unstubAllGlobals();}
+  });
+
   it("keeps the immutable native launch ahead of a newer plugin current URL during cold startup",async()=>{
     const other=INITIAL_URL.replace("41234","41235");
     native.getCurrent.mockResolvedValue([other]);

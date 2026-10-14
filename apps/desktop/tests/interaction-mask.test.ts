@@ -52,6 +52,28 @@ describe("model-only pointer interaction", () => {
     expect(send).toHaveBeenLastCalledWith(null);
     finish(); await Promise.resolve();
   });
+  it("reuses paused fixed-layout coverage after a native surface resize without filling transparent holes",async()=>{
+    const send=vi.fn(async()=>{}),bridge=new InteractionMaskBridge(send,vi.fn());
+    bridge.update({...mask,viewportWidth:576,viewportHeight:720});await Promise.resolve();
+    bridge.resizeFixedViewport(576,1204);await Promise.resolve();
+    expect(send).toHaveBeenLastCalledWith({...mask,viewportWidth:576,viewportHeight:1204,bits:Array.from(mask.bits)});
+    expect(bridge.hitTest(35,25)).toBe(true);expect(bridge.hitTest(15,25)).toBe(false);
+    bridge.resizeFixedViewport(576,1204);bridge.resizeFixedViewport(NaN,1204);
+    expect(send).toHaveBeenCalledTimes(2);
+    bridge.invalidateForViewport();bridge.resizeFixedViewport(576,720);
+    expect(send).toHaveBeenCalledTimes(2);expect(bridge.hitTest(35,25)).toBe(false);
+  });
+  it("coalesces fixed viewport changes behind an in-flight frame and cannot restore a removed model",async()=>{
+    let finish!:()=>void;
+    const send=vi.fn(()=>new Promise<void>(done=>{finish=done}));
+    const bridge=new InteractionMaskBridge(send,vi.fn());
+    bridge.update(mask);bridge.resizeFixedViewport(576,720);bridge.resizeFixedViewport(576,1204);
+    expect(send).toHaveBeenCalledOnce();finish();await Promise.resolve();
+    expect(send).toHaveBeenLastCalledWith({...mask,viewportWidth:576,viewportHeight:1204,bits:Array.from(mask.bits)});
+    bridge.update(undefined);bridge.resizeFixedViewport(576,720);finish();await Promise.resolve();
+    expect(send).toHaveBeenLastCalledWith(null);finish();await Promise.resolve();
+    bridge.resizeFixedViewport(576,1204);expect(send).toHaveBeenCalledTimes(3);
+  });
   it("invalidates old viewport coverage without sending a drag-cancelling null mask",async()=>{
     let finish!:()=>void;
     const send=vi.fn(()=>new Promise<void>(done=>{finish=done}));

@@ -4,7 +4,7 @@ import { detectCompanionHost, launchWindowsPet, type WindowsCompanionHost } from
 import { startStatusServer, type StatusServer } from "./server.js";
 import { DeepSeekBilling, type BillingContext } from "./billing.js";
 import {QuestionBridge} from "./questions.js";
-import {openDshSession} from "./navigation.js";
+import {createDshNavigator} from "./navigation.js";
 
 type Listener = (...arguments_: unknown[]) => unknown;
 type Disposer = () => void | Promise<void>;
@@ -38,16 +38,19 @@ export async function startDshAdapter(
     throw new Error("StarLite requires a Windows x64 or WSL2 x64 DSH Host");
   }
 
+  const navigator = createDshNavigator(context, dependencies.openBrowser);
   const aggregator = new DshStateAggregator();
   const billing = new DeepSeekBilling(context);
-  const questions = new QuestionBridge(aggregator,key=>openDshSession(context,key,dependencies.openBrowser));
-  const server = await (dependencies.startServer ?? startStatusServer)(aggregator, {billing,questions});
+  const questions = new QuestionBridge(aggregator,key=>navigator.open(key));
+  let server: StatusServer;
+  try {server = await (dependencies.startServer ?? startStatusServer)(aggregator, {billing,questions});}
+  catch (error) {questions.close(); billing.close(); await navigator.close(); throw error;}
   const refreshTitle=(key:unknown)=>{
     try{const service=asRecord(context.get?.("sessionTitle"));const value=typeof service?.get==="function"?asRecord(service.get.call(service,key)):undefined;
       aggregator.sessionInfo(key,typeof value?.title==="string"?value.title:undefined);
     }catch{aggregator.sessionInfo(key)}
   };
-  const disposers: Disposer[] = [];
+  const disposers: Disposer[] = [() => navigator.close()];
   let approvalSequence = 0;
 
   try {

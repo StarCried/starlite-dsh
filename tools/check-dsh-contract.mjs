@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { navigationContract } from "./dsh-navigation-contract.mjs";
+import { desktopNavigationContract } from "./dsh-desktop-contract.mjs";
 
 const dshRoot = resolve(
   process.argv[2]
@@ -97,6 +98,19 @@ if (missing.length > 0) {
 
 console.log(`DSH ${String(packageJson.version)} exposes every required desktop-pet contract.`);
 console.log(`DSH client navigation: ${navigation.kind}.`);
+
+const desktopNavigation = desktopNavigationContract({
+  profile: await optionalSource("dsh-app-boot/lib/types/profile-context.d.ts"),
+  rpc: connection,
+  host: await optionalSource("dsh-client-connection/lib/types/rpc-host.d.ts"),
+  client: await optionalSource("dsh-client-connection/lib/types/client/index.d.ts"),
+});
+// Old supported Web builds need no Desktop carrier. New release qualification
+// explicitly requires its complete shape; method names alone are insufficient.
+if (process.argv.includes("--desktop") && !desktopNavigation.supported) {
+  throw new Error(`DSH Desktop navigation contract changed:\n- ${desktopNavigation.missing.join("\n- ")}`);
+}
+console.log(`DSH Desktop navigation: ${desktopNavigation.supported ? "public profile + authenticated Connection RPC" : "not qualified (Web only)"}.`);
 
 // Fees are optional at runtime, but a release advertising them must verify
 // the public read/credential seams and durable usage vocabulary as well.

@@ -1,3 +1,5 @@
+import {NAVIGATION_CHANNEL, object, opaqueRef, sessionIdentity, type NavigationRpc} from "./navigation-rpc.js";
+
 export const inject = ["sessions"];
 
 interface Address {
@@ -65,29 +67,52 @@ export function followCompanionSession(
   const url = new URL(location.href);
   const fragment = new URLSearchParams(url.hash.slice(1));
   const ids = fragment.getAll("companionSession"), id = ids[0];
-  if (ids.length !== 1 || !id || id.length > 256 || Array.from(id).some(c => c.charCodeAt(0) < 32)) {
+  if (ids.length !== 1 || !sessionIdentity(id)) {
     return () => undefined;
   }
-  const navigation = navigationFor(sessions, workspace);
-  if (!navigation) return () => undefined;
   const initialHref = location.href;
-  let done = false, discovering = false;
-  const visited = new Set<string>();
-  let unsubscribe: () => void = () => undefined;
-  const stop = () => { done = true; unsubscribe(); clearTimeout(timer); };
-  const current = () => {
-    if (location.href !== initialHref) stop();
-    return !done;
-  };
-  const select = (target: string | Address) => {
-    stop();
-    try {
-      navigation.open(target);
+  return watchTarget(sessions, id, workspace, {
+    current: () => location.href === initialHref,
+    selected: () => {
       fragment.delete("companionSession");
       url.hash = fragment.toString();
       history.replaceState(history.state, "", url.href);
+    },
+  });
+}
+
+interface WatchOptions {
+  current?(): boolean;
+  selected?(): void;
+  finished?(opened: boolean): void;
+  signal?: AbortSignal;
+  expiresAt?: number;
+}
+function watchTarget(sessions: Sessions, id: string, workspace: WorkspaceNavigation | undefined, options: WatchOptions): () => void {
+  const navigation = navigationFor(sessions, workspace);
+  if (!navigation || options.signal?.aborted) {options.finished?.(false); return () => undefined;}
+  let done = false, discovering = false;
+  const visited = new Set<string>();
+  let unsubscribe: () => void = () => undefined;
+  const cleanup = () => {
+    done = true; unsubscribe(); clearTimeout(timer);
+    options.signal?.removeEventListener("abort", stop);
+  };
+  const stop = () => {if (done) return; cleanup(); options.finished?.(false);};
+  const current = () => {
+    if (options.expiresAt !== undefined && Date.now() >= options.expiresAt) stop();
+    if (options.current && !options.current()) stop();
+    return !done;
+  };
+  const select = (target: string | Address) => {
+    cleanup();
+    try {
+      navigation.open(target);
+      options.selected?.();
+      options.finished?.(true);
     } catch {
       // Failed navigation leaves its hint intact and never selects a substitute.
+      options.finished?.(false);
     }
   };
   const inspect = () => {
@@ -122,16 +147,92 @@ export function followCompanionSession(
       inspect();
     }
   };
-  const timer = setTimeout(stop, 20_000);
+  const timer = setTimeout(stop, Math.max(0, Math.min(20_000, (options.expiresAt ?? Infinity) - Date.now())));
+  options.signal?.addEventListener("abort", stop, {once: true});
   unsubscribe = sessions.list.subscribe(inspect);
   inspect();
   if (current()) void sessions.refresh().then(inspect, () => undefined);
   return stop;
 }
 
+/** Opens only the requested listed/catalogued identity, with bounded cancellation. */
+export function openCompanionTarget(sessions: Sessions, workspace: WorkspaceNavigation | undefined, id: string, signal: AbortSignal, expiresAt?: number): Promise<boolean> {
+  if (!sessionIdentity(id)) return Promise.resolve(false);
+  return new Promise(resolve => {watchTarget(sessions, id, workspace, {signal, finished: resolve, ...(expiresAt === undefined ? {} : {expiresAt})});});
+}
+
+/** Keep one long poll alive while discovery runs so reloads revoke old acknowledgements. */
+export function followDesktopNavigation(
+  rpc: NavigationRpc, sessions: Sessions, workspace?: WorkspaceNavigation,
+  clientRef = crypto.randomUUID(),
+): () => void {
+  const lifetime = new AbortController();
+  let active: AbortController | undefined;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  let lastRef: string | undefined;
+  let busyUntil: number | undefined;
+  const pause = () => new Promise<void>(resolve => {
+    const cancelled = () => {clearTimeout(retry); resolve();};
+    retry = setTimeout(() => {lifetime.signal.removeEventListener("abort", cancelled); resolve();}, 250);
+    lifetime.signal.addEventListener("abort", cancelled, {once: true});
+  });
+  const acknowledge = async (requestRef: string, id: string, expiresAt: number) => {
+    active?.abort();
+    const selection = new AbortController();
+    active = selection;
+    const opened = await openCompanionTarget(sessions, workspace, id, selection.signal, expiresAt);
+    if (lifetime.signal.aborted || active !== selection || selection.signal.aborted) return;
+    await rpc.call(NAVIGATION_CHANNEL, "ack", {clientRef, requestRef, opened}, lifetime.signal);
+  };
+  const poll = async () => {
+    while (!lifetime.signal.aborted) {
+      try {
+        const response = await rpc.call(NAVIGATION_CHANNEL, "listen", {clientRef}, lifetime.signal);
+        if (lifetime.signal.aborted) return;
+        if (!response.ok) {
+          active?.abort();
+          // During reload the old HTTP disconnect may arrive after the new page.
+          // Retry only explicit ownership contention, without stealing its ACK.
+          busyUntil ??= Date.now() + 20_000;
+          if (response.error.code !== "starlite/navigation-busy" || Date.now() >= busyUntil) return;
+          await pause(); continue;
+        }
+        busyUntil = undefined;
+        if (response.value === null) continue;
+        const command = object(response.value);
+        if (!command || Object.keys(command).length !== 3 || !opaqueRef(command.requestRef) || !sessionIdentity(command.sessionId)
+          || !Number.isSafeInteger(command.expiresAt) || Number(command.expiresAt) <= Date.now()) {active?.abort(); return;}
+        if (command.requestRef === lastRef) continue;
+        lastRef = command.requestRef;
+        void acknowledge(command.requestRef, command.sessionId, Number(command.expiresAt)).catch(() => undefined);
+      } catch {
+        active?.abort();
+        // Carrier/authentication errors are not ownership contention. A fresh
+        // official connection generation can re-register through apply().
+        return;
+      }
+    }
+  };
+  void poll();
+  return () => {
+    if (lifetime.signal.aborted) return;
+    lifetime.abort(); active?.abort(); clearTimeout(retry);
+    // Best effort only; cancellation of the outstanding poll also releases ownership.
+    void rpc.call(NAVIGATION_CHANNEL, "release", {clientRef}).catch(() => undefined);
+  };
+}
+
+function isDesktopPage(): boolean {
+  const page = window as unknown as {dshDesktop?: {protocolVersion?: number}; location: Location};
+  const url = new URL(page.location.href);
+  return url.protocol === "dsh-app:" && url.hostname === "app" && page.dshDesktop?.protocolVersion === 1;
+}
+
 interface ClientContext {
   sessions: Sessions;
   uiWorkspace?: WorkspaceNavigation;
+  connection?: {rpc?: NavigationRpc};
+  on?(event: "connection/reset", listener: () => void): (() => void) | unknown;
   effect?(callback: () => () => void): unknown;
   inject?(dependencies: string[], callback: (context: ClientContext) => void): unknown;
 }
@@ -141,14 +242,31 @@ export function apply(context: ClientContext): () => void {
   const start = (scope: ClientContext, workspace?: WorkspaceNavigation) => {
     const mount = () => {
       if (disposed) return () => undefined;
-      const stop = followCompanionSession(scope.sessions, window.location, window.history, workspace);
+      const rpc = scope.connection?.rpc;
+      let stopped = false;
+      let currentStop: () => void = () => undefined;
+      const desktop = isDesktopPage() && typeof rpc?.call === "function";
+      const restart = () => {
+        if (stopped || disposed) return;
+        currentStop();
+        currentStop = desktop
+          ? followDesktopNavigation(rpc!, scope.sessions, workspace)
+          : followCompanionSession(scope.sessions, window.location, window.history, workspace);
+      };
+      restart();
+      const removeReset = desktop ? scope.on?.("connection/reset", restart) : undefined;
+      const stop = () => {stopped = true; if (typeof removeReset === "function") removeReset(); currentStop();};
       activeStop = stop;
       return stop;
     };
     if (scope.effect) scope.effect(mount);
     else mount();
   };
-  if (navigationFor(context.sessions)) start(context);
+  if (isDesktopPage()) {
+    // Both services belong to the shared Web client; Desktop is a transport.
+    context.inject?.(["connection", "uiWorkspace"], scope => start(scope, scope.uiWorkspace));
+  }
+  else if (navigationFor(context.sessions)) start(context);
   else if (typeof context.sessions.refreshProjections === "function") {
     // Cordis inject() waits for this optional child service and unloads its effects
     // when the service changes. Older DSH needs only the original sessions service.

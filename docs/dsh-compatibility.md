@@ -1,4 +1,15 @@
-# DSH 兼容性与本地验收
+# DSH 兼容性与发布验收
+
+## 当前公开源码与发布进度（2026-10-14）
+
+- 当前公开源码为 [`ee86d39`](https://github.com/StarCried/starlite-dsh/commit/ee86d3984d300621812f16016b08450ec860ec13)。产品运行代码自 `cf3db8f` 的 GitHub 资源重定向修复后未变；后续提交仅涉及文档、CI、测试和打包检查工具。共享运行时固定到已公开的 [`986443cc`](https://github.com/StarCried/starlite/commit/986443cc07018ba99240b0dd217bbdf31484b57d)。
+- 微光已作为[独立授权模型发行](https://github.com/StarCried/starlite/releases/tag/weiguang-v3.0.0-starlite.1)。正式候选使用固定的 [HTTPS 模型地址](https://github.com/StarCried/starlite/releases/download/weiguang-v3.0.0-starlite.1/Weiguang-StarLite.vrm)，已验证下载长度、SHA-256 和正式发布门；模型不包含在程序包中。本机资源服务仅用于下方历史本地验收。
+- [托管 DSH latest 兼容检查 #38590434662](https://github.com/StarCried/starlite-dsh/actions/runs/38590434662) 的 Windows 与 Ubuntu 作业均通过，实际官方 npm 版本为 `0.2.0-rc.2`。覆盖契约、真实认证 Desktop RPC、打包隔离安装、认证首页、fail-open 和退出回收；Ubuntu 的宿主检查确认不支持的平台安全停用，并不提供 Linux 桌宠。
+- 主 CI 的 Windows／Rust 作业仍在执行，尚不记为通过。公开 npm 包和软件 GitHub Release **尚未发布**，等待发布身份的 2FA 授权及剩余发布步骤；模型发行与程序发行分别记录。
+
+## 历史本地候选与人工验收
+
+以下记录保留各次候选的源码、产物和人工结果。「当前」「本轮」及未推送、本机模型来源等描述均指记录当时；现在的公开交付状态以上节为准，旧结果不会被改记为新包的全面复验。
 
 2026-10-14，已验 Host／问答及原生程序的基线为 `6881daf`／`d41976d1`；当前功能源码 `5e4981d` 另含 DPI 尺寸与静止交互同步修复，`f00cc279` 候选已构建安装并通过用户 DPI、睡眠恢复复测。保持一个 `dsh-starlite` 插件和同一个 Windows x64 Tauri 程序。未推送源码、发布 npm／Release、部署或公开模型；候选的默认模型地址仍是作者本机资源服务。
 

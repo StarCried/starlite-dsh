@@ -1,6 +1,8 @@
 # StarLite for DSH alpha 发布检查
 
-本指南描述 `0.1.0-alpha.0` 的 alpha 发布流程。统一插件包含 Windows 程序、通知及下载清单；程序仅内嵌已批准的基础待机，微光角色及其他动作仍作为独立授权的单文件 VRM 下载。本地脚本只构建和校验，不自动推送、发布或部署博客。
+`dsh-starlite@0.1.0-alpha.0` 已发布到 [npm alpha 渠道](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.0)，[软件 Release `v0.1.0-alpha.0`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.0) 对应源码 `ee86d3984d300621812f16016b08450ec860ec13`。从公开 registry 全新下载的 tarball 与正式包完全一致，并通过官方 npm DSH `0.2.1-alpha.2` 的隔离安装和 fail-open 检查，详见[发布验收](dsh-compatibility.md)。
+
+以下保留发布流程，供后续版本使用。统一插件包含 Windows 程序、通知及下载清单；程序仅内嵌已批准的基础待机，微光角色及其他动作仍作为独立授权的单文件 VRM 下载。本地脚本只构建和校验，不自动推送、发布或部署博客。
 
 ## 构建来源
 

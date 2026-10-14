@@ -92,8 +92,12 @@ export function browserEnvironment(source:NodeJS.ProcessEnv):NodeJS.ProcessEnv{
   }
   return result;
 }
+/** Electron needs Node mode only to enter this worker, never for the GUI it opens. */
+export function browserWorkerScript(openModuleUrl: string): string {
+  return `delete process.env.ELECTRON_RUN_AS_NODE;const {default:open}=await import(${JSON.stringify(openModuleUrl)});await open(process.argv[1],{wait:true});`;
+}
 async function openLocalBrowser(url:string, signal?: AbortSignal):Promise<void>{
-  const script=`const {default:open}=await import(${JSON.stringify(import.meta.resolve("open"))});await open(process.argv[1],{wait:true});`;
+  const script = browserWorkerScript(import.meta.resolve("open"));
   await new Promise<void>((resolve,reject)=>{
     const env = browserEnvironment(process.env);
     // Desktop's bundled CLI also uses Electron. Its child must remain in Node

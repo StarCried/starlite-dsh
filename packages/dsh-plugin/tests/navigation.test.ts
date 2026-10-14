@@ -1,7 +1,34 @@
 import {describe,it,expect,vi} from "vitest";
-import {browserEnvironment,openDshSession} from "../src/navigation.js";
+import {execFile} from "node:child_process";
+import {promisify} from "node:util";
+import {mkdtemp, rm, writeFile} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {pathToFileURL} from "node:url";
+import {browserEnvironment,browserWorkerScript,openDshSession} from "../src/navigation.js";
 import {followCompanionSession,type Sessions} from "../src/client.js";
 describe("exact companion navigation",()=>{
+  it("uses Node mode to enter an opener worker but removes it before the launcher and its child",async()=>{
+    const directory = await mkdtemp(join(tmpdir(), "starlite-opener-"));
+    try {
+      const fixture = join(directory, "open fixture.mjs");
+      // The real open package starts PowerShell without an env override, which
+      // propagates Electron's Node flag to the associated GUI unless removed.
+      await writeFile(fixture, `import {execFileSync} from "node:child_process";
+        const atImport = process.env.ELECTRON_RUN_AS_NODE ?? null;
+        export default async (target, options) => {
+          const child = JSON.parse(execFileSync(${JSON.stringify(process.execPath)}, ["--input-type=module", "--eval",
+            "process.stdout.write(JSON.stringify({nodeFlag:process.env.ELECTRON_RUN_AS_NODE??null,apiKey:process.env.DEEPSEEK_API_KEY??null}))"], {encoding:"utf8"}));
+          process.stdout.write(JSON.stringify({target,wait:options.wait,atImport,child}));
+        };`);
+      const target = "dsh://open";
+      const env = {...browserEnvironment({...process.env, DEEPSEEK_API_KEY: "must-not-leave-host"}), ELECTRON_RUN_AS_NODE: "1"};
+      const result = await promisify(execFile)(process.execPath, ["--input-type=module", "--eval", browserWorkerScript(pathToFileURL(fixture).href), target], {env, windowsHide: true, timeout: 5_000});
+      expect(JSON.parse(result.stdout)).toEqual({target, wait: true, atImport: null, child: {nodeFlag: null, apiKey: null}});
+      expect(env.ELECTRON_RUN_AS_NODE).toBe("1"); // The parent/worker startup contract remains intact.
+    } finally {await rm(directory, {recursive: true, force: true});}
+  });
+
   it("opens the authenticated Web UI home only for an explicit absent session",async()=>{
     const open=vi.fn(async(_url:string)=>undefined);
     const context={get:(name:string)=>name==="webServer"?{host:"127.0.0.1",port:4194}:{authenticatedUrl:(url:string)=>`${url}?launchToken=private#stale-hint`}};

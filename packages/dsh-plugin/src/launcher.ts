@@ -90,7 +90,9 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
 
   return new Promise((resolve, reject) => {
     const child = spawn(executable, [url], {
-      detached: false,
+      // Windows' non-detached child job ends with the Host; the pet must retain
+      // its own reconnect lease and any queued successor after that exit.
+      detached: host === "windows",
       shell: false,
       stdio: "ignore",
       windowsHide: true,

@@ -114,7 +114,8 @@ describe("Windows launcher contract", () => {
     await vi.waitFor(()=>expect(spawnMock).toHaveBeenCalledOnce());
     child.emit("spawn");await started;
     expect(execFileMock).not.toHaveBeenCalled();expect(prepareMock).not.toHaveBeenCalled();
-    expect(spawnMock).toHaveBeenCalledWith("E:\\Apps\\dsh-inochi2d-pet.exe",[expect.stringContaining("dsh-inochi2d-pet://connect")],expect.objectContaining({shell:false,windowsHide:true,env:companionEnvironment(process.env)}));
+    expect(spawnMock).toHaveBeenCalledWith("E:\\Apps\\dsh-inochi2d-pet.exe",[expect.stringContaining("dsh-inochi2d-pet://connect")],expect.objectContaining({detached:true,shell:false,windowsHide:true,env:companionEnvironment(process.env)}));
+    expect(child.unref).toHaveBeenCalledOnce();
     expect(spawnMock.mock.calls[0]![2].env).not.toHaveProperty("ELECTRON_RUN_AS_NODE");
     expect(spawnMock.mock.calls[0]![2].env).not.toHaveProperty("DEEPSEEK_API_KEY");
   });
@@ -134,6 +135,7 @@ describe("Windows launcher contract", () => {
     expect(prepareMock).toHaveBeenCalledWith(expect.objectContaining({cacheDirectory:host==="windows"?"C:\\StarLite-fixture\\Local\\StarCried\\StarLite\\companions":"/mnt/c/StarLite-fixture/Local/StarCried/StarLite/companions",acquireDefaultModel:true}));
     expect(execFileMock).toHaveBeenCalledTimes(host==="windows"?1:3);
     expect(spawnMock.mock.calls[0]![0]).toBe(executable);
+    expect(spawnMock.mock.calls[0]![2].detached).toBe(host === "windows");
   });
 
   it.each(["\\\\server\\share", "C:\\cache\\..\\escape", "relative", "C:\\bad\nname"])("rejects unsafe native cache directories before preparing files: %s",async path=>{

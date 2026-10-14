@@ -14,19 +14,59 @@ describe("exact companion navigation",()=>{
       const fixture = join(directory, "open fixture.mjs");
       // The real open package starts PowerShell without an env override, which
       // propagates Electron's Node flag to the associated GUI unless removed.
-      await writeFile(fixture, `import {execFileSync} from "node:child_process";
+      await writeFile(fixture, `import {execFileSync,spawn} from "node:child_process";
         const atImport = process.env.ELECTRON_RUN_AS_NODE ?? null;
         export default async (target, options) => {
           const child = JSON.parse(execFileSync(${JSON.stringify(process.execPath)}, ["--input-type=module", "--eval",
             "process.stdout.write(JSON.stringify({nodeFlag:process.env.ELECTRON_RUN_AS_NODE??null,apiKey:process.env.DEEPSEEK_API_KEY??null}))"], {encoding:"utf8"}));
           process.stdout.write(JSON.stringify({target,wait:options.wait,atImport,child}));
+          const launcher=spawn(process.execPath,["--eval","setTimeout(()=>{},30)"],{stdio:"ignore",windowsHide:true});
+          launcher.unref();await new Promise((resolve,reject)=>{launcher.once("spawn",resolve);launcher.once("error",reject)});return launcher;
         };`);
       const target = "dsh://open";
       const env = {...browserEnvironment({...process.env, DEEPSEEK_API_KEY: "must-not-leave-host"}), ELECTRON_RUN_AS_NODE: "1"};
       const result = await promisify(execFile)(process.execPath, ["--input-type=module", "--eval", browserWorkerScript(pathToFileURL(fixture).href), target], {env, windowsHide: true, timeout: 5_000});
-      expect(JSON.parse(result.stdout)).toEqual({target, wait: true, atImport: null, child: {nodeFlag: null, apiKey: null}});
+      expect(JSON.parse(result.stdout)).toEqual({target, wait: false, atImport: null, child: {nodeFlag: null, apiKey: null}});
       expect(env.ELECTRON_RUN_AS_NODE).toBe("1"); // The parent/worker startup contract remains intact.
     } finally {await rm(directory, {recursive: true, force: true});}
+  });
+
+  it("waits for the real launcher to finish without waiting for its long-lived GUI child",async()=>{
+    const directory=await mkdtemp(join(tmpdir(),"starlite-opener-"));let guiPid:number|undefined;
+    try{
+      const fixture=join(directory,"cold browser fixture.mjs");
+      const launcherProgram=`const {spawn}=require("node:child_process");
+        const gui=spawn(process.execPath,["--eval","setInterval(()=>{},1000)"],{detached:true,stdio:"ignore",windowsHide:true});
+        gui.unref();gui.once("spawn",()=>{process.stdout.write(JSON.stringify({guiPid:gui.pid}));setTimeout(()=>process.exit(0),150);});`;
+      await writeFile(fixture,`import {spawn} from "node:child_process";
+        export default async(_target,options)=>{
+          if(options.wait!==false)throw Error("must not wait for the GUI");
+          const launcher=spawn(process.execPath,["--eval",${JSON.stringify(launcherProgram)}],{stdio:["ignore","pipe","ignore"],windowsHide:true});
+          launcher.stdout.on("data",chunk=>process.stdout.write(chunk));
+          launcher.unref();await new Promise((resolve,reject)=>{launcher.once("spawn",resolve);launcher.once("error",reject)});return launcher;
+        };`);
+      let output="";
+      try{output=(await promisify(execFile)(process.execPath,["--input-type=module","--eval",browserWorkerScript(pathToFileURL(fixture).href),"http://127.0.0.1:4194/"],{env:browserEnvironment(process.env),windowsHide:true,timeout:3_000})).stdout;}
+      catch(error){output=(error as {stdout?:string}).stdout??"";throw error;}
+      finally{if(output)guiPid=(JSON.parse(output) as {guiPid:number}).guiPid;}
+      expect(guiPid).toBeTypeOf("number");expect(()=>process.kill(guiPid!,0)).not.toThrow();
+    }finally{if(guiPid)try{process.kill(guiPid)}catch{}await rm(directory,{recursive:true,force:true});}
+  });
+
+  it.each(["nonzero","spawn-error","already-exited"] as const)("observes launcher completion and failure (%s)",async mode=>{
+    const directory=await mkdtemp(join(tmpdir(),"starlite-opener-"));
+    try{
+      const fixture=join(directory,"launcher result fixture.mjs");
+      await writeFile(fixture,`import {spawn} from "node:child_process";
+        export default async()=>{
+          const launcher=${mode==="spawn-error"?`spawn(${JSON.stringify(join(directory,"missing-launcher.exe"))},[],{stdio:"ignore",windowsHide:true})`:`spawn(process.execPath,["--eval",${JSON.stringify(mode==="nonzero"?"setTimeout(()=>process.exit(7),30)":"process.exit(0)")}],{stdio:"ignore",windowsHide:true})`};
+          ${mode==="already-exited"?`await new Promise((resolve,reject)=>{launcher.once("exit",resolve);launcher.once("error",reject)});`:`launcher.unref();`}
+          return launcher;
+        };`);
+      const running=promisify(execFile)(process.execPath,["--input-type=module","--eval",browserWorkerScript(pathToFileURL(fixture).href),"dsh://open"],{env:browserEnvironment(process.env),windowsHide:true,timeout:3_000});
+      if(mode==="already-exited")await expect(running).resolves.toMatchObject({stdout:""});
+      else await expect(running).rejects.toMatchObject({code:1});
+    }finally{await rm(directory,{recursive:true,force:true});}
   });
 
   it("opens the authenticated Web UI home only for an explicit absent session",async()=>{

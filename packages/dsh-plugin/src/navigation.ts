@@ -94,7 +94,23 @@ export function browserEnvironment(source:NodeJS.ProcessEnv):NodeJS.ProcessEnv{
 }
 /** Electron needs Node mode only to enter this worker, never for the GUI it opens. */
 export function browserWorkerScript(openModuleUrl: string): string {
-  return `delete process.env.ELECTRON_RUN_AS_NODE;const {default:open}=await import(${JSON.stringify(openModuleUrl)});await open(process.argv[1],{wait:true});`;
+  // wait:true makes PowerShell wait for the GUI to quit. Instead, keep only
+  // its launcher alive until it reports whether Start-Process succeeded.
+  return `delete process.env.ELECTRON_RUN_AS_NODE;
+    const {default:open}=await import(${JSON.stringify(openModuleUrl)});
+    const launcher=await open(process.argv[1],{wait:false});
+    launcher.ref();
+    await new Promise((resolve,reject)=>{
+      let settled=false;
+      const finish=(code,signal)=>{
+        if(settled)return;settled=true;
+        launcher.off("error",failed);launcher.off("exit",finish);
+        if(code===0&&!signal)resolve();else reject(Error("DSH launcher failed"));
+      };
+      const failed=()=>finish(null,null);
+      launcher.once("error",failed);launcher.once("exit",finish);
+      if(launcher.exitCode!==null||launcher.signalCode!==null)finish(launcher.exitCode,launcher.signalCode);
+    });`;
 }
 async function openLocalBrowser(url:string, signal?: AbortSignal):Promise<void>{
   const script = browserWorkerScript(import.meta.resolve("open"));

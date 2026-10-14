@@ -11,6 +11,10 @@ Desktop 自带的 CLI 也使用 Electron，因此不能根据可执行文件或
 `/starlite-navigation` 通道。DSH 的 Host/Origin 检查、浏览器 cookie 认证和请求取消
 继续由官方 Connection 执行。客户端的 `dsh.client.platform` 保持 `web`。
 
+Host 的各个插件并行启动。导航注册通过公开的 `ctx.inject(["connection"], ...)`
+等待服务就绪，并随该服务撤销和重新注册；不会因为冷启动时 Connection 尚未提供
+而停用整个桌宠插件。撤销服务或禁用插件会取消旧目标，禁止迟到确认继续导航。
+
 只有 `dsh-app://app/` 中具有官方 Desktop 标记的客户端会订阅导航。它通过
 `uiWorkspace.openSession` 选择准确会话，再确认临时请求。Host 通过官方
 `dsh://open` 显示窗口；该协议本身没有指定会话的能力。
@@ -38,7 +42,8 @@ node tools/check-dsh-contract.mjs <DSH包目录> --desktop
 ```
 
 真实 RPC 验证直接加载指定安装中官方的 Host 和浏览器实现，使用临时回环 HTTP
-服务与内存凭据，检查 cookie 认证、Origin 限制、取消、确认身份和释放。
+服务与内存凭据，从 Connection 尚未提供的冷启动开始，检查服务撤销和重建、
+cookie 认证、Origin 限制、取消、确认身份和释放。
 它不启动用户 profile、不注册系统协议，也不调用模型 API：
 
 ```powershell

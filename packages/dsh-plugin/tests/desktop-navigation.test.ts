@@ -219,6 +219,50 @@ describe("Desktop client target delivery", () => {
 });
 
 describe("Host surface selection", () => {
+  it("waits for Connection during cold startup and revokes requests on dependency replacement", async () => {
+    let mount: ((scope: {get(name: string): unknown}) => (() => Promise<void>) | undefined) | undefined;
+    let unmount: (() => Promise<void>) | undefined;
+    const dispose = vi.fn(async () => {await unmount?.();});
+    const open = vi.fn(async () => undefined), remove = vi.fn(async () => undefined);
+    let handler: ((endpoint: string, payload: unknown, abort: AbortSignal, peer: unknown) => Promise<RpcResult>) | undefined;
+    const handle = vi.fn((_channel: string, callback: NonNullable<typeof handler>) => {handler = callback; return remove;});
+    const navigator = createDshNavigator({
+      get: name => name === "profileContext" ? {name: "desktop"} : undefined,
+      inject: (dependencies, callback) => {expect(dependencies).toEqual(["connection"]); mount = callback; return {dispose};},
+    }, open);
+    expect(handle).not.toHaveBeenCalled();
+    await expect(navigator.open({id: "target"})).rejects.toThrow("unavailable");
+    expect(open).not.toHaveBeenCalled();
+    const scope = {get: () => ({rpc: {handle}})};
+    unmount = mount!(scope);
+    const firstHandler = handler!;
+    const pending = navigator.open({id: "target"});
+    const rejected = expect(pending).rejects.toThrow("unavailable");
+    const delivered = await command(firstHandler("listen", {clientRef: first}, signal().signal, peer));
+    await unmount!(); await rejected;
+    expect((await firstHandler("ack", {clientRef: first, requestRef: delivered.requestRef, opened: true}, signal().signal, peer)).ok).toBe(false);
+    unmount = mount!(scope);
+    expect(handle).toHaveBeenCalledTimes(2);
+    const fresh = navigator.open({id: "fresh"});
+    const delivery = await command(handler!("listen", {clientRef: second}, signal().signal, peer));
+    await handler!("ack", {clientRef: second, requestRef: delivery.requestRef, opened: true}, signal().signal, peer);
+    await fresh; await navigator.close(); await navigator.close();
+    expect(remove).toHaveBeenCalledTimes(2); expect(dispose).toHaveBeenCalledOnce();
+    mount!(scope);
+    expect(handle).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not disable DSH for an unavailable optional Desktop contract or attach after disposal", async () => {
+    let mount: ((scope: {get(name: string): unknown}) => (() => Promise<void>) | undefined) | undefined;
+    const dispose = vi.fn(async () => undefined), handle = vi.fn();
+    const navigator = createDshNavigator({get: () => ({name: "desktop"}), inject: (_deps, callback) => {mount = callback; return {dispose};}});
+    expect(() => mount!({get: () => ({rpc: {}})})).not.toThrow();
+    await expect(navigator.open({id: "target"})).rejects.toThrow("unavailable");
+    await navigator.close();
+    mount!({get: () => ({rpc: {handle}})});
+    expect(handle).not.toHaveBeenCalled(); expect(dispose).toHaveBeenCalledOnce();
+  });
+
   it.each(["timeout", "dispose"])("bounds the entire show-and-ACK operation, including a hung opener: %s", async outcome => {
     vi.useFakeTimers();
     let handler: ((endpoint: string, payload: unknown, abort: AbortSignal, peer: unknown) => Promise<RpcResult>) | undefined;

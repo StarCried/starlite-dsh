@@ -19,6 +19,10 @@ const temporary = await mkdtemp(join(tmpdir(), "starlite-navigation-"));
 const host = new Context(), client = new Context();
 const routes = new Map();
 let navigator;
+let connectionFiber;
+const settle = async () => {
+  await Promise.all([...host.registry.values()].flatMap(runtime => [...runtime.fibers]).map(fiber => fiber.await()));
+};
 const sockets = new Set();
 const server = createServer((request, response) => {
   if (new URL(request.url, "http://fixture.invalid").pathname === "/") {
@@ -50,10 +54,14 @@ try {
   host.provide("credentials", {
     async modifyRecord(_key, transform) {credential = await transform(credential) ?? credential; return credential;},
   });
-  await connectionPackage.apply(host);
   host.provide("profileContext", {name: "desktop"});
   const opened = [];
   navigator = createDshNavigator(host, async url => {opened.push(url);});
+  assert.equal(host.get("connection"), undefined);
+  await assert.rejects(navigator.open({id: "not-ready"}), /unavailable/u);
+  assert.deepEqual(opened, []);
+  connectionFiber = await host.plugin(connectionPackage);
+  await settle();
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${server.address().port}/`;
   const authenticated = await fetch(host.get("connection").authenticatedUrl(base), {redirect: "manual"});
@@ -91,12 +99,30 @@ try {
   await pending;
   assert.equal((await call("ack", ack)).ok, false);
   active.abort(); await assert.rejects(next);
+  // A client-side abort may settle before its HTTP disconnect reaches the Host.
+  // Explicitly relinquish the old owner before testing a different renderer.
+  await call("release", {clientRef}, new AbortController().signal);
   await navigator.open(undefined);
   assert.deepEqual(opened, ["dsh://open", "dsh://open"]);
+  const interrupted = navigator.open({id: "withdrawn-session"});
+  const rejected = assert.rejects(interrupted, /unavailable/u);
+  const previous = await call("listen", {clientRef: crypto.randomUUID()}, new AbortController().signal);
+  assert.equal(previous.ok, true);
+  await connectionFiber.dispose(); await settle(); await rejected;
+  await assert.rejects(navigator.open({id: "not-ready"}), /unavailable/u);
+  connectionFiber = await host.plugin(connectionPackage); await settle();
+  const freshRef = crypto.randomUUID();
+  assert.equal((await call("ack", {clientRef, requestRef: previous.value.requestRef, opened: true}, new AbortController().signal)).ok, false);
+  const resumed = navigator.open({id: "replacement-session"});
+  const replacement = await call("listen", {clientRef: freshRef}, new AbortController().signal);
+  assert.equal(replacement.ok, true); assert.equal(replacement.value.sessionId, "replacement-session");
+  assert.notEqual(replacement.value.requestRef, previous.value.requestRef);
+  assert.equal((await call("ack", {clientRef: freshRef, requestRef: replacement.value.requestRef, opened: true}, new AbortController().signal)).ok, true);
+  await resumed;
   await navigator.close();
   assert.equal((await fetch(url, {method: "POST", headers: {...headers, cookie}, body: JSON.stringify(envelope)})).status, 404);
   const version = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8")).version;
-  console.log(`DSH ${version}: official Host/browser RPC, cookie authentication, origin fence, opaque ACK, cancellation and disposal passed.`);
+  console.log(`DSH ${version}: cold dependency startup/replacement, official Host/browser RPC, cookie authentication, origin fence, opaque ACK, cancellation and disposal passed.`);
 } finally {
   await navigator?.close();
   await client.fiber.dispose(); await host.fiber.dispose();

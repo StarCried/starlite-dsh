@@ -2,26 +2,51 @@ import {spawn} from "node:child_process";
 import {DesktopNavigationBroker, DESKTOP_NAVIGATION_TIMEOUT_MS} from "./desktop-navigation.js";
 import {NAVIGATION_CHANNEL, object, sessionIdentity, type HostNavigationRpc} from "./navigation-rpc.js";
 
-interface Services {get?(name:string):unknown}
+interface Services {
+  get?(name:string):unknown;
+  inject?(dependencies: string[], callback: (scope: Services) => (() => Promise<void>) | undefined): {dispose(): Promise<void>};
+}
 export interface DshNavigator {open(key: unknown): Promise<void>; close(): Promise<void>}
 /** Profile ownership, not Electron's executable identity, selects Desktop navigation. */
 export function createDshNavigator(context: Services, openUrl = openLocalBrowser): DshNavigator {
   if (object(context.get?.("profileContext"))?.name !== "desktop") {
     return {open: key => openDshSession(context, key, openUrl), close: async () => undefined};
   }
-  const rpc = object(object(context.get?.("connection"))?.rpc) as unknown as HostNavigationRpc | undefined;
-  if (typeof rpc?.handle !== "function") throw Error("DSH Desktop navigation contract unavailable");
-  const broker = new DesktopNavigationBroker();
-  const remove = rpc.handle(NAVIGATION_CHANNEL, (endpoint, payload, signal, peer) => broker.handle(endpoint, payload, signal, peer));
-  if (typeof remove !== "function") {broker.close(); throw Error("DSH Desktop navigation disposal unavailable");}
   let closed = false;
   const active = new Set<AbortController>();
+  let binding: {broker: DesktopNavigationBroker; remove(): void | Promise<void>} | undefined;
+  const attach = (scope: Services) => {
+    if (closed) return;
+    const rpc = object(object(scope.get?.("connection"))?.rpc) as unknown as HostNavigationRpc | undefined;
+    if (typeof rpc?.handle !== "function") throw Error("DSH Desktop navigation contract unavailable");
+    const broker = new DesktopNavigationBroker();
+    const remove = rpc.handle(NAVIGATION_CHANNEL, (endpoint, payload, signal, peer) => broker.handle(endpoint, payload, signal, peer));
+    if (typeof remove !== "function") {broker.close(); throw Error("DSH Desktop navigation disposal unavailable");}
+    const current = {broker, remove};
+    binding = current;
+    return async () => {
+      if (binding === current) {
+        binding = undefined;
+        for (const abort of active) abort.abort();
+      }
+      broker.close();
+      await remove();
+    };
+  };
+  // Cordis mounts profile bundles in parallel. The Connection service is not
+  // necessarily ready when this plugin starts; own the route through its public
+  // dependency lifecycle so withdrawal/replacement also revokes pending targets.
+  const injected = context.inject?.(["connection"], scope => {
+    try {return attach(scope);} catch {return undefined;} // Navigation must not stop DSH boot.
+  });
+  const detach = context.inject ? undefined : attach(context);
   return {
     async open(key) {
       if (closed) throw Error("DSH Desktop unavailable");
       const id = record(key)?.id;
       if (key !== undefined && !sessionIdentity(id)) throw Error("DSH session unavailable");
-      const request = key === undefined ? undefined : broker.request(id as string);
+      if (key !== undefined && !binding) throw Error("DSH Desktop session unavailable");
+      const request = key === undefined ? undefined : binding!.broker.request(id as string);
       const abort = new AbortController();
       active.add(abort);
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -38,8 +63,8 @@ export function createDshNavigator(context: Services, openUrl = openLocalBrowser
       if (closed) return;
       closed = true;
       for (const abort of active) abort.abort();
-      broker.close();
-      await remove();
+      await injected?.dispose();
+      await detach?.();
     },
   };
 }

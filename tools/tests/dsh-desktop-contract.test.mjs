@@ -2,6 +2,8 @@ import {describe, expect, it} from "vitest";
 import {desktopNavigationContract} from "../dsh-desktop-contract.mjs";
 
 const contract = {
+  registry: "inject(deps: Inject, callback: Plugin.Function<void>): Fiber & PromiseLike<Fiber>;",
+  fiber: "readonly dispose: () => Promise<void>;",
   profile: "interface ProfileContext { readonly name: string; } interface Context { profileContext: ProfileContext; }",
   host: "connection: HostConnectionHandle; get rpc(): HostConnectionRpc;",
   client: "readonly rpc: ClientConnectionRpc; 'connection/reset'(): void;",
@@ -16,8 +18,12 @@ describe("complete Desktop navigation contracts", () => {
   it("accepts the public launcher identity and authenticated cancellable RPC contract", () => {
     expect(desktopNavigationContract(contract)).toEqual({supported: true, missing: []});
   });
-  it.each(["profile", "rpc", "host", "client"])("does not advertise Desktop when %s is absent on an older Web build", field => {
+  it.each(["profile", "rpc", "host", "client", "registry", "fiber"])("does not advertise Desktop when %s is absent on an older Web build", field => {
     expect(desktopNavigationContract({...contract, [field]: undefined}).supported).toBe(false);
+  });
+  it("requires dependency and disposer shapes rather than similarly named methods", () => {
+    expect(desktopNavigationContract({...contract, registry: contract.registry.replace("Fiber & PromiseLike<Fiber>", "void")}).missing).toContain("service-owned dependency lifecycle");
+    expect(desktopNavigationContract({...contract, fiber: "readonly dispose: () => void;"}).missing).toContain("async dependency disposal");
   });
   it.each([
     ["peer: PeerScope", "peer: string", "RPC request cancellation and peer identity"],

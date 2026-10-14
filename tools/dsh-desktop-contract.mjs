@@ -1,6 +1,8 @@
 /** Public contracts needed in addition to ordinary Web navigation. */
 export function desktopNavigationContract(sources) {
   const requirements = [
+    ["service-owned dependency lifecycle", sources.registry, /inject\(deps:\s*Inject,\s*callback:\s*Plugin\.Function<void>\):\s*Fiber\s*&\s*PromiseLike<Fiber>;/u],
+    ["async dependency disposal", sources.fiber, /readonly\s+dispose:\s*\(\)\s*=>\s*Promise<void>;/u],
     ["launcher-owned profile name", sources.profile, /interface\s+ProfileContext\s*\{\s*readonly\s+name:\s*string;/u],
     ["public profile context service", sources.profile, /interface\s+Context\s*\{[^}]*profileContext:\s*ProfileContext;/u],
     ["Host Connection service", sources.host, /connection:\s*HostConnectionHandle;/u],

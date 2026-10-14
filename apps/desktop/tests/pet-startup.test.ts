@@ -7,7 +7,7 @@ import { startPet } from "../src/pet.js";
 const native = vi.hoisted(() => ({
   invoke: vi.fn(), listen: vi.fn(), getCurrent: vi.fn(), onOpenUrl: vi.fn(),
   getCurrentWindow: vi.fn(), availableMonitors: vi.fn(), primaryMonitor: vi.fn(),
-  createModelSlot: vi.fn(), mountModel: vi.fn(), connection: vi.fn(),
+  createModelSlot: vi.fn(), mountModel: vi.fn(), connection: vi.fn(), message: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/core", () => ({invoke: native.invoke}));
 vi.mock("@tauri-apps/api/event", () => ({listen: native.listen}));
@@ -16,12 +16,13 @@ vi.mock("@tauri-apps/api/window", () => ({
   primaryMonitor: native.primaryMonitor, PhysicalPosition: class {constructor(readonly x: number, readonly y: number) {}},
 }));
 vi.mock("@tauri-apps/plugin-deep-link", () => ({getCurrent: native.getCurrent, onOpenUrl: native.onOpenUrl}));
+vi.mock("@tauri-apps/plugin-dialog", () => ({message:native.message}));
 vi.mock("../src/renderer.js", () => ({createModelSlot: native.createModelSlot, mountModel: native.mountModel}));
 vi.mock("../src/connection.js", () => ({StatusConnection: class {
   constructor(callbacks: unknown) { return native.connection(callbacks); }
 }}));
 
-interface ConnectionCallbacks {onConnected(): void; onDisconnected(): void; onSnapshot(value: unknown): void}
+interface ConnectionCallbacks {onConnected(): void; onDisconnected(): void; onSnapshot(value: unknown): void; onConflict(): void}
 const settings: DesktopSettings = {
   schemaVersion: 4,
   preferences: {fps: 30, maxDevicePixelRatio: 1.5, scale: .67, privacyMode: false, bubbleMode: "compact"},
@@ -38,6 +39,7 @@ let finishDeepLinks: (() => void) | undefined;
 let finishTraySubscription: (() => void) | undefined;
 let trayListener: ((event: {payload: string}) => void) | undefined;
 let settingsListener: ((event: {payload: DesktopSettings}) => void) | undefined;
+let deepLinkListener: ((urls:string[])=>void) | undefined;
 
 function changeVisibility(value: DocumentVisibilityState) {
   visibility = value;
@@ -75,17 +77,18 @@ beforeEach(() => {
     return () => undefined;
   });
   native.getCurrent.mockResolvedValue(["dsh-inochi2d-pet://connect?fixture=memory-only"]);
-  native.onOpenUrl.mockImplementation(() => new Promise<() => void>(resolve => {finishDeepLinks = () => resolve(() => undefined);}));
+  native.onOpenUrl.mockImplementation(listener => {deepLinkListener=listener;return new Promise<() => void>(resolve => {finishDeepLinks = () => resolve(() => undefined);});});
+  native.message.mockResolvedValue(undefined);
   native.createModelSlot.mockResolvedValue({
     mount: (factory: (signal: AbortSignal) => Promise<WidgetController>) => factory(new AbortController().signal),
     destroy: vi.fn(() => controller.destroy()),
   });
   native.mountModel.mockResolvedValue(controller);
   native.connection.mockImplementation((callbacks: ConnectionCallbacks) => ({
-    connect: vi.fn(() => queueMicrotask(() => {
+    connect: vi.fn(() => {queueMicrotask(() => {
       callbacks.onConnected();
       callbacks.onSnapshot({protocolVersion: 1, sequence: 1, emittedAt: 1, state: "idle"});
-    })),
+    });return "accepted";}),
     stop: vi.fn(), setInputAvailable: vi.fn(async () => undefined),
   }));
 });
@@ -94,11 +97,43 @@ afterEach(async () => {
   finishDeepLinks?.(); finishTraySubscription?.();
   globalThis.dispatchEvent(new Event("pagehide"));
   await Promise.resolve(); await Promise.resolve();
-  finishDeepLinks = undefined; finishTraySubscription = undefined; trayListener = undefined; settingsListener = undefined;
+  finishDeepLinks = undefined; finishTraySubscription = undefined; trayListener = undefined; settingsListener = undefined;deepLinkListener=undefined;
   vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks(); vi.resetAllMocks();
 });
 
 describe("desktop hidden-window startup", () => {
+  it.each(["unchanged","conflict"])("does not hide or reset the model for a %s launch",async admission=>{
+    const ready=startPet();
+    await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    const bridge=native.connection.mock.results[0]!.value;
+    const callbacks=native.connection.mock.calls[0]![0] as ConnectionCallbacks;
+    const bubble=document.querySelector<HTMLOutputElement>("#bubble")!;bubble.hidden=false;bubble.textContent="Original Host";
+    const hide=native.getCurrentWindow.mock.results[0]!.value.hide;
+    const previousHides=hide.mock.calls.length,previousMounts=native.mountModel.mock.calls.length;
+    bridge.connect.mockImplementation(()=>{if(admission==="conflict")callbacks.onConflict();return admission;});
+    deepLinkListener!(["dsh-inochi2d-pet://connect?fixture=another-host"]);
+    await Promise.resolve();
+    expect(hide).toHaveBeenCalledTimes(previousHides);expect(native.mountModel).toHaveBeenCalledTimes(previousMounts);
+    expect(bubble.hidden).toBe(false);expect(bubble.textContent).toBe("Original Host");expect(controller.status).toBe("running");
+    expect(vi.getTimerCount()).toBe(0);
+    if(admission==="conflict")expect(native.message).toHaveBeenCalledWith(expect.stringContaining("等待 StarLite 托盘图标退出"),expect.objectContaining({kind:"info"}));
+    else expect(native.message).not.toHaveBeenCalled();
+  });
+  it("does not extend the original Host's reconnect period for a refused launch",async()=>{
+    const ready=startPet();
+    await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    const bridge=native.connection.mock.results[0]!.value;
+    const callbacks=native.connection.mock.calls[0]![0] as ConnectionCallbacks;
+    callbacks.onDisconnected();await vi.advanceTimersByTimeAsync(30_000);
+    bridge.connect.mockReturnValue("conflict");
+    deepLinkListener!(["dsh-inochi2d-pet://connect?fixture=another-host"]);
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(native.invoke).not.toHaveBeenCalledWith("exit_app");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(native.invoke).toHaveBeenCalledWith("exit_app");
+  });
   it("keeps a disabled model hidden without mounting, bubbles or input interception", async () => {
     const disabled = {...structuredClone(settings),activeModelId:null};
     native.invoke.mockImplementation(async command => command === "get_settings" || command === "prepare_model" ? disabled : undefined);

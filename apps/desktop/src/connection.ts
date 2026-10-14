@@ -18,7 +18,10 @@ export interface ConnectionCallbacks {
   onSnapshot(snapshot: PetSnapshot): void;
   onConnected(): void;
   onDisconnected(): void;
+  onConflict?(): void;
 }
+
+export type ConnectionAdmission = "accepted" | "unchanged" | "conflict";
 
 export interface ConnectionTimers {
   setTimeout(callback: () => void, delayMs: number): ReturnType<typeof setTimeout>;
@@ -41,6 +44,7 @@ export class StatusConnection {
   #connected = false;
   #run = 0;
   #lastSequence = -1;
+  #conflictReported = false;
 
   constructor(
     callbacks: ConnectionCallbacks,
@@ -52,13 +56,25 @@ export class StatusConnection {
     this.#timers = timers;
   }
 
-  connect(rawUrl: string): void {
+  connect(rawUrl: string): ConnectionAdmission {
     const descriptor = parsePetConnectionUrl(rawUrl);
+    if (this.#descriptor) {
+      const current = this.#descriptor;
+      if (current.instanceId === descriptor.instanceId && current.port === descriptor.port && current.token === descriptor.token) return "unchanged";
+      // A transient disconnection does not release this Host's ownership.
+      // The companion's existing reconnect/exit period ends the ownership.
+      if (!this.#conflictReported) {
+        this.#conflictReported = true;
+        this.#callbacks.onConflict?.();
+      }
+      return "conflict";
+    }
     this.stop();
     this.#descriptor = descriptor;
     this.#lastSequence = -1;
     const run = ++this.#run;
     void this.#connectionLoop(descriptor, run);
+    return "accepted";
   }
 
   stop(): void {
@@ -67,6 +83,7 @@ export class StatusConnection {
     this.#abort = undefined;
     this.#descriptor = undefined;
     this.#connected = false;
+    this.#conflictReported = false;
     this.#cancelRequests();
   }
 

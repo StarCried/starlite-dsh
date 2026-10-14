@@ -9,6 +9,7 @@ import {
   type Window,
 } from "@tauri-apps/api/window";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import { message } from "@tauri-apps/plugin-dialog";
 import type { PetSnapshot, WidgetController } from "./vendor-types.js";
 import type { DesktopSettings } from "./types.js";
 import { StatusConnection } from "./connection.js";
@@ -251,13 +252,17 @@ export async function startPet(): Promise<void> {
     onDisconnected() {
       beginOfflineCountdown();
     },
+    onConflict() {
+      void message("桌宠已连接另一个 DSH Host，本次不会切换。\n\n要切换到当前 Host，请先停止原 DSH，等待 StarLite 托盘图标退出后，再重新启动当前 DSH。断线检测最多 45 秒，随后保留 60 秒重连期。", {title:"StarLite for DSH · 连接未切换",kind:"info"}).catch(()=>{});
+    },
   });
 
   const connectUrls = (urls: string[] | null | undefined) => {
     if (!urls) return;
     for (const url of urls) {
       try {
-        connection?.connect(url);
+        const admission = connection?.connect(url);
+        if (admission !== "accepted") return;
         fees.cancel();
         // A valid deep link represents a DSH instance that should be reachable.
         // Start the fail-closed lifetime here so an initial connection failure

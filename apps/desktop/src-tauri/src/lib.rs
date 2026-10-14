@@ -180,11 +180,15 @@ pub fn run() {
             }
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
+        .on_window_event(|window, event| match event {
+            WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _ = window.hide();
             }
+            WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
+                model_viewport::schedule_reconcile(window);
+            }
+            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("StarLite for DSH failed to start");

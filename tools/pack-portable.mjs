@@ -60,15 +60,21 @@ async function ordinaryFile(root, relativePath) {
 function portableInstructions(version) {
   return `StarLite for DSH ${version} · Windows 11 x64 免安装版
 
-需要 Windows WebView2，以及 WSL2 中已经可用的 DSH。
+需要 Windows WebView2，以及 Windows 原生 CLI/Web 或 WSL2 中已经可用的 DSH。
+普通使用请安装统一 dsh-starlite 插件，插件会自动准备程序和默认模型。
+本免安装版仅供显式选择程序路径的维护与验收使用。
 本程序未签名。请核对作者提供的 SHA256SUMS，不要关闭系统防护。
 
 1. 将本目录解压到固定位置，例如 D:\\Apps\\StarLite，不要修改 EXE 文件名。
-2. 双击 ${BINARY}，在设置中导入独立授权的微光 ZIP 并确认许可。
-3. 在 WSL 给日常 profile 安装同版本桥接插件：
+2. 双击 ${BINARY} 打开设置，需要自定义模型时直接导入单个 VRM 文件。
+3. 在运行 DSH 的终端给日常 profile 安装同版本插件：
    dsh plugin --profile web add /path/to/dsh-starlite-${version}.tgz
-4. 在启动 DSH 的 WSL 终端设置 Windows EXE 的绝对路径，然后启动：
+4. WSL 终端设置 Windows EXE 的绝对路径，然后启动：
    export DSH_INOCHI2D_PET_EXE='D:\\Apps\\StarLite\\${BINARY}'
+   dsh --profile web
+
+   Windows PowerShell 使用：
+   $env:DSH_INOCHI2D_PET_EXE='D:\\Apps\\StarLite\\${BINARY}'
    dsh --profile web
 
 将路径和 web 换成自己的目录及 profile。日常可将 export 一行加入自己的 shell 配置，
@@ -82,7 +88,7 @@ function portableInstructions(version) {
 删除程序目录不会删除 AppData 中的用户模型与设置。
 
 程序采用 BSD-2-Clause，见 LICENSE；依赖许可见 THIRD_PARTY_LICENSES.txt。
-程序不包含微光或第三方动作；资源包单独授权。
+程序仅内嵌基础待机；微光与其其他动作以单独授权的 VRM 交付。
 `;
 }
 

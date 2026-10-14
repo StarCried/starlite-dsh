@@ -45,6 +45,9 @@ it("packages exactly four flat files and preserves executable bytes without coll
   expect(entries.get("dsh-inochi2d-pet.exe")).toEqual(executable());
   const instructions = entries.get("README.txt").toString();
   expect(instructions).toContain("export DSH_INOCHI2D_PET_EXE='D:\\Apps\\StarLite\\dsh-inochi2d-pet.exe'");
+  expect(instructions).toContain("$env:DSH_INOCHI2D_PET_EXE='D:\\Apps\\StarLite\\dsh-inochi2d-pet.exe'");
+  expect(instructions).toContain("单个 VRM");
+  expect(instructions).not.toContain("微光 ZIP");
   expect(instructions).toContain("WebView2"); expect(instructions).toContain("AppData");
   await expect(packPortable(root)).rejects.toMatchObject({code: "EEXIST"});
   expect(await readFile(path)).toEqual(archive);

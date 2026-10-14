@@ -294,7 +294,7 @@ export async function startPet(): Promise<void> {
     const ref=latestSnapshot?.session?.ref;
     if(!connected||!connection)return;
     void openDisplayedDsh(connection,ref).catch(()=>{
-      if(latestSnapshot?.session?.ref===ref&&!latestSnapshot?.inputRequest){renderPlainBubble(bubble,ref?"暂时无法打开 DSH 会话":"暂时无法打开 DSH Web UI","notice",settings.preferences.privacyMode?"DSH":latestSnapshot?.session?.title);updateRegion();}
+      if(latestSnapshot?.session?.ref===ref&&!latestSnapshot?.inputRequest){renderPlainBubble(bubble,ref?"暂时无法打开 DSH 会话":"暂时无法打开 DSH","notice",settings.preferences.privacyMode?"DSH":latestSnapshot?.session?.title);updateRegion();}
     });
   });
   await keepWindowVisible(window);

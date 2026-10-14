@@ -1,19 +1,44 @@
 # StarLite for DSH 安装与使用
 
-需要 Windows 11 x64、WebView2，以及 WSL2 中可用的 DSH。只安装一个 DSH 插件：Windows 桌宠由插件准备和启动，不需要安装器、管理员权限或手动设置 EXE 路径。
+需要 Windows 11 x64、WebView2，以及以下任一种 DSH：官方 Windows 桌面版、Windows 原生 CLI/Web、WSL2 CLI/Web。只安装一个 `dsh-starlite` 插件：桌宠由插件准备和启动，不需要安装器、管理员权限或手动设置 EXE 路径。
 
 当前是本地测试候选，尚未发布 npm 包或公开微光下载地址。候选包中的本机下载地址只用于作者安排的本地验收，不能复制给其他设备作为正式版本。
 
 ## 安装
 
-在 **WSL 终端**为日常使用的 profile 安装候选包，再启动 DSH：
+### 官方 Windows 桌面版
+
+在侧栏打开「插件 → 添加插件」，输入候选 `.tgz` 的 Windows 绝对路径，点击安装并启用。若提示需要重启，从 DSH 托盘完全退出后重新启动。桌面版自带运行时和包管理器，不要求另外安装 Node.js 或 pnpm。
+
+桌面版使用独立的 `desktop` profile。CLI/Web 或 WSL 中已安装的插件不会自动出现在桌面版，需要在桌面版再安装一次；两边沿用同一 Windows 用户的 StarLite 模型与偏好。Windows 与 WSL 的 DSH 主目录通常也不同，不会自动同步会话或凭据。
+
+若通过命令行管理桌面插件，先启动一次 Desktop 初始化 profile，再完全退出 Desktop。使用 Desktop「管理 dsh 命令」注册的内置命令：
+
+```powershell
+dsh plugin --profile desktop add 'C:\Downloads\dsh-starlite-0.1.0-alpha.0.tgz'
+```
+
+安装后重新打开 Desktop。独立 npm 安装的 `dsh` 不能管理受管 `desktop` profile，也不能用 `dsh --profile desktop` 启动桌面应用。
+
+### Windows 原生 CLI/Web
+
+在 PowerShell 为日常 profile 安装候选包，再启动：
+
+```powershell
+dsh plugin --profile web add 'C:\Downloads\dsh-starlite-0.1.0-alpha.0.tgz'
+dsh --profile web
+```
+
+### WSL2 CLI/Web
+
+在 WSL 终端安装并启动：
 
 ```bash
 dsh plugin --profile web add /path/to/dsh-starlite-0.1.0-alpha.0.tgz
 dsh --profile web
 ```
 
-将路径换成候选 tarball 的 WSL 绝对路径，将 `web` 换成自己使用的 profile。正式 npm 发布后，才可使用 `dsh plugin --profile web add dsh-starlite@alpha`。
+将路径换成当前终端可用的候选包绝对路径，将 `web` 换成自己使用的 profile。WSL 需要启用 Windows 互操作。正式 npm 发布后，才可使用 `dsh plugin --profile web add dsh-starlite@alpha`；桌面版插件页可直接填 `dsh-starlite@alpha`。
 
 如果同一 profile 曾安装旧名桥接，先移除旧包，避免同时运行两份：
 
@@ -21,7 +46,7 @@ dsh --profile web
 dsh plugin --profile web remove dsh-inochi2d-pet
 ```
 
-此操作不删除 Windows 用户模型与设置。在 DSH「设置 → 插件 → 插件列表 → 全局」可查找 `dsh-starlite`；桌宠设置位于 Windows 托盘中的 StarLite，不在 DSH 的插件配置卡中。
+此操作不删除 Windows 用户模型与设置。在 DSH 侧栏「插件」查找 `dsh-starlite`；旧版 DSH 在设置的插件列表中查看。桌宠设置位于 Windows 托盘中的 StarLite。
 
 ## 启动与模型许可
 
@@ -39,7 +64,9 @@ dsh plugin --profile web remove dsh-inochi2d-pet
 dsh --profile web
 ```
 
-桌宠连接 DSH 后显示。单独打开缓存中的 Windows 程序可以调整设置，但不会启动 DSH。程序更新随插件版本更新，不在后台自动更新。
+桌面版以后直接打开应用即可；CLI/Web 继续使用上面的命令。桌宠连接 DSH 后显示。单独打开缓存中的 Windows 程序可以调整设置，但不会启动 DSH。程序更新随插件版本更新，不在后台自动更新。
+
+一次连接一个 Host。桌面版的 × 只隐藏主窗口，Host 和桌宠继续运行；请从 DSH 托盘选择退出。要从 WSL 切换到原生 Windows 或另一个 profile，先退出原 DSH，等 StarLite 托盘退出，再启动目标 Host。另一个 Host 不会抢占当前桌宠，出现冲突提示时 DSH 本身仍能正常使用。
 
 ## DSH 版本
 
@@ -51,12 +78,12 @@ DSH `0.1.5-rc.1` 与 `0.2.0-rc.2` 均通过实际候选包的隔离安装、契�
 
 - **拖动／设置**：拖动模型身体；周围透明区域允许点击后面的程序。右键身体或托盘打开设置。开启全窗口穿透后可用托盘恢复。
 - **单击**：待机时随机回应并显示官方 DeepSeek 余额与今日 DSH 用量估算；工作时只查费用。等待答题时费用不会覆盖表单。
-- **双击**：打开气泡显示的会话；没有会话时打开 Web UI。断线或引用失效时显示不可用，不跳到其他会话。
+- **双击**：打开气泡显示的会话；没有会话时打开 DSH 主界面。官方桌面版在应用内导航，CLI/Web 打开浏览器。断线、目标失效或桌面客户端未就绪时显示不可用，不跳到其他会话或另一个浏览器界面。
 - **气泡**：默认精简模式为标题＋状态；详细模式额外显示经过限制的思考／输出。普通用户问题可以直接单选、多选或输入；工具权限审批继续在 DSH 中处理。
 - **动作**：只有待机循环。其他状态动作各播放一次再回待机；任务忙碌时不会触发点击或偶发动作。思考和输出共用工作动作，新状态可以打断旧动作。
-- **隐藏会话内容**：隐藏标题、思考／输出、输入题目和费用，只显示固定状态；需要回答时转到 DSH。无论是否开启此选项，用户提示、工具参数／结果、真实会话 ID 和 API Key 都不会发送给 Windows。
+- **隐藏会话内容**：隐藏标题、思考／输出、输入题目和费用，只显示固定状态；需要回答时转到 DSH。无论是否开启此选项，用户提示、工具参数／结果、真实会话 ID 和 API Key 都不会发送给桌宠。
 
-桥接随 DSH 销毁。Windows 桌宠断连后隐藏，等待 60 秒重连后退出；失去心跳时先经过最多 45 秒检测。当前只支持 WSL2 DSH，依赖 WSL 的 Windows 互操作功能。
+桥接随 Host 销毁或插件停用。桌宠断连后隐藏，等待 60 秒重连后退出；失去心跳时先经过最多 45 秒检测。关闭桌面主窗口不会销毁 Host。暂不支持 macOS/Linux 桌宠或远程 Host。
 
 ## 换模型和动作
 
@@ -68,7 +95,7 @@ DSH `0.1.5-rc.1` 与 `0.2.0-rc.2` 均通过实际候选包的隔离安装、契�
 
 在 DSH「模型」页面配置官方 DeepSeek 凭据即可，桌宠不要求填写 API Key。支持默认 `deepseek-official` 和可选 `deepseek` 路由；两者都有凭据时使用默认路由。查询余额调用官方只读接口、缓存 60 秒，不发起付费模型请求。
 
-DSH `0.2.0-rc.2` 支持 API Key 提供者的实时配置和自定义 profile 条目名；更换配置后重新查询即可刷新。`deepseek-account` 的登录令牌不用于余额查询。密钥始终仅在 WSL 中解析。
+较新 DSH 支持 API Key 提供者的实时配置和自定义 profile 条目名；更换配置后重新查询即可刷新。仅登录桌面 DeepSeek 账号不会启用 API 余额查询：`deepseek-account` 的登录令牌不是 API Key，也不用于余额接口；两种配置并存时只使用 API-key 提供者。密钥仅在 DSH Host 中解析，不传给桌宠。
 
 同一账户的多个官方模型共用余额，用量按实际请求模型估算。多个账户时余额卡标明配置；今日估算仍包含当前 profile 的可用官方记录，不能视作单个账户账单，也不能将更换 Key 前的历史记录可靠归属到新账户。未知模型、网关或不完整用量会显示限制，不伪造金额。
 
@@ -76,7 +103,7 @@ DSH `0.2.0-rc.2` 支持 API Key 提供者的实时配置和自定义 profile 条
 
 ## 升级与卸载
 
-停止 DSH 和桌宠后，更新同一 profile 中的 `dsh-starlite` 插件，再启动 DSH。插件自动准备对应版本的 Windows 程序，用户模型、映射与偏好继续沿用。不要同时安装新旧桥接。
+停止 DSH 和桌宠后，更新同一 profile 中的 `dsh-starlite` 插件，再启动 DSH。桌面版也可从插件页按 DSH 提示更新／重新安装并重启。插件自动准备对应版本的 Windows 程序，用户模型、映射与偏好继续沿用。不要同时安装新旧桥接。
 
 卸载插件：
 
@@ -86,9 +113,11 @@ dsh plugin --profile web remove dsh-starlite
 
 退出 Windows 托盘中的 StarLite 后即可停止桌宠。插件准备的程序缓存与 AppData 用户模型／设置彼此独立；卸载插件不会主动删除用户模型和设置。如需清理用户数据，应另行确认后删除。
 
+桌面版从侧栏「插件」停用或卸载；也可完全退出 Desktop 后使用其内置 `dsh plugin --profile desktop remove dsh-starlite`。
+
 ## 常见情况
 
-- **没有自动出现**：确认启动的是安装插件的 profile、WSL 互操作开启且系统已有 WebView2；检查 DSH 的插件提示，或从托盘打开设置。
+- **没有自动出现**：确认当前 Host/profile 已安装并启用插件、系统已有 WebView2；WSL 还需 Windows 互操作。检查 DSH 的插件提示或从托盘打开设置；有另一 Host 正连接时先退出它。
 - **首次下载失败**：本地候选需要作者的本机资源服务仍在运行。正式包需要可访问清单中固定的 HTTPS 地址；检查失败不会导入，DSH 可以继续使用。
 - **微光显示「待下载」**：选择微光后重启 DSH，插件会自动下载资源。选择「不显示模型」时不会下载。
 - **动作、眼球或眨眼不正确**：检查 VRM humanoid、lookAt 和 blink 映射及导出结果。只有文件或骨骼名字正确并不足够，VRM 内必须实际配置对应映射。

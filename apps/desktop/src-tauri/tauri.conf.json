@@ -53,7 +53,7 @@
     "publisher": "StarCried",
     "copyright": "Copyright © 2026 StarCried",
     "shortDescription": "StarLite for DSH: lightweight VRM desktop companion",
-    "longDescription": "A lightweight local StarLite character driven by DeepSeek Harness running in WSL2.",
+    "longDescription": "A lightweight local StarLite character for DeepSeek Harness on Windows: official Desktop, native CLI/Web, or WSL2.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

@@ -38,16 +38,23 @@ describe("status SSE server", () => {
   });
   it("waits for the official continued-answer result before acknowledging HTTP success",async()=>{
     const source=new DshStateAggregator(),bridge=new QuestionBridge(source,async()=>undefined);
-    let reject!:(error:Error)=>void;
-    const answer=vi.spyOn(bridge,"answer").mockImplementation(()=>new Promise<void>((_resolve,fail)=>{reject=fail;}));
+    let entered!:()=>void,complete!:()=>void,reject!:(error:Error)=>void;
+    const called=new Promise<void>(resolve=>{entered=resolve;});
+    const officialResult=new Promise<void>((resolve,fail)=>{complete=resolve;reject=fail;});
+    const answer=vi.spyOn(bridge,"answer").mockImplementation(()=>{entered();return officialResult;});
     const server=await startStatusServer(source,{questions:bridge});
+    const controller=new AbortController();
+    let response:Promise<Response>|undefined;
     try{
       let settled=false;
-      const response=fetch(`http://127.0.0.1:${server.port}/v1/interaction/answer`,{method:"POST",
+      response=fetch(`http://127.0.0.1:${server.port}/v1/interaction/answer`,{method:"POST",signal:AbortSignal.any([controller.signal,AbortSignal.timeout(3000)]),
         headers:{Authorization:`Bearer ${server.token}`,"Content-Type":"application/json"},body:"{}"}).then(value=>{settled=true;return value;});
-      await vi.waitFor(()=>expect(answer).toHaveBeenCalledOnce());expect(settled).toBe(false);
+      // Synchronize with the actual HTTP handler; transport failure or an early
+      // HTTP response must fail instead of leaving an unobserved pending fetch.
+      await Promise.race([called,response.then(()=>{throw Error("HTTP completed before the official answer handler");})]);
+      expect(answer).toHaveBeenCalledOnce();expect(settled).toBe(false);
       reject(Error("PRIVATE owner rejection"));const failed=await response;expect(failed.status).toBe(409);expect(await failed.text()).toBe("");
-    }finally{await server.close();}
+    }finally{controller.abort();complete();await response?.catch(()=>undefined);await server.close();}
   });
   it("requires a distinct authenticated empty action to open the Web UI home",async()=>{
     const source=new DshStateAggregator(),open=vi.fn(async()=>undefined),bridge=new QuestionBridge(source,open);

@@ -27,9 +27,9 @@ jobs:
     defaults:
       run:
         shell: bash
-    env:
-      DSH_LATEST_INSTALL: ${{ runner.temp }}/starlite-dsh-official
     steps:
+      - name: Select the temporary official DSH installation directory
+        run: echo "DSH_LATEST_INSTALL=$RUNNER_TEMP/starlite-dsh-official" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
         with:
           persist-credentials: false

@@ -1,5 +1,31 @@
 import { expect, it } from "vitest";
-import { glbWriter, hasAuthoredEyeRotation, readGlb } from "../prepare-single-vrm.mjs";
+import { compactConstantAnimationSamples, glbWriter, hasAuthoredEyeRotation, readGlb } from "../prepare-single-vrm.mjs";
+
+it("keeps constant rotation and multi-morph tracks at their exact endpoints", () => {
+  const times = [0, 0.25, 0.5, 1];
+  expect(compactConstantAnimationSamples(times, [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1]))
+    .toEqual({ times: [0, 1], values: [0, 0, 0, 1, 0, 0, 0, 1] });
+  expect(compactConstantAnimationSamples(times, [0, 0.25, 1, 0, 0.25, 1, 0, 0.25, 1, 0, 0.25, 1]))
+    .toEqual({ times: [0, 1], values: [0, 0.25, 1, 0, 0.25, 1] });
+  expect(compactConstantAnimationSamples(times, [0, 0, 0, 0]))
+    .toEqual({ times: [0, 1], values: [0, 0] });
+});
+
+it("never reduces varying samples, including tiny changes or signed zero", () => {
+  const times = [0, 0.25, 0.5, 1];
+  for (const values of [[0, 0, 1e-12, 0], [0, -0, 0, 0], [0, 1, 0, 1, 0, 1.01, 0, 1]]) {
+    const compact = compactConstantAnimationSamples(times, values);
+    expect(compact.times).toBe(times);
+    expect(compact.values).toBe(values);
+  }
+  expect(compactConstantAnimationSamples([2, 3], [1, 1])).toEqual({ times: [2, 3], values: [1, 1] });
+});
+
+it("rejects samples that cannot be divided into complete frames", () => {
+  expect(() => compactConstantAnimationSamples([0], [1])).toThrow("sample dimensions");
+  expect(() => compactConstantAnimationSamples([0, 1], [1, 2, 3])).toThrow("sample dimensions");
+  expect(() => compactConstantAnimationSamples([0, 1], [])).toThrow("sample dimensions");
+});
 
 it("omits exported neutral eye channels so cursor look-at remains available", () => {
   expect(hasAuthoredEyeRotation(undefined)).toBe(false);

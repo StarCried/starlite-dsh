@@ -100,6 +100,21 @@ export function hasAuthoredEyeRotation(track) {
     Math.abs(Math.abs(value) - (index % 4 === 3 ? 1 : 0)) > 1e-6));
 }
 
+/** Keep every varying sample; constant tracks need only their two endpoints. */
+export function compactConstantAnimationSamples(times, values) {
+  const width = values.length / times.length;
+  if (times.length < 2 || !Number.isInteger(width) || width < 1) {
+    throw Error("Invalid animation sample dimensions");
+  }
+  if (times.length <= 2 || values.some((value, index) => !Object.is(value, values[index % width]))) {
+    return { times, values };
+  }
+  return {
+    times: [times[0], times.at(-1)],
+    values: [...values.slice(0, width), ...values.slice(-width)],
+  };
+}
+
 export async function prepareSingleVrm({ runtime, model, motions, profile, license, mappings, output }) {
   if (resolve(model) === resolve(output)) throw Error("The source VRM must remain unchanged");
   const moduleAt = (path) => import(pathToFileURL(resolve(runtime, "node_modules", path)));
@@ -202,21 +217,28 @@ export async function prepareSingleVrm({ runtime, model, motions, profile, licen
     }
     const animation = { name, channels: [], samplers: [] };
     const input = writer.floats(times, 1, true);
+    let constantInput;
+    const sample = (values, size) => {
+      const compact = compactConstantAnimationSamples(times, values);
+      const samplerInput = compact.times === times ? input
+        : (constantInput ??= writer.floats(compact.times, 1, true));
+      return addSampler(writer, animation, samplerInput, compact.values, size);
+    };
     for (const { bone, index } of animatedBones) {
-      const sampler = addSampler(writer, animation, input, rotations.get(bone), 4);
+      const sampler = sample(rotations.get(bone), 4);
       animation.channels.push({ sampler, target: { node: index, path: "rotation" } });
       if (bone === "hips") {
-        const sampler = addSampler(writer, animation, input, hipsTranslations, 3);
+        const sampler = sample(hipsTranslations, 3);
         animation.channels.push({ sampler, target: { node: index, path: "translation" } });
       }
     }
     if (expressions.length) {
       for (const { index } of meshes) {
-        const sampler = addSampler(writer, animation, input, morphWeights.get(index), 1);
+        const sampler = sample(morphWeights.get(index), 1);
         animation.channels.push({ sampler, target: { node: index, path: "weights" } });
       }
       const expressionSamplers = Object.fromEntries(expressions.map((expression) => [
-        expression, addSampler(writer, animation, input, expressionValues.get(expression), 1),
+        expression, sample(expressionValues.get(expression), 1),
       ]));
       // Ordinary viewers use weights channels. Named expression scalars allow
       // StarLite to combine those expressions with automatic blink and look-at.

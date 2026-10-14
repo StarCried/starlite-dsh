@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import type { BillingSnapshot } from "@starcried/starlite-dsh-protocol";
-import { BillingBubble, renderBillingBubble } from "../src/billing-bubble.js";
+import { BillingBubble, renderBillingBubble, type BillingBubbleView } from "../src/billing-bubble.js";
 import { renderPlainBubble } from "../src/work-bubble.js";
 
 const snapshot: BillingSnapshot = {
@@ -70,6 +70,19 @@ describe("click fee bubble", () => {
 });
 
 describe("dedicated fee card", () => {
+  it("requires an official API Key rather than a signed-in desktop account", () => {
+    const output=document.createElement("output");
+    renderBillingBubble(output,{status:"ready",snapshot:{...snapshot,balance:{status:"unconfigured",balances:[]}}});
+    expect(output.querySelector(".billing-message")?.textContent).toBe("请先配置官方 DeepSeek API Key");
+    expect(output.querySelector(".billing-hint")?.textContent).toBe("在 DSH 的模型设置中配置官方 DeepSeek API Key。");
+    const failures:BillingBubbleView[]=[{status:"ready",snapshot:{...snapshot,balance:{status:"unavailable",balances:[]}}},{status:"error"}];
+    for(const view of failures){
+      renderBillingBubble(output,view);
+      expect(output.querySelector(".billing-hint")?.textContent).toBe("请检查官方 DeepSeek API Key 与网络，稍后再试。");
+      expect(output.textContent).not.toMatch(/配置官方账户|账户配置|登录/);
+    }
+  });
+
   it("separates the account balance, all-currency DSH estimates and current pricing period", () => {
     const output=document.createElement("output");
     const current:BillingSnapshot={...snapshot,pricingPeriod:"off-peak",balance:{...snapshot.balance,source:"deepseek-official",balances:[{currency:"USD",remaining:7.65},{currency:"CNY",remaining:123.45}]},today:{...snapshot.today,estimates:[...snapshot.today.estimates,{currency:"USD",minimum:.02,maximum:.04}]}};

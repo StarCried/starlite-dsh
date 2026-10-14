@@ -53,8 +53,8 @@ export function renderBillingBubble(element: HTMLElement, view: BillingBubbleVie
       card.append(remaining);
       if (balances.length > 1) card.append(node("div", "billing-secondary", balances.slice(1).map(item => `${item.currency} ${symbol(item.currency)}${item.remaining.toFixed(2)}`).join(" · ")));
     } else {
-      card.append(node("div", "billing-message", snapshot.balance.status === "unconfigured" ? "请先配置官方 DeepSeek" : "暂时无法查询余额"));
-      card.append(node("p", "billing-hint", snapshot.balance.status === "unconfigured" ? "在 DSH 的模型设置中配置官方账户。" : "请检查账户配置与网络，稍后再试。"));
+      card.append(node("div", "billing-message", snapshot.balance.status === "unconfigured" ? "请先配置官方 DeepSeek API Key" : "暂时无法查询余额"));
+      card.append(node("p", "billing-hint", snapshot.balance.status === "unconfigured" ? "在 DSH 的模型设置中配置官方 DeepSeek API Key。" : "请检查官方 DeepSeek API Key 与网络，稍后再试。"));
     }
     const today = node("div", "billing-today");
     today.append(node("span", "billing-label", "今日 DSH 估算"));
@@ -71,7 +71,7 @@ export function renderBillingBubble(element: HTMLElement, view: BillingBubbleVie
   } else {
     header.append(node("span", "billing-status", view.status === "loading" ? "查询中" : "暂不可用"));
     card.append(node("div", "billing-message", view.status === "loading" ? "正在查询余额与费用…" : "费用暂时无法查询"));
-    card.append(node("p", "billing-hint", view.status === "loading" ? "读取账户余额与今日 DSH 用量。" : "请检查账户配置与网络，稍后再试。"));
+    card.append(node("p", "billing-hint", view.status === "loading" ? "读取账户余额与今日 DSH 用量。" : "请检查官方 DeepSeek API Key 与网络，稍后再试。"));
   }
   const heading = title ? node("span", "bubble-title", title) : undefined;
   element.replaceChildren(...(heading ? [heading, card] : [card]));

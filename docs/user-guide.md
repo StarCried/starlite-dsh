@@ -126,6 +126,7 @@ dsh plugin --profile web remove dsh-starlite
 - **微光显示「待下载」**：选择微光后重启 DSH，插件会自动下载资源。选择「不显示模型」时不会下载。
 - **动作、眼球或眨眼不正确**：检查 VRM humanoid、lookAt 和 blink 映射及导出结果。只有文件或骨骼名字正确并不足够，VRM 内必须实际配置对应映射。
 - **候选安装后仍是旧代码**：同版本同路径可能命中包缓存，应核对 tarball 内容哈希；正式升级使用新版本，不编辑插件缓存。
+- **程序缓存损坏、重装后仍不出现**：先完全退出所有 DSH 和 StarLite。在 Windows 文件资源管理器打开 `%LOCALAPPDATA%\StarCried\StarLite\companions`，只删除出错的「版本号－哈希」子目录，再启动 DSH，插件会重新准备程序；默认模型尚未缓存时需要重新下载。不要删除 `%APPDATA%\com.starcried.dsh-inochi2d-pet`，那里保存导入模型、映射和偏好。WSL 也使用同一个 Windows 程序缓存，无需重配模型。
 - **余额未配置／不可用**：检查 DSH 的官方 DeepSeek API Key、端点与网络；仅登录桌面账号、网关或不支持的契约不会触发 API 余额请求。
 
 开发者构建与本地资源服务见 [开发说明](development.md)。

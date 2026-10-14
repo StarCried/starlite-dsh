@@ -30,6 +30,8 @@ pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.0.tg
 
 ## 人工验收
 
+给用户阅读和逐项检查的简版见[本地候选验收](release-candidate-review.md)。测试结果与当前候选的来源、哈希记录放在本机 `release-output`，不把早期 ZIP 或旧产品名的报告当作本轮发布通过。
+
 - WSL 自动准备 Windows 程序、默认 VRM 下载、离线缓存、下载／长度／哈希失败以及 DSH 继续启动。
 - 模型列表切换、许可排版、不显示后重启保持、已有模型与偏好迁移。
 - 单个 VRM 直接导入；无动作时基础站姿、呼吸、眨眼与限角跟随；有动作时完整目录和精确映射；失败保留旧模型。
@@ -51,3 +53,9 @@ pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.0.tg
 先公开并验证共享运行时及相关依赖，再在模型分发获准后核验固定 HTTPS 来源。重新 staging 统一插件，通过默认发布门，最后发布固定运行时 revision 的桌宠源码和同版本插件。npm alpha 使用 `--tag alpha`，不覆盖 latest。没有公开模型来源时只验证本地候选。
 
 安装见 [用户指南](user-guide.md)，模型约定见 [模型导入](model-import.md)。发布检查失败不得阻止 DSH 本身运行。
+
+## 依赖审计记录
+
+2026-10-14 已修复可用的构建依赖补丁，并将撤回的 `chacha20 0.10.1` 更新为 `0.10.2`。DSH 的 npm 完整／生产依赖审计均无已知漏洞；共享包的浏览器运行时和插件自身不携带 Hexo 主程序，私有 Hexo 7 示例及使用者的 Hexo 依赖仍有 9 条上游审计记录，不能称整个 Hexo 生态已无告警。
+
+使用隔离的 cargo-audit 0.22.2 与官方 RustSec 数据库 `6aed84668c23d7f535077a9fe918bf1fa0f6a5bc` 检查两个 Cargo.lock，未发现已知漏洞或仍撤回的版本。Windows 运行链中的 5 个 `unic` 库仍有停止维护提示；其他目标的 `glib`／`proc-macro-error` 警告不在 Windows x64 依赖树。保留真实审计结果，后续发布仍须重新扫描，不强行替换不兼容的传递依赖。

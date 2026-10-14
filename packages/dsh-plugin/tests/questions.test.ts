@@ -34,3 +34,41 @@ it("opens home explicitly without recovering stale sessions or navigating after 
  await expect(f.bridge.open("invalid")).rejects.toThrow("session unavailable");expect(f.open).toHaveBeenCalledOnce();
  f.bridge.close();await expect(f.bridge.openWebUi()).rejects.toThrow("Web UI unavailable");expect(f.open).toHaveBeenCalledOnce();await f.aggregator.stop();
 });
+it("preserves a blocking question when navigation fails so it can still be answered",async()=>{
+ const f=await fixture(),key={id:"PRIVATE"},next=vi.fn(async()=>"official");
+ const waiting=f.bridge.ask(key,{questions},next),request=f.bridge.read(f.snapshots.at(-1)!.inputRequest!)!;
+ f.open.mockRejectedValueOnce(Error("navigation failed"));
+ await expect(f.bridge.open(request.sessionRef)).rejects.toThrow("navigation failed");
+ expect(f.bridge.read(request.requestId)).toBe(request);expect(next).not.toHaveBeenCalled();
+ await f.bridge.answer({...request,answers:[{id:"q",selected:["Yes"]}]});
+ await expect(waiting).resolves.toEqual({answers:[{id:"q",selected:["Yes"]}]});f.bridge.close();await f.aggregator.stop();
+});
+it("delegates a captured blocking question only after successful navigation",async()=>{
+ const f=await fixture(),key={id:"PRIVATE"},next=vi.fn(async()=>"official");let finish!:()=>void;
+ const waiting=f.bridge.ask(key,{questions},next),request=f.bridge.read(f.snapshots.at(-1)!.inputRequest!)!;
+ f.open.mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve;}));
+ const navigating=f.bridge.open(request.sessionRef);
+ expect(f.bridge.read(request.requestId)).toBe(request);expect(next).not.toHaveBeenCalled();
+ finish();await navigating;await expect(waiting).resolves.toBe("official");
+ expect(next).toHaveBeenCalledOnce();expect(f.bridge.read(request.requestId)).toBeUndefined();f.bridge.close();await f.aggregator.stop();
+});
+it("does not let an old navigation cancel newer questions in the same or another session",async()=>{
+ const f=await fixture(),key={id:"PRIVATE"};let finish!:()=>void;
+ const first=f.bridge.ask(key,{questions},async()=>"official-old"),old=f.bridge.read(f.snapshots.at(-1)!.inputRequest!)!;
+ f.open.mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve;}));const navigating=f.bridge.open(old.sessionRef);
+ await f.bridge.answer({...old,answers:[{id:"q",selected:["Yes"]}]});await first;
+ const next=vi.fn(async()=>"wrong"),newWaiting=f.bridge.ask(key,{questions},next),newRequest=f.bridge.read(f.snapshots.at(-1)!.inputRequest!)!;
+ const otherWaiting=f.bridge.ask({}, {questions},next),other=f.bridge.read(f.snapshots.at(-1)!.inputRequest!)!;
+ finish();await navigating;
+ expect(f.bridge.read(newRequest.requestId)).toBe(newRequest);expect(f.bridge.read(other.requestId)).toBe(other);expect(next).not.toHaveBeenCalled();
+ for(const request of [newRequest,other])await f.bridge.answer({...request,answers:[{id:"q",selected:["Yes"]}]});
+ await Promise.all([newWaiting,otherWaiting]);f.bridge.close();await f.aggregator.stop();
+});
+it.each(["close","dispose"])("does not mutate a retired question after navigation settles (%s)",async reason=>{
+ const f=await fixture(),key={id:"PRIVATE"};let finish!:()=>void;
+ const waiting=f.bridge.ask(key,{questions},async()=>"official");const caught=waiting.catch(()=>"cancelled"),request=f.bridge.read(f.snapshots.at(-1)!.inputRequest!)!;
+ f.open.mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve;}));const navigating=f.bridge.open(request.sessionRef);
+ if(reason==="close")f.bridge.close();else{f.bridge.cancelSession(key);f.aggregator.disposeSession(key);}
+ await caught;const count=f.snapshots.length;finish();await navigating;expect(f.snapshots).toHaveLength(count);expect(f.bridge.read(request.requestId)).toBeUndefined();
+ f.bridge.close();await f.aggregator.stop();
+});

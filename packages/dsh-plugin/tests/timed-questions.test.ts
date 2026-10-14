@@ -22,7 +22,7 @@ async function fixture(remainingMs=500){
     userQuestions:{attachWait,answer},
     sessionProjections:{stateOf:()=>({questions:{active}}),onChanged:(value:typeof listener)=>{listener=value;return unsubscribe;}},
   };
-  const open=vi.fn(async()=>undefined),bridge=new QuestionBridge(aggregator,open,{get:name=>services[name]});
+  const open=vi.fn<()=>Promise<void>>(async()=>undefined),bridge=new QuestionBridge(aggregator,open,{get:name=>services[name]});
   bridge.setConnected(true);bridge.setEnabled(true);await settle();
   return {bridge,aggregator,snapshots,session,agent,services,attachWait,answer,unsubscribe,open,
     claims:()=>claims,owner:(value:unknown)=>{registered=value;},roots:(value:unknown[])=>{roots=value;},
@@ -158,6 +158,48 @@ describe("official timed and continued user questions",()=>{
       await f.bridge.open(request.sessionRef);f.bridge.setEnabled(true);f.bridge.refresh();await settle();
       expect(f.snapshots.at(-1)?.inputRequest).toBeUndefined();expect(f.open).toHaveBeenCalledExactlyOnceWith(f.session);
       expect(f.answer).not.toHaveBeenCalled();f.remove();await settle();f.project("continued","PRIVATE-new");await settle();expect(f.request()).toBeDefined();
+    }finally{await f.close();}
+  });
+  it("keeps a continued form and its answerability when navigation fails",async()=>{
+    const f=await fixture();try{
+      f.project();await settle();const request=f.request();f.open.mockRejectedValueOnce(Error("navigation failed"));
+      await expect(f.bridge.open(request.sessionRef)).rejects.toThrow("navigation failed");
+      f.bridge.refresh();await settle();expect(f.bridge.read(request.requestId)).toBe(request);expect(f.request().requestId).toBe(request.requestId);
+      await f.bridge.answer(reply(request));expect(f.answer).toHaveBeenCalledExactlyOnceWith(f.agent,"PRIVATE-call",{answers:reply(request).answers});
+    }finally{await f.close();}
+  });
+  it("suppresses only a captured continued form after navigation actually succeeds",async()=>{
+    const f=await fixture();try{
+      f.project();await settle();const request=f.request();let finish!:()=>void;
+      f.open.mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve;}));const navigating=f.bridge.open(request.sessionRef);
+      expect(f.bridge.read(request.requestId)).toBe(request);finish();await navigating;
+      f.bridge.refresh();await settle();expect(f.bridge.read(request.requestId)).toBeUndefined();expect(f.snapshots.at(-1)?.inputRequest).toBeUndefined();
+      expect(f.answer).not.toHaveBeenCalled();
+    }finally{await f.close();}
+  });
+  it("does not suppress a changed continued question that arrived during old navigation",async()=>{
+    const f=await fixture();try{
+      f.project();await settle();const old=f.request();let finish!:()=>void;
+      f.open.mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve;}));const navigating=f.bridge.open(old.sessionRef);
+      f.project("continued","PRIVATE-call",[{...questions[0],question:"New decision"}]);await settle();const current=f.request();
+      expect(current.requestId).not.toBe(old.requestId);finish();await navigating;f.bridge.refresh();await settle();
+      expect(f.bridge.read(current.requestId)).toBe(current);await f.bridge.answer(reply(current));expect(f.answer).toHaveBeenCalledOnce();
+    }finally{await f.close();}
+  });
+  it("does not suppress a new reference for the same continued call after input availability changes",async()=>{
+    const f=await fixture();try{
+      f.project();await settle();const old=f.request();let finish!:()=>void;
+      f.open.mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve;}));const navigating=f.bridge.open(old.sessionRef);
+      f.bridge.setEnabled(false);f.bridge.setEnabled(true);await settle();const current=f.request();expect(current.requestId).not.toBe(old.requestId);
+      finish();await navigating;f.bridge.refresh();await settle();expect(f.bridge.read(current.requestId)).toBe(current);
+      await f.bridge.answer(reply(current));expect(f.answer).toHaveBeenCalledOnce();
+    }finally{await f.close();}
+  });
+  it("preserves a timed claim after navigation failure until the human answers",async()=>{
+    const f=await fixture();try{
+      const wait=f.wait();await settle();const request=f.request();f.open.mockRejectedValueOnce(Error("navigation failed"));
+      await expect(f.bridge.open(request.sessionRef)).rejects.toThrow();expect(f.claims()).toBe(1);expect(wait.next).not.toHaveBeenCalled();
+      await f.bridge.answer(reply(request));await expect(wait.result).resolves.toEqual({answers:reply(request).answers});await settle();expect(f.claims()).toBe(0);
     }finally{await f.close();}
   });
 });

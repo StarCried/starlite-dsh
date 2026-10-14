@@ -52,11 +52,20 @@ export class QuestionBridge {
   }
   async open(ref:string):Promise<void>{
     const key=this.aggregator.sessionKey(ref);if(key===undefined||this.#closed)throw Error("session unavailable");
-    // Availability refreshes must not reclaim a question the human just chose
-    // to answer in the official UI. A new foreground question may revisit it.
-    for(const item of this.#lateQuestions())if(item.key===key)this.#suppress(key,item.callId);
-    for(const pending of this.#pending.values())if(pending.key===key)pending.finish(undefined);
+    const captured=[...this.#pending.values()].filter(item=>item.key===key);
     await this.openSession(key);
+    if(this.#closed||this.aggregator.sessionKey(ref)!==key)return;
+    // Navigation may fail or outlive its question. Only a successful open can
+    // delegate the same captured request; a newer form keeps its own lifetime.
+    for(const pending of captured){
+      if(this.#pending.get(pending.request.requestId)!==pending)continue;
+      if(pending.deadline!==undefined&&Date.now()>=pending.deadline)continue;
+      if(pending.late){
+        if(!this.#currentLate(pending.late))continue;
+        this.#suppress(key,pending.late.callId);
+      }
+      pending.finish(undefined);
+    }
   }
   async openWebUi():Promise<void>{if(this.#closed)throw Error("DSH Web UI unavailable");await this.openSession(undefined);}
   cancelForeground(key:unknown):void{for(const item of this.#pending.values())if(item.key===key&&!item.late)item.abort();}

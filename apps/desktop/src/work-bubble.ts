@@ -26,13 +26,14 @@ interface QuestionActions {
 }
 export class WorkBubble {
   #generation=0;#key:string|undefined;#latest:PetSnapshot|undefined;#preferences:DesktopPreferences|undefined;
+  #waitTimer:ReturnType<typeof setInterval>|undefined;
   constructor(readonly element:HTMLElement,readonly actions:QuestionActions){}
-  clear():void{++this.#generation;this.#key=undefined;this.element.hidden=true;this.element.replaceChildren();delete this.element.dataset.interactive;this.actions.changed()}
+  clear():void{this.#stopCountdown();++this.#generation;this.#key=undefined;this.element.hidden=true;this.element.replaceChildren();delete this.element.dataset.interactive;this.actions.changed()}
   update(snapshot:PetSnapshot,preferences:DesktopPreferences):void{
     this.#latest=snapshot;this.#preferences=preferences;
     const key=!preferences.privacyMode&&snapshot.inputRequest&&snapshot.session?`${snapshot.session.ref}/${snapshot.inputRequest}`:undefined;
     if(key&&key===this.#key){const title=this.element.querySelector(".bubble-title");if(title)title.textContent=snapshot.session!.title;return;}
-    ++this.#generation;this.#key=key;
+    this.#stopCountdown();++this.#generation;this.#key=key;
     if(!key){renderBubble(this.element,snapshot,preferences.privacyMode,preferences.bubbleMode);this.actions.changed();return;}
     this.#load(snapshot);
   }
@@ -56,10 +57,28 @@ export class WorkBubble {
       body.replaceChildren(createQuestionForm(request,async answer=>{
         if(generation!==this.#generation)throw Error("question changed");
         await this.actions.answer(answer);
-      }));this.actions.changed();
+      }));this.#showWait(request,generation,body);this.actions.changed();
     }).catch(()=>{
       if(generation!==this.#generation)return;
       body.textContent="输入请求暂时无法加载。";retry.hidden=false;this.actions.changed();
     });
   }
+  #showWait(request:PetInteraction,generation:number,body:Element):void{
+    if(!request.wait)return;
+    const status=document.createElement("span");status.className="question-status question-wait-status";body.before(status);
+    if(request.wait.state==="continued"){
+      status.setAttribute("role","status");status.textContent="DSH 已继续处理，仍可补答。";return;
+    }
+    status.setAttribute("role","timer");
+    const deadline=request.wait.deadline;
+    const tick=()=>{
+      if(generation!==this.#generation){this.#stopCountdown();return;}
+      const seconds=Math.max(0,Math.ceil((deadline-Date.now())/1000));
+      const text=seconds?`剩余 ${seconds} 秒；到时 DSH 将继续处理。`:"等待时间已结束，DSH 将继续处理。";
+      if(status.textContent!==text){status.textContent=text;this.actions.changed();}
+      if(seconds===0)this.#stopCountdown();
+    };
+    tick();if(deadline>Date.now())this.#waitTimer=setInterval(tick,250);
+  }
+  #stopCountdown():void{clearInterval(this.#waitTimer);this.#waitTimer=undefined;}
 }

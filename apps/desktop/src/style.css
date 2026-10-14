@@ -88,6 +88,7 @@ body {
 #bubble :is(button,input,textarea,summary):focus-visible {outline:2px solid #497cb6;outline-offset:2px;}
 #bubble details p {white-space:pre-wrap;font-size:12px;}
 #bubble .question-status {display:block;font-size:12px;}
+#bubble .question-wait-status {margin:4px 0 8px;color:#58677a;}
 
 #bubble[data-bubble-kind="reasoning"] { color: #838995; }
 #bubble[data-bubble-kind="response"] .bubble-content { animation: bubble-reveal 180ms ease-out; }

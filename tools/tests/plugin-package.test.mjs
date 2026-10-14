@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { checkPluginPackage } from "../check-plugin-package.mjs";
 import { DESKTOP_ASSET_FILES, sha256 } from "../plugin-desktop-assets.mjs";
@@ -45,7 +45,7 @@ async function fixture(defaultModel = model) {
     for (const [name, bytes] of Object.entries(files)) await file(source, `package/${name}`, bytes);
     const archive = join(root, `packages/dsh-plugin/.pack/dsh-starlite-${version}.tgz`);
     await mkdir(dirname(archive), { recursive: true });
-    execFileSync("tar", ["-czf", archive, ...Object.keys(files).map(name => `package/${name}`)], { cwd: source, windowsHide: true });
+    execFileSync("tar", ["-czf", relative(source, archive).split(sep).join("/"), ...Object.keys(files).map(name => `package/${name}`)], { cwd: source, windowsHide: true });
   }
   await pack();
   return { root, assets, manifest, pack };

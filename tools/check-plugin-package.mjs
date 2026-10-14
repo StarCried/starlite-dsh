@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
-import { resolve } from "node:path";
+import { relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertDesktopExecutable, assertDesktopManifest, DESKTOP_ASSET_DIRECTORY, DESKTOP_ASSET_FILES, ordinaryBuildFile } from "./plugin-desktop-assets.mjs";
 
@@ -12,7 +12,10 @@ export async function checkPluginPackage(root, { allowLocalTest = true } = {}) {
   if (!info?.isFile() || info.size === 0 || info.size > 16 * 1024 * 1024) {
     throw new Error("packed DSH bundle is missing, empty, or unexpectedly large");
   }
-  const entries = execFileSync("tar", ["-tzf", archive], {
+  // Git Bash's GNU tar treats a Windows drive colon as a remote host.
+  // A relative archive with portable separators also works with BSD tar.
+  const tarArchive = relative(root, archive).split(sep).join("/");
+  const entries = execFileSync("tar", ["-tzf", tarArchive], {
     cwd: root, encoding: "utf8", windowsHide: true,
   }).trim().split(/\r?\n/u).sort();
   const expected = [
@@ -23,7 +26,7 @@ export async function checkPluginPackage(root, { allowLocalTest = true } = {}) {
   if (JSON.stringify(entries) !== JSON.stringify(expected)) {
     throw new Error(`unexpected npm tarball contents:\n${entries.join("\n")}`);
   }
-  const extract = (name, maxBuffer) => execFileSync("tar", ["-xOzf", archive, name], { cwd: root, maxBuffer, windowsHide: true });
+  const extract = (name, maxBuffer) => execFileSync("tar", ["-xOzf", tarArchive, name], { cwd: root, maxBuffer, windowsHide: true });
   const manifest = assertDesktopManifest(JSON.parse(extract("package/assets/windows-x64/manifest.json", 16 * 1024).toString("utf8")), { expectedVersion: packageJson.version, allowLocalTest });
   assertDesktopExecutable(extract("package/assets/windows-x64/dsh-inochi2d-pet.exe", 64 * 1024 * 1024), manifest.executable);
   for (const name of DESKTOP_ASSET_FILES) {

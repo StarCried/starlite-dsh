@@ -137,9 +137,7 @@ export async function shouldAcquireDefaultModel(path: string): Promise<boolean> 
       if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
       if (!("schemaVersion" in value)) return false;
       if (value.schemaVersion === 4) {
-        return "activeModelId" in value && typeof value.activeModelId === "string"
-          && value.activeModelId.length > 0 && value.activeModelId.length <= 128
-          && !/[\p{Cc}]/u.test(value.activeModelId);
+        return "activeModelId" in value && value.activeModelId === "weiguang-default";
       }
       if (![1, 2, 3].includes(value.schemaVersion as number)) return false;
       const preferences = "preferences" in value ? value.preferences : undefined;

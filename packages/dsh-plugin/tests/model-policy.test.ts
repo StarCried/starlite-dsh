@@ -45,13 +45,13 @@ it("does not interpret malformed model flags as permission to download the chara
   }
 });
 
-it("uses the library selection and never downloads for an intentionally hidden model", async () => {
+it("only acquires the starter when selected, preserving removal and custom model selection", async () => {
   const path = await fixture();
-  for (const activeModelId of ["weiguang-default", "custom-model"]) {
+  for (const activeModelId of ["weiguang-default"]) {
     await writeFile(path, JSON.stringify({schemaVersion:4,activeModelId,models:[]}));
     expect(await shouldAcquireDefaultModel(path)).toBe(true);
   }
-  for (const activeModelId of [null, "", false, {}, "a".repeat(129), "unsafe\nvalue"]) {
+  for (const activeModelId of [null, "custom-model", "", false, {}, "a".repeat(129), "unsafe\nvalue"]) {
     await writeFile(path, JSON.stringify({schemaVersion:4,activeModelId,preferences:{modelEnabled:true}}));
     expect(await shouldAcquireDefaultModel(path)).toBe(false);
   }

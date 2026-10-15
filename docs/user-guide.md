@@ -2,7 +2,7 @@
 
 需要 Windows 11 x64、WebView2，以及以下任一种 DSH：官方 Windows 桌面版、Windows 原生 CLI/Web、WSL2 CLI/Web。只安装一个 `dsh-starlite` 插件：桌宠由插件准备和启动，不需要安装器、管理员权限或手动设置 EXE 路径。
 
-公开发行版为 `0.1.0-alpha.0`。安装使用 alpha 渠道 `dsh-starlite@alpha`；需要固定版本时可换为 `dsh-starlite@0.1.0-alpha.0`。本文同时描述当前本地候选：允许缺少 Blink、模型移除及重连后点击恢复尚未发布；公开 alpha.0 导入仍要求有效 Blink，也没有「移除」按钮。候选状态见[兼容性记录](dsh-compatibility.md)。
+本文对应 `0.1.0-alpha.1`。安装使用 alpha 渠道 `dsh-starlite@alpha`；需要固定版本时可换为 `dsh-starlite@0.1.0-alpha.1`。[版本变化](../CHANGELOG.md) · [兼容性与验收](dsh-compatibility.md)
 
 ## 安装
 

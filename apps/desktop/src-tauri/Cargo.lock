@@ -896,7 +896,7 @@ dependencies = [
 
 [[package]]
 name = "dsh-inochi2d-pet"
-version = "0.1.0-alpha.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "atomic-write-file",
  "serde",

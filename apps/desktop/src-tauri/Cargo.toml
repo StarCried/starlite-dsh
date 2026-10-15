@@ -1,6 +1,6 @@
 [package]
 name = "dsh-inochi2d-pet"
-version = "0.1.0-alpha.0"
+version = "0.1.0-alpha.1"
 description = "StarLite for DSH: lightweight VRM Windows companion"
 authors = ["StarCried"]
 edition = "2021"

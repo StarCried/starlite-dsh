@@ -1,6 +1,6 @@
 {
   "name": "dsh-starlite",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "StarLite for DSH: a lightweight Windows companion managed by one DSH plugin",
   "type": "module",
   "license": "BSD-2-Clause",

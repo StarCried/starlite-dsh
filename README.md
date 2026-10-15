@@ -4,9 +4,7 @@
 
 **[先看模型效果](https://starcried.github.io/)**：无需安装，用桌面浏览器体验博客中的微光；DSH 的工作状态与问答气泡需安装下方插件。
 
-Alpha `0.1.0-alpha.0`，需要 **Windows 11 x64 + WebView2**。支持官方 Windows 桌面版、Windows 原生 CLI/Web 和 WSL2 DSH。
-
-以下安装命令获取已发布的 alpha.0，自定义模型仍需有效 Blink 表达。缺少 Blink 的模型导入、模型移除和重连后点击恢复已在本地修复，尚未发布，见[当前状态](docs/dsh-compatibility.md)。
+Alpha `0.1.0-alpha.1`，需要 **Windows 11 x64 + WebView2**。支持官方 Windows 桌面版、Windows 原生 CLI/Web 和 WSL2 DSH。[版本变化](CHANGELOG.md)
 
 ## 安装并体验微光
 
@@ -37,7 +35,7 @@ dsh --profile web
 
 [安装、升级与卸载](docs/user-guide.md) · [自定义模型与动作](docs/model-import.md) · [气泡与互动](docs/companion-interactions.md) · [开发说明](docs/development.md)
 
-添加自己的模型只需选择一个 VRM：无动作时使用自带的基础待机，有动作时自动列出供映射。
+添加自己的标准人形 VRM：无动作时使用自带的基础待机，有动作时自动列出供映射。眨眼和眼球跟随按模型能力启用，缺少对应配置仍可使用；不再需要的模型可在卡片上移除，源文件保留。
 
 一次连接一个 DSH Host。切换时停止原 Host（桌面版从 DSH 托盘退出），桌宠会在重连期结束后连接等待者。
 

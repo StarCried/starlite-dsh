@@ -1,6 +1,10 @@
 # DSH 兼容性与发布验收
 
-## 当前公开源码与发布状态（2026-10-15）
+## 0.1.0-alpha.1 发布准备（2026-10-15）
+
+当前源码版本已统一为 `0.1.0-alpha.1`，正在准备发行。此次变更包括可选眨眼、模型移除、默认模型获取策略、断线重连后的点击恢复、平台与安装诊断，见[版本变化](../CHANGELOG.md)。正式来源、CI、新版本产物及公开 registry 下载验证完成后另行记录；下方旧版本与本地候选结果保留原身份，不作为 alpha.1 已发布的证据。
+
+## 首次公开发行 0.1.0-alpha.0（2026-10-15）
 
 - 已发布程序的源码基线为 [`ee86d39`](https://github.com/StarCried/starlite-dsh/commit/ee86d3984d300621812f16016b08450ec860ec13)。产品运行代码自 `cf3db8f` 的 GitHub 资源重定向修复后未变；后续提交仅涉及文档、CI、测试和打包检查工具。共享运行时固定到已公开的 [`986443cc`](https://github.com/StarCried/starlite/commit/986443cc07018ba99240b0dd217bbdf31484b57d)。
 - 微光已作为[独立授权模型发行](https://github.com/StarCried/starlite/releases/tag/weiguang-v3.0.0-starlite.1)。已发布程序使用固定的 [HTTPS 模型地址](https://github.com/StarCried/starlite/releases/download/weiguang-v3.0.0-starlite.1/Weiguang-StarLite.vrm)，已验证下载长度、SHA-256 和正式发布门；模型不包含在程序包中。本机资源服务仅用于下方历史本地验收。
@@ -9,7 +13,9 @@
 - [npm `dsh-starlite@0.1.0-alpha.0`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.0) 已发布，`alpha` 标签指向该版本。使用全新缓存从公开 registry 执行 `npm pack`，下载包为 3,905,392 字节、SHA-256 `7223035a62f44dc1a5f3c06a5f443c63234fd532c9460e880c685e1a45d19044`，与 `ee86d39` 的正式包完全一致；11 文件白名单、正式 HTTPS 模型来源及无 `localTest` 检查通过。这个公开下载包在官方 npm DSH `0.2.1-alpha.2` 中通过隔离安装、认证首页、fail-open 和退出回收，使用不存在的 EXE 覆盖，未启动桌宠或调用付费 API。
 - [软件 Release `v0.1.0-alpha.0`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.0) 已公开，目标源码为 `ee86d3984d300621812f16016b08450ec860ec13`，提供插件 tarball、Windows 安装器、校验和、SOURCE_REVISION、SBOM 与依赖许可。模型发行与程序发行分别记录；以下人工验收保留原候选身份，不改记为公开程序逐项重新手验。
 
-## 当前本地修复（尚未发布）
+## alpha.1 之前的本地修复验收
+
+以下验证发生在开发版本仍为 alpha.0 的本地候选上；行为与人工结果可作为变更依据，产物哈希不会改记为 alpha.1。最新版本的公开状态以上节为准。
 
 标准人形 VRM 0／1 缺少 Blink 时可以导入，仅停用缺失的眨眼能力；声明的绑定仍校验资源引用。自动待机优先使用有效角色配置的 `neutralAnimation`，明确映射保持优先。设置页增加模型「移除」：保留源文件，移除当前模型后隐藏角色，微光不会在重启时重新获取。不支持的平台明确提示需要 Windows 11 x64 或其上的 WSL2 x64；安装检查输出阶段、固定错误类别与退出码，不输出原始凭据或会话内容。
 

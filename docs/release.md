@@ -1,8 +1,12 @@
 # StarLite for DSH alpha 发布检查
 
+本次发行目标为 `0.1.0-alpha.1`，包含可选眨眼、模型移除、默认资源获取策略、断线后点击恢复及安装诊断改进，见[版本变化](../CHANGELOG.md)。需要针对新版本重新构建、打包并核验公开下载；不能将下方 alpha.0 或开发版本候选的哈希和结果改记为 alpha.1 已发布。
+
+## 首次发行基线
+
 `dsh-starlite@0.1.0-alpha.0` 已发布到 [npm alpha 渠道](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.0)，[软件 Release `v0.1.0-alpha.0`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.0) 对应源码 `ee86d3984d300621812f16016b08450ec860ec13`。从公开 registry 全新下载的 tarball 与正式包完全一致，并通过官方 npm DSH `0.2.1-alpha.2` 的隔离安装和 fail-open 检查，详见[发布验收](dsh-compatibility.md)。
 
-以下保留发布流程，供后续版本使用。统一插件包含 Windows 程序、通知及下载清单；程序仅内嵌已批准的基础待机，微光角色及其他动作仍作为独立授权的单文件 VRM 下载。本地脚本只构建和校验，不自动推送、发布或部署博客。
+以下流程用于本次与后续版本。统一插件包含 Windows 程序、通知及下载清单；程序仅内嵌已批准的基础待机，微光角色及其他动作仍作为独立授权的单文件 VRM 下载。本地脚本只构建和校验，不自动推送、发布或部署博客。
 
 ## 构建来源
 
@@ -19,11 +23,11 @@
 5. 保持 workspace、desktop、protocol、plugin、Cargo、Tauri 版本一致。正式升级使用新版本。
 
 ```powershell
-pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.0_x64-setup.exe"
+pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.1_x64-setup.exe"
 pnpm stage:plugin -- release-output/default-model.json
 pnpm pack:plugin
 pnpm check:release
-pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.0.tgz "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.0_x64-setup.exe"
+pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.1.tgz "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.1_x64-setup.exe"
 ```
 
 资源描述只包含 `title`、固定 HTTPS `url`、VRM 的 `sha256` 和 `bytes`；程序清单 schema 为 2，使用 `defaultModel` 字段。首次元数据命令提供 staging 所需的依赖通知，打包后再生成最终 SHA256SUMS、CycloneDX SBOM 和第三方许可证。
@@ -37,8 +41,8 @@ pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.0.tg
 给用户阅读和逐项检查的简版见[本地候选验收](release-candidate-review.md)。测试结果与当前候选的来源、哈希记录放在本机 `release-output`，不把早期 ZIP 或旧产品名的报告当作本轮发布通过。
 
 - WSL2、Windows 原生 CLI/Web、官方 Windows Desktop 自动准备同一 Windows 程序；默认 VRM 下载、离线缓存、下载／长度／哈希失败以及 DSH 继续启动。
-- 模型列表切换、许可排版、不显示后重启保持、已有模型与偏好迁移。
-- 单个 VRM 直接导入；无动作时基础站姿、呼吸、眨眼与限角跟随；有动作时完整目录和精确映射；失败保留旧模型。
+- 模型列表切换、许可排版、不显示后重启保持、已有模型与偏好迁移；移除确认的取消与提交、只清理程序管理副本、源文件保留、重启不重新获取微光。
+- 单个 VRM 直接导入；无动作时基础站姿、呼吸与限角头部跟随；缺少可选眨眼／眼球配置时仍能使用，有动作时完整目录和精确映射；损坏引用仍拒绝并保留旧模型。
 - 微光 14 个动作、手指、表情、耳尾物理、大动作边界、中途切换及低帧率恢复。
 - 透明区域穿透、拖动、DPI、多显示器、睡眠、重连与关闭 DSH 后退出。
 - 工作、费用、普通问题表单、隐私、单击与双击；不使用付费模型请求来替代可模拟的检查。
@@ -59,10 +63,10 @@ pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.0.tg
 先公开并验证固定 pin 的共享源码，单独发布获准分发的微光 VRM 与许可，再核验固定 HTTPS 来源的全新缓存下载和离线复用。推送同版本 DSH 源码并确认 CI，通过默认发布门后发布已校验的 tarball：
 
 ```sh
-npm publish packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.0.tgz --tag alpha --access public
+npm publish packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.1.tgz --tag alpha --access public
 ```
 
-发布后核对 `npm view dsh-starlite@alpha version` 为 `0.1.0-alpha.0`，验证 registry tarball 与本地包一致，并在隔离 profile 安装 `dsh-starlite@alpha`。这些是发布后的验证步骤，不以文档中的安装命令代替实际结果。npm 发布指定 `alpha` 标签；升级必须使用新版本。Windows Release 随附匹配的安装器、可选免安装包、SHA256SUMS、SBOM 和依赖许可；微光作为独立授权资产分发，不夹进程序包。没有公开模型来源时仍只能验证本地候选。
+发布后核对 `npm view dsh-starlite@alpha version` 为 `0.1.0-alpha.1`，验证 registry tarball 与本地包一致，并在隔离 profile 安装 `dsh-starlite@alpha`。这些是发布后的验证步骤，不以文档中的安装命令代替实际结果。npm 发布指定 `alpha` 标签；升级必须使用新版本。Windows Release 随附匹配的安装器、可选免安装包、SHA256SUMS、SBOM 和依赖许可；微光作为独立授权资产分发，不夹进程序包。没有公开模型来源时仍只能验证本地候选。
 
 首次发行的实际标签（2026-10-15）：`alpha` 和 `latest` 均指向 `0.1.0-alpha.0`。npm 对新包首次发布会额外创建 `latest`，即使指定其他标签，见[上游记录](https://github.com/npm/cli/issues/8490)。本次删除 `latest` 返回 HTTP 400，保留现状，不重复删除或通过新增版本绕过。此前没有稳定版本，未覆盖已有稳定版的 `latest`；安装继续明确使用 `dsh-starlite@alpha`。
 

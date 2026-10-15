@@ -2,7 +2,9 @@
 
 用动作和气泡陪伴你的 DSH 工作。**安装一个插件，启动 DSH 即默认使用微光**，无需另装软件或手动导入资源。
 
-Alpha `0.1.0-alpha.0`，需要 Windows 11 x64、WebView2，以及官方 Windows 桌面版、Windows 原生 CLI/Web 或 WSL2 DSH。
+Alpha `0.1.0-alpha.1`，需要 Windows 11 x64、WebView2，以及官方 Windows 桌面版、Windows 原生 CLI/Web 或 WSL2 DSH。
+
+[先看模型效果](https://starcried.github.io/)（桌面浏览器，无需安装；工作状态与问答需安装插件）。
 
 ## 安装与启动
 
@@ -29,6 +31,6 @@ dsh --profile web
 
 [安装、升级与卸载](https://github.com/StarCried/starlite-dsh/blob/main/docs/user-guide.md) · [换模型与动作](https://github.com/StarCried/starlite-dsh/blob/main/docs/model-import.md) · [气泡、费用与隐私](https://github.com/StarCried/starlite-dsh/blob/main/docs/companion-interactions.md)
 
-自己的标准人形 VRM 需要有效的人形映射和眨眼表达，无动作时自动使用自带基础待机；模型内的动作会自动列出供映射。桌宠准备、下载或兼容性检查失败时，DSH 仍可正常运行。API Key、用户提示、工具参数／结果和真实会话 ID 不发送给桌宠。桌面版关闭主窗口只隐藏界面，须从 DSH 托盘退出才停止 Host。
+自己的标准人形 VRM 需要有效的人形映射，无动作时自动使用自带基础待机；眨眼和眼球跟随是可选能力，缺少时仍可使用。模型内的动作会自动列出供映射；模型卡片可移除不用的模型，源文件保留，重启不重新添加。桌宠准备、下载或兼容性检查失败时，DSH 仍可正常运行。API Key、用户提示、工具参数／结果和真实会话 ID 不发送给桌宠。桌面版关闭主窗口只隐藏界面，须从 DSH 托盘退出才停止 Host。
 
 程序 BSD-2-Clause；默认待机随程序提供，来源见开发文档。微光及其其他动作独立授权，不打包在 npm 插件内。Windows 程序目前未签名。

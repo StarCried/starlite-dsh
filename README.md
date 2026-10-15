@@ -2,7 +2,11 @@
 
 让微光陪你使用 DeepSeek Harness：安静待机，用动作和气泡显示工作状态，也能直接回答会话里的选择题。
 
+**[先看模型效果](https://starcried.github.io/)**：无需安装，用桌面浏览器体验博客中的微光；DSH 的工作状态与问答气泡需安装下方插件。
+
 Alpha `0.1.0-alpha.0`，需要 **Windows 11 x64 + WebView2**。支持官方 Windows 桌面版、Windows 原生 CLI/Web 和 WSL2 DSH。
+
+以下安装命令获取已发布的 alpha.0，自定义模型仍需有效 Blink 表达。缺少 Blink 的模型导入、模型移除和重连后点击恢复已在本地修复，尚未发布，见[当前状态](docs/dsh-compatibility.md)。
 
 ## 安装并体验微光
 

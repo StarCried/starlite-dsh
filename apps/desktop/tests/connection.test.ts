@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { StatusConnection, consumeSseFrames } from "../src/connection.js";
+import { StateAnimator } from "../src/state-animator.js";
+import type { PetState, WidgetController } from "../src/vendor-types.js";
 
 const CONNECTION_URL =
   "dsh-inochi2d-pet://connect?port=45678" +
@@ -56,6 +58,85 @@ describe("consumeSseFrames", () => {
     await vi.waitFor(() => expect(snapshots).toEqual([4, 5]));
     expect(receiver).toBeUndefined();
     connection.stop();
+  });
+});
+
+describe("same Host stream resynchronization", () => {
+  function fixture(onSnapshot = vi.fn(), onDisconnected = vi.fn()) {
+    const streams: ReadableStreamDefaultController<Uint8Array>[] = [];
+    const request = vi.fn<typeof fetch>(async () => new Response(new ReadableStream<Uint8Array>({
+      start(stream) { streams.push(stream); },
+    }), {headers: {"Content-Type": "text/event-stream"}}));
+    const callbacks = {onConnected: vi.fn(), onSnapshot, onDisconnected};
+    const connection = new StatusConnection(callbacks, request);
+    const frame = (stream: number, sequence: number, state: PetState = "idle") => {
+      streams[stream]!.enqueue(new TextEncoder().encode(`event: snapshot\ndata: ${JSON.stringify({protocolVersion: 1, sequence, emittedAt: sequence, state})}\n\n`));
+    };
+    const reconnect = async (stream: number) => {
+      streams[stream]!.error(Error("transient stream interruption"));
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(streams).toHaveLength(stream + 2);
+    };
+    return {connection, callbacks, frame, reconnect, streams};
+  }
+
+  it("restores clicking from unchanged Idle after repeated transient disconnects", async () => {
+    vi.useFakeTimers();
+    const playAnimation = vi.fn<WidgetController["playAnimation"]>(async () => "completed");
+    const animator = new StateAnimator({playAnimation, stopAnimation: vi.fn()} as unknown as WidgetController, {
+      idle: "Idle", working: null, completed: null, error: null, blocked: null, approval: null, click: ["Click"], ambient: [],
+    });
+    const test = fixture(vi.fn(snapshot => animator.apply(snapshot)), vi.fn(() => animator.disconnected()));
+    try {
+      test.connection.connect(CONNECTION_URL);
+      await vi.advanceTimersByTimeAsync(0);
+      test.frame(0, 4);
+      await vi.advanceTimersByTimeAsync(0);
+      await animator.click();
+      expect(playAnimation.mock.calls.filter(([name]) => name === "Click")).toHaveLength(1);
+      for (let stream = 0; stream < 2; stream += 1) {
+        await test.reconnect(stream);
+        await animator.click();
+        expect(playAnimation.mock.calls.filter(([name]) => name === "Click")).toHaveLength(stream + 1);
+        test.frame(stream + 1, 4);
+        await vi.advanceTimersByTimeAsync(0);
+        await animator.click();
+        expect(playAnimation.mock.calls.filter(([name]) => name === "Click")).toHaveLength(stream + 2);
+      }
+      expect(test.callbacks.onConnected).toHaveBeenCalledTimes(3);
+      expect(test.callbacks.onSnapshot.mock.calls.map(([snapshot]) => snapshot.sequence)).toEqual([4, 4, 4]);
+    } finally { test.connection.stop(); animator.disconnected(); vi.useRealTimers(); }
+  });
+
+  it("ignores stale first frames and later duplicates without losing the initial equal snapshot", async () => {
+    vi.useFakeTimers();
+    const test = fixture();
+    try {
+      test.connection.connect(CONNECTION_URL);
+      await vi.advanceTimersByTimeAsync(0);
+      test.frame(0, 4);
+      await vi.advanceTimersByTimeAsync(0);
+      await test.reconnect(0);
+      test.streams[1]!.enqueue(new TextEncoder().encode(": heartbeat\n\nevent: ignored\ndata: ignored\n\n"));
+      test.frame(1, 3, "error");
+      test.frame(1, 4);
+      test.frame(1, 4, "error");
+      await vi.advanceTimersByTimeAsync(0);
+      test.frame(1, 4, "error");
+      test.frame(1, 5, "working");
+      test.frame(1, 4, "error");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(test.callbacks.onSnapshot.mock.calls.map(([snapshot]) => [snapshot.sequence, snapshot.state]))
+        .toEqual([[4, "idle"], [4, "idle"], [5, "working"]]);
+      await test.reconnect(1);
+      test.frame(2, 6, "completed");
+      test.frame(2, 5, "error");
+      test.frame(2, 6, "error");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(test.callbacks.onSnapshot.mock.calls.map(([snapshot]) => [snapshot.sequence, snapshot.state]))
+        .toEqual([[4, "idle"], [4, "idle"], [5, "working"], [6, "completed"]]);
+    } finally { test.connection.stop(); vi.useRealTimers(); }
   });
 });
 

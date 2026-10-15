@@ -212,6 +212,7 @@ export class StatusConnection {
     onOpen();
 
     let buffer = "";
+    let synchronized = false;
     let heartbeat = this.#armHeartbeat(abort);
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -230,7 +231,12 @@ export class StatusConnection {
         }
         for (const data of parsed.data) {
           const snapshot = parsePetSnapshotJson(data);
-          if (snapshot.sequence <= this.#lastSequence) continue;
+          // A disconnect clears the consumer's animation state. Each new stream
+          // must restore it from the Host's cached snapshot, even if no event
+          // advanced its sequence while offline. Older frames remain invalid.
+          if (snapshot.sequence < this.#lastSequence
+            || synchronized && snapshot.sequence === this.#lastSequence) continue;
+          synchronized = true;
           this.#lastSequence = snapshot.sequence;
           this.#callbacks.onSnapshot(snapshot);
         }

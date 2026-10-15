@@ -96,6 +96,51 @@ describe("settings model library",() => {
   expect(button().disabled).toBe(false);
   document.querySelector<HTMLButtonElement>(".model-none")!.click();
   await vi.waitFor(() => expect(current.activeModelId).toBeNull());
+  expect(document.querySelector("#settings-error")!.textContent).toBe("");
+  expect(document.querySelector("#settings-status")!.textContent).toBe("已自动保存");
+ });
+ it("clears a failed default preparation after selecting and installing the default successfully",async()=>{
+  await launch(empty,new Error("default download unavailable"));
+  expect(document.querySelector("#settings-status")!.textContent).toBe("默认模型尚未就绪");
+  native.invoke.mockImplementationOnce(async(command:string)=>{
+   expect(command).toBe("select_model");current=structuredClone(installed);return structuredClone(current);
+  });
+  document.querySelector<HTMLButtonElement>('[data-model-id="weiguang-default"]')!.click();
+  await vi.waitFor(()=>expect(activeIdle().value).toBe("RelaxedBreath"));
+  expect(document.querySelector("#settings-error")!.textContent).toBe("");
+  expect(document.querySelector("#settings-status")!.textContent).toBe("已自动保存");
+ });
+ it.each(["installed","opted out"])("refreshes failed preparation feedback when another window has %s",async resolution=>{
+  await launch(empty,new Error("default download unavailable"));
+  const callback=(native.listen.mock.calls[0] as unknown as [string,(event:{payload:DesktopSettings})=>void])[1];
+  current=structuredClone(resolution==="installed"?installed:{...empty,activeModelId:null});callback({payload:structuredClone(current)});
+  expect(document.getElementById("mapping-section")!.hidden).toBe(resolution!=="installed");
+  expect(document.querySelector("#settings-error")!.textContent).toBe("");
+  expect(document.querySelector("#settings-status")!.textContent).toBe("已自动保存");
+ });
+ it("keeps preparation failure when an external update still has no active installed model",async()=>{
+  await launch(empty,new Error("default download unavailable"));
+  const callback=(native.listen.mock.calls[0] as unknown as [string,(event:{payload:DesktopSettings})=>void])[1];
+  callback({payload:{...empty,models:[custom]}});
+  expect(document.querySelector("#settings-error")!.textContent).toBe("default download unavailable");
+  expect(document.querySelector("#settings-status")!.textContent).toBe("默认模型尚未就绪");
+ });
+ it.each(["selection","external"])("keeps a separate failed preference when %s resolves default preparation",async resolution=>{
+  await launch(empty,new Error("default download unavailable"));
+  native.invoke.mockRejectedValueOnce(new Error("preference could not be saved"));edit("scale","0.75");
+  await vi.waitFor(()=>expect(document.querySelector("#settings-error")!.textContent).toBe("preference could not be saved"));
+  if(resolution==="selection"){
+   native.invoke.mockImplementationOnce(async()=>{current=structuredClone(installed);return structuredClone(current);});
+   document.querySelector<HTMLButtonElement>('[data-model-id="weiguang-default"]')!.click();
+   await vi.waitFor(()=>expect(activeIdle().value).toBe("RelaxedBreath"));
+  }else{
+   const callback=(native.listen.mock.calls[0] as unknown as [string,(event:{payload:DesktopSettings})=>void])[1];
+   current=structuredClone(installed);callback({payload:structuredClone(current)});
+  }
+  expect(document.querySelector("#settings-error")!.textContent).toBe("preference could not be saved");
+  expect(document.querySelector("#settings-status")!.textContent).toBe("部分更改未保存");
+  expect((document.getElementById("scale") as HTMLInputElement).value).toBe("0.75");
+  expect(current.preferences.scale).toBe(preferences.scale);
  });
 });
 

@@ -70,6 +70,11 @@ export async function startSettings(): Promise<void> {
     const visible = readUncheckedPreferences();
     populatePreferences(Object.fromEntries(Object.entries(next.preferences).map(([key, value]) => [key, dirtyPreferences.has(key as keyof DesktopPreferences) ? visible[key as keyof DesktopPreferences] : value])) as unknown as DesktopPreferences);
     render();
+    const preparationResolved = next.activeModelId === null || activeModel() !== undefined;
+    if (preparationResolved && failedWrites.delete("prepare") && !writing) {
+      error.textContent = [...failedWrites.values()].at(-1) ?? "";
+      saveStatus.textContent = failedWrites.size ? "部分更改未保存" : "已自动保存";
+    }
   };
   const drainWrites = async () => {
     if (writing) return;

@@ -146,27 +146,37 @@ pub fn inspect(
         DEFAULT_IDLE.into(),
     ));
     names.insert(DEFAULT_IDLE_NAME);
-    let profile = if let Some(path) = profile {
+    let (profile, neutral_animation) = if let Some(path) = profile {
         let bytes = read_limited(path, PROFILE_LIMIT)?;
         let value: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
         validate_profile(&value, &parsed.json, &names)?;
-        Some(bytes)
+        (
+            Some(bytes),
+            value["neutralAnimation"].as_str().map(str::to_owned),
+        )
     } else if !extras["profile"].is_null() {
         let bytes = serde_json::to_vec(&extras["profile"]).map_err(|e| e.to_string())?;
         if bytes.len() > PROFILE_LIMIT {
             return Err("embedded character profile exceeds size limit".into());
         }
         validate_profile(&extras["profile"], &parsed.json, &names)?;
-        Some(bytes)
+        (
+            Some(bytes),
+            extras["profile"]["neutralAnimation"]
+                .as_str()
+                .map(str::to_owned),
+        )
     } else {
-        None
+        (None, None)
     };
     let mut default_mappings = AnimationMappings {
-        idle: if names.contains("Idle") {
-            "Idle".into()
-        } else {
-            DEFAULT_IDLE_NAME.into()
-        },
+        idle: neutral_animation.unwrap_or_else(|| {
+            if names.contains("Idle") {
+                "Idle".into()
+            } else {
+                DEFAULT_IDLE_NAME.into()
+            }
+        }),
         working: None,
         completed: None,
         error: None,
@@ -1497,6 +1507,39 @@ mod tests {
         assert_eq!(data.embedded_animations, ["Wave"]);
         assert_eq!(data.animations.len(), 1);
         assert!(Path::new(data.profile_path.as_ref().unwrap()).is_file());
+    }
+    #[test]
+    fn profile_baseline_precedes_automatic_idle_but_not_explicit_mappings() {
+        let (mut value, bin) = animated_model();
+        let mut idle = value["animations"][0].clone();
+        idle["name"] = "Idle".into();
+        value["animations"].as_array_mut().unwrap().push(idle);
+        value["extras"]["starlite"]["profile"] = json!({
+            "schemaVersion":1,"type":"weiguang","neutralAnimation":"Wave","neutralPose":{},
+            "earBones":[],"earPoses":{"Neutral":{}},"expressions":{},
+            "accessories":{"collar":"hips","cone":"head","collarVisible":true,"coneVisible":false},
+            "blink":{"period":4,"curve":[[0,0],[0.1,1],[0.2,0]]}
+        });
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("model.vrm");
+        fs::write(&source, glb(value.clone(), bin.clone())).unwrap();
+        assert_eq!(
+            inspect(&source, &[], None).unwrap().default_mappings.idle,
+            "Wave"
+        );
+        value["extras"]["starlite"]["mappings"] = json!({"idle":"Idle","working":null,"completed":null,"error":null,"blocked":null,"approval":null,"click":[],"ambient":[]});
+        fs::write(&source, glb(value.clone(), bin.clone())).unwrap();
+        assert_eq!(
+            inspect(&source, &[], None).unwrap().default_mappings.idle,
+            "Idle"
+        );
+        value["extras"]["starlite"]["profile"]["neutralAnimation"] = "Missing".into();
+        fs::write(&source, glb(value, bin)).unwrap();
+        assert!(inspect(&source, &[], None)
+            .err()
+            .unwrap()
+            .contains("profile neutral animation is missing"));
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
     }
     #[test]
     fn refuses_corrupt_embedded_clips_reserved_names_and_unavailable_mappings() {

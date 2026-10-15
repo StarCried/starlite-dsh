@@ -198,6 +198,21 @@ impl DesktopSettings {
         }
         Ok(())
     }
+
+    pub fn remove_model(&mut self, id: &str) -> Result<Option<LibraryModel>, String> {
+        let removed = if let Some(index) = self.models.iter().position(|model| model.id == id) {
+            Some(self.models.remove(index))
+        } else if id == DEFAULT_MODEL_ID && self.active_model_id.as_deref() == Some(id) {
+            // A starter download may not yet have created an installed entry.
+            None
+        } else {
+            return Err("没有找到该模型，请重新打开设置。".into());
+        };
+        if self.active_model_id.as_deref() == Some(id) {
+            self.active_model_id = None;
+        }
+        Ok(removed)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -707,6 +722,41 @@ mod tests {
         assert_eq!(restored.models.len(), 2);
         assert!(restored.active_model_id.is_none());
         assert!(current.add_model(test_model("first")).is_err());
+    }
+
+    #[test]
+    fn removal_preserves_other_models_and_frees_library_capacity() {
+        let mut current = DesktopSettings::default();
+        for index in 0..64 {
+            current
+                .add_model(test_model(&format!("model-{index}")))
+                .unwrap();
+        }
+        current.remove_model("model-0").unwrap();
+        assert_eq!(current.active_model_id.as_deref(), Some("model-63"));
+        current.add_model(test_model("replacement")).unwrap();
+        assert_eq!(current.models.len(), 64);
+        current.remove_model("replacement").unwrap();
+        assert!(current.active_model_id.is_none());
+        assert_eq!(current.models.len(), 63);
+        assert!(current.remove_model("missing").is_err());
+        let restored = decode_settings(&settings_bytes(&current).unwrap()).unwrap();
+        assert!(restored.active_model_id.is_none());
+        assert_eq!(restored.models.len(), 63);
+    }
+
+    #[test]
+    fn installed_or_pending_starter_removal_persists_an_empty_disabled_library() {
+        for installed in [false, true] {
+            let mut current = DesktopSettings::default();
+            if installed {
+                current.add_model(test_model(DEFAULT_MODEL_ID)).unwrap();
+            }
+            current.remove_model(DEFAULT_MODEL_ID).unwrap();
+            let restored = decode_settings(&settings_bytes(&current).unwrap()).unwrap();
+            assert!(restored.models.is_empty());
+            assert!(restored.active_model_id.is_none());
+        }
     }
 
     #[test]

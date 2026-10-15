@@ -42,6 +42,19 @@ async fn select_model(
 }
 
 #[tauri::command]
+async fn remove_model(app: AppHandle, model_id: String) -> Result<model::ModelRemoval, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        settings::with_write(&app, || {
+            let result = model::remove(&app, model_id)?;
+            let _ = app.emit("settings-changed", result.settings.clone());
+            Ok(result)
+        })
+    })
+    .await
+    .map_err(|_| "模型移除失败，请重试。".to_string())?
+}
+
+#[tauri::command]
 async fn update_preferences(
     app: AppHandle,
     preferences: settings::DesktopPreferences,
@@ -157,6 +170,7 @@ pub fn run() {
             inspect_model,
             prepare_model,
             select_model,
+            remove_model,
             update_preferences,
             get_model_license,
             install_model,

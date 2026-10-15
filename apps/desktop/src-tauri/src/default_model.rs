@@ -29,10 +29,21 @@ struct DefaultDescriptor {
 }
 
 pub fn prepare_model(app: &AppHandle) -> Result<DesktopSettings, String> {
-    let mut current = settings::load(app);
-    if has_default(&current) {
+    let current = settings::load(app);
+    if !needs_default(&current) {
         return Ok(current);
     }
+    prepare_default(app, current)
+}
+
+fn needs_default(current: &DesktopSettings) -> bool {
+    current.active_model_id.as_deref() == Some(settings::DEFAULT_MODEL_ID) && !has_default(current)
+}
+
+fn prepare_default(
+    app: &AppHandle,
+    mut current: DesktopSettings,
+) -> Result<DesktopSettings, String> {
     let parent = default_parent()?;
     let Some(descriptor) = read_descriptor(&parent)? else {
         return Ok(current);
@@ -67,7 +78,7 @@ pub fn prepare_model(app: &AppHandle) -> Result<DesktopSettings, String> {
 pub fn select_model(app: &AppHandle, model_id: Option<String>) -> Result<DesktopSettings, String> {
     let mut current = settings::load(app);
     if model_id.as_deref() == Some(settings::DEFAULT_MODEL_ID) && !has_default(&current) {
-        current = prepare_model(app)?;
+        current = prepare_default(app, current)?;
         // A missing local cache is acquired by the plugin on the next DSH
         // startup. Persist the explicit selection without inventing model data.
         if !has_default(&current) {
@@ -245,5 +256,15 @@ mod tests {
         let info: DefaultDescriptor = serde_json::from_value(descriptor()).unwrap();
         assert!(checked_model(directory.path(), &info).is_err());
         assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn only_the_selected_missing_starter_is_automatically_prepared() {
+        let mut current = DesktopSettings::default();
+        assert!(needs_default(&current));
+        current.remove_model(settings::DEFAULT_MODEL_ID).unwrap();
+        assert!(!needs_default(&current));
+        current.active_model_id = Some("custom-model".into());
+        assert!(!needs_default(&current));
     }
 }

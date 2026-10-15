@@ -13,7 +13,7 @@
 
 标准人形 VRM 0／1 缺少 Blink 时可以导入，仅停用缺失的眨眼能力；声明的绑定仍校验资源引用。自动待机优先使用有效角色配置的 `neutralAnimation`，明确映射保持优先。设置页增加模型「移除」：保留源文件，移除当前模型后隐藏角色，微光不会在重启时重新获取。不支持的平台明确提示需要 Windows 11 x64 或其上的 WSL2 x64；安装检查输出阶段、固定错误类别与退出码，不输出原始凭据或会话内容。
 
-本地运行时来自干净的 StarLite `f545ca9afbbb2185a6827ffa9189b31cbf8752b3`。完整 `pnpm check` 通过：46 个文件、478 项测试；Rust 58 项通过、1 项既有私有模型测试忽略，fmt／严格 Clippy 通过。Windows GUI／NSIS 构建与 11 文件包检查通过；当前本地 tarball 为 3,921,993 字节、SHA-256 `160495f53536e59e425f4d745d4433f86fed933aee7cac25cc0761d9a46698a7`，EXE 为 `2b0d74f75f21d0b9f21cad347e98bc06f17c3754771e6819fca29070a29bcb89`。此包通过官方 DSH `0.2.1-alpha.2` 的 Windows 隔离安装、认证首页、fail-open 和退出回收检查，未调用付费 API。
+本地运行时来自干净的 StarLite `f545ca9afbbb2185a6827ffa9189b31cbf8752b3`。完整 `pnpm check` 通过：46 个文件、478 项测试；Rust 58 项通过、1 项既有私有模型测试忽略，fmt／debug 与 release 严格 Clippy 通过。Windows GUI／NSIS 构建与 11 文件包检查通过；当前本地 tarball 为 3,921,993 字节、SHA-256 `160495f53536e59e425f4d745d4433f86fed933aee7cac25cc0761d9a46698a7`，EXE 为 `2b0d74f75f21d0b9f21cad347e98bc06f17c3754771e6819fca29070a29bcb89`。同一包通过官方 DSH `0.2.1-alpha.2` 在 Windows（Node 24）与 WSL2（Node 22.22.1）的隔离安装、认证首页、fail-open 和退出回收检查，未调用付费 API。测试未修改日常 DSH profile；两个平台的检查均不会启动实际桌宠或下载模型，桌宠界面另行验证。
 
 新设置页已实际打开，移除确认框可取消，原设置文件哈希保持不变；用户手动检查新界面仍待结果。历史性能、DPI 和睡眠记录保留原候选身份，不改记为新包重新验收。以上本地 tarball 沿用开发版本号，只用于验证，不可覆盖已发布版本。
 

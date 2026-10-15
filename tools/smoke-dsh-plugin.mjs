@@ -9,6 +9,12 @@ const self=fileURLToPath(import.meta.url);
 const root=resolve(dirname(self),"..");
 const PROFILE="starlite-ci-smoke";
 
+export function smokeHost(platform=process.platform,architecture=process.arch,kernelRelease=release()) {
+  if(architecture!=="x64")return "unsupported";
+  if(platform==="win32")return "windows";
+  return platform==="linux"&&kernelRelease.toLowerCase().includes("microsoft")?"wsl":"unsupported";
+}
+
 /** A fresh Harness home and cwd, without inherited accounts, proxy settings or Node hooks. */
 export function smokeEnvironment(source, directory, platform=process.platform) {
   const result={};
@@ -28,26 +34,88 @@ function ensure(value,step){if(!value)fail(step);}
 const delay=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
 async function until(test,step,milliseconds=5000){const end=Date.now()+milliseconds;while(!test()){if(Date.now()>=end)fail(step);await delay(25);}}
 
-function runQuiet(file,args,options,step,ipc=false) {
+const processDiagnostics=[
+  ["package-integrity",/\bEINTEGRITY\b|integrity checksum/iu,"check the package archive or npm cache"],
+  ["registry-authentication",/\bE(?:401|403|NEEDAUTH|AUTH)\b/iu,"check registry access; this test uses an isolated npm configuration"],
+  ["registry-package-not-found",/\bE404\b/iu,"check the package name/version and registry"],
+  ["network-dns",/\b(?:EAI_AGAIN|ENOTFOUND)\b|getaddrinfo/iu,"check DNS and npm registry connectivity"],
+  ["tls-certificate",/\b(?:CERT_HAS_EXPIRED|SELF_SIGNED_CERT_IN_CHAIN|DEPTH_ZERO_SELF_SIGNED_CERT|UNABLE_TO_VERIFY_LEAF_SIGNATURE)\b/iu,"check the system clock and registry certificate chain"],
+  ["network-connection",/\b(?:ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH)\b|fetch failed/iu,"check network and npm registry connectivity"],
+  ["disk-space",/\bENOSPC\b/iu,"free space in the temporary/cache directory"],
+  ["filesystem-permission",/\b(?:EACCES|EPERM)\b/iu,"check access to the temporary directory and executable"],
+  ["missing-runtime-dependency",/\b(?:ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND)\b|Cannot find (?:module|package)/u,"reinstall the official DSH runtime and verify its dependencies"],
+  ["unsupported-node-version",/\bEBADENGINE\b|Unsupported engine/iu,"use the Node.js version required by DSH"],
+  ["runtime-module-incompatible",/\b(?:ERR_REQUIRE_ESM|SyntaxError)\b/iu,"check the Node.js version and DSH package compatibility"],
+];
+const workerSteps=new Set([
+  "unexpected-external-fetch","packed-plugin-bundle-not-composed","loopback-web-ui-unavailable","web-ui-authentication-unavailable",
+  "unexpected-authentication-origin","unexpected-login-redirect","authenticated-web-ui-failed","expected-http-servers-unavailable",
+  "unsupported-host-not-disabled","native-bridge-or-fail-open-unavailable","launch-probe-server-leak","incompatible-adapter-not-fail-open",
+  "incompatible-adapter-server-leak","host-disposal-server-leak","web-ui-still-running-after-disposal","public-profile-boot-failed",
+]);
+
+/** Return only fixed diagnostic categories: never echo a child log or credential. */
+export function processDiagnostic(text) {
+  const match=latestDiagnostic(text);
+  return match ? `${match[0]}: ${match[2]}` : undefined;
+}
+
+function latestDiagnostic(text) {
+  let latest;let position=-1;
+  for(const entry of processDiagnostics){
+    for(const match of text.matchAll(new RegExp(entry[1].source,`${entry[1].flags}g`))){
+      if(match.index>position){position=match.index;latest=entry;}
+    }
+  }
+  return latest;
+}
+
+function workerFailure(error) {
+  if(workerSteps.has(error?.smokeStep))return {kind:"failure",step:error.smokeStep};
+  const code=typeof error?.code==="string"?error.code:"";
+  const message=typeof error?.message==="string"?error.message:"";
+  const category=(latestDiagnostic(code)??latestDiagnostic(message))?.[0];
+  // Only the allow-listed category crosses IPC; the parent supplies its hint.
+  return category?{kind:"failure",category}:{kind:"failure",step:"public-profile-boot-failed"};
+}
+
+export function runQuiet(file,args,options,step,ipc=false) {
   return new Promise((resolve,reject)=>{
     const child=spawn(file,args,{...options,windowsHide:true,shell:false,stdio:ipc?["ignore","pipe","pipe","ipc"]:["ignore","pipe","pipe"]});
-    // Boot logs can contain authentication URLs. Drain without printing or persisting them.
-    child.stdout.on("data",()=>{});child.stderr.on("data",()=>{});
-    let result;let failure;
-    if(ipc)child.on("message",message=>{if(message?.kind==="complete")result=message.result;else if(message?.kind==="failure")failure=message.step;});
-    const timer=setTimeout(()=>{child.kill();reject(Error(`${step}: timed out`));},120_000);
-    child.once("error",()=>{clearTimeout(timer);reject(Error(`${step}: process failed`));});
-    child.once("exit",code=>{clearTimeout(timer);if(code===0&&(!ipc||result))resolve(result);else reject(Error(`${step}: ${failure??"process failed"}`));});
+    // Boot logs can contain authentication URLs. Inspect a bounded in-memory
+    // suffix for allow-listed categories, without printing or persisting logs.
+    let result;let failure;let diagnostic;let suffix="";
+    const observe=chunk=>{const text=suffix+String(chunk);diagnostic=processDiagnostic(text)??diagnostic;suffix=text.slice(-256);};
+    child.stdout.on("data",observe);child.stderr.on("data",observe);
+    if(ipc)child.on("message",message=>{
+      if(message?.kind==="complete")result=message.result;
+      else if(message?.kind==="failure"){
+        const category=processDiagnostics.find(([name])=>name===message.category);
+        failure=workerSteps.has(message.step)?message.step:category?`${category[0]}: ${category[2]}`:"unknown-worker-failure";
+      }
+    });
+    const timer=setTimeout(()=>{child.kill();reject(Error(`${step}: timeout after 120 seconds; check runtime/profile boot and network access`));},120_000);
+    child.once("error",error=>{clearTimeout(timer);const category=error.code==="ENOENT"?"executable-or-working-directory-not-found":processDiagnostic(String(error.code))??"process-launch-failed";reject(Error(`${step}: ${category}; check the executable and working directory`));});
+    child.once("close",(code,signal)=>{
+      clearTimeout(timer);
+      if(code===0&&(!ipc||result))resolve(result);
+      else {
+        const termination=Number.isInteger(code)?`exit ${code}`:typeof signal==="string"&&/^SIG[A-Z0-9]+$/u.test(signal)?signal:"unknown exit";
+        reject(Error(`${step}: ${failure??diagnostic??(code===0&&ipc?"missing-worker-result":"nonzero-exit")} (${termination})`));
+      }
+    });
   });
 }
 
 /** Install the real packed bundle using DSH, then boot and dispose through its public profile API. */
 export async function smokeDshPlugin(runtimeDirectory,archive) {
-  const runtime=await realpath(runtimeDirectory),packageFile=await realpath(archive);
-  const metadata=JSON.parse(await readFile(join(runtime,"package.json"),"utf8"));
-  ensure(metadata.name==="@deepseek-ai/dsh","not-an-official-dsh-package");
+  const runtime=await inputPath(runtimeDirectory,"runtime-directory"),packageFile=await inputPath(archive,"plugin-archive");
+  let metadata;
+  try{metadata=JSON.parse(await readFile(join(runtime,"package.json"),"utf8"));}
+  catch{fail("runtime-metadata-invalid: provide an installed official DSH package directory containing package.json");}
+  ensure(metadata?.name==="@deepseek-ai/dsh","not-an-official-dsh-package");
   ensure(typeof metadata.bin?.dsh==="string","official-cli-entry-unavailable");
-  const cli=await realpath(resolve(runtime,metadata.bin.dsh));
+  const cli=await inputPath(resolve(runtime,metadata.bin.dsh),"official-cli-entry");
   ensure(cli.startsWith(`${runtime}${sep}`),"official-cli-entry-outside-package");
   const temporary=await mkdtemp(join(tmpdir(),"starlite-dsh-smoke-"));
   try {
@@ -64,6 +132,14 @@ export async function smokeDshPlugin(runtimeDirectory,archive) {
     const actual=await realpath(temporary);
     ensure(dirname(actual)===await realpath(tmpdir())&&basename(actual).startsWith("starlite-dsh-smoke-"),"unsafe-smoke-cleanup");
     await rm(actual,{recursive:true,force:true,maxRetries:3,retryDelay:100});
+  }
+}
+
+async function inputPath(path,step) {
+  try{return await realpath(path);}
+  catch(error){
+    const category=error?.code==="ENOENT"?"not-found":processDiagnostic(String(error?.code))??"input-unavailable";
+    throw Error(`${step}: ${category}; check the supplied path`);
   }
 }
 
@@ -88,8 +164,7 @@ async function worker(runtime,profile) {
   const {prepareProfile,runProfile}=await import(pathToFileURL(require.resolve("@deepseek-ai/dsh/profile-boot")));
   const {createLaunchEnvironmentSnapshot}=await import(pathToFileURL(require.resolve("@deepseek-ai/dsh-launch-environment")));
   const environment=createLaunchEnvironmentSnapshot([{source:"process",values:process.env}]);
-  const native=process.platform==="win32";
-  const host=native?"windows":release().toLowerCase().includes("microsoft")?"wsl":"unsupported";
+  const host=smokeHost();
   const servers=()=>process.getActiveResourcesInfo().filter(type=>type.toLowerCase()==="tcpserverwrap").length;
   const before=servers();
   ensure(prepareProfile(PROFILE).layers.some(layer=>layer.packageName==="dsh-starlite"),"packed-plugin-bundle-not-composed");
@@ -125,7 +200,7 @@ async function worker(runtime,profile) {
       for(const argument of message.args){
         if(typeof argument!=="string")continue;
         diagnostics.bridgeReady ||= argument.includes("StarLite for DSH status bridge is ready.");
-        diagnostics.disabled ||= argument.includes("StarLite for DSH is disabled because");
+        diagnostics.disabled ||= argument.includes("StarLite for DSH requires Windows 11 x64");
         diagnostics.launchFailed ||= argument.includes("StarLite for DSH could not start the Windows companion");
       }
     }});
@@ -153,7 +228,7 @@ if(process.argv[1]&&resolve(process.argv[1])===self) {
   if(mode==="--initialize")await initialize(resolve(args[0]));
   else if(mode==="--worker"){
     try{process.send?.({kind:"complete",result:await worker(resolve(args[0]),resolve(args[1]))});}
-    catch(error){process.send?.({kind:"failure",step:error?.smokeStep??"public-profile-boot-failed"},()=>process.exit(1));process.exitCode=1;}
+    catch(error){process.send?.(workerFailure(error),()=>process.exit(1));process.exitCode=1;}
     finally{process.disconnect?.();}
   }else{
     const runtime=mode??process.env.DSH_PACKAGE_ROOT;

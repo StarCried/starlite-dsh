@@ -46,6 +46,11 @@ export interface LibraryModel extends InstalledModel {
   title: string;
 }
 
+export interface ModelRemoval {
+  settings: DesktopSettings;
+  cleanupWarning?: string;
+}
+
 export interface ModelInspection {
   backend: ModelBackend;
   sourceSha256: string;

@@ -17,7 +17,7 @@
 
 设置中的「添加模型」直接选择 VRM，然后检查并事务安装。原生 `inspect_model`／`install_model` 接口读取标准 humanoid、眨眼绑定、模型元数据及内嵌 glTF animation。公共动作目录只有名称与时长；内嵌动作名称放在 VRM 载荷的 `embeddedAnimations` 中。
 
-程序随原生 EXE 提供单个基础动作 `StarLiteIdle`，所有导入模型均可选择。没有自己的 `Idle` 时自动映射到它；存在模型 Idle 时优先使用。其他事件动作只来自用户模型，缺失时保持未映射。基础动作来源见 [记录](../apps/desktop/src-tauri/assets/default-idle.md)，不将含第三方呼吸层的片段表述为完全原创。
+程序随原生 EXE 提供单个基础动作 `StarLiteIdle`，所有导入模型均可选择。未提供明确映射时，依次选用角色配置的有效 `neutralAnimation`、模型 `Idle`、程序 `StarLiteIdle`；明确提供的默认映射和已保存用户映射保持优先。其他事件动作只来自用户模型，缺失时保持未映射。基础动作来源见 [记录](../apps/desktop/src-tauri/assets/default-idle.md)，不将含第三方呼吸层的片段表述为完全原创。
 
 VRM 内嵌动作使用标准 glTF 骨骼、位移及形态权重通道。运行时将原始人形骨骼轨道转换到 VRM normalized 骨骼，再统一更新人形、表情与物理，避免动画覆盖或重复更新。可选 `animation.extras.starlite.expressions` 用表达名称关联 SCALAR sampler，使表情与自动眨眼、视线协作；普通形态动画仍可播放。
 
@@ -38,6 +38,8 @@ VRM 必须自包含，提供 15 个必需 humanoid 骨骼映射。对象名称�
 设置 schema 为 4：`models` 保存模型列表，`activeModelId` 选择当前模型，`null` 表示不显示。每个模型独立保存资源、映射及许可。旧版本当前模型、映射、许可和偏好自动迁移，旧禁用状态转为不显示；旧 Inochi2D 文件保留但不可选用。
 
 `update_preferences` 自动保存显示偏好，`update_model_mappings` 按模型 ID 保存映射，`select_model` 切换选择。原生写入和设置事件使用同一互斥锁保证顺序。映射与隐私修改不重建渲染器。
+
+`remove_model` 按模型 ID 移除列表项；当前模型被移除时选择设为 `null`。先持久保存设置，再清理可证明属于程序的 `models/model-UUID` 平面目录；不递归遍历，不删除原始、共享、外部引用或未知文件。清理失败单独返回提示，不将已保存的移除误报为失败。微光没有额外保留规则：只有仍选择尚未安装的默认模型时才自动准备，移除后不重新下载或加入。
 
 只有 Idle 循环；其他状态各播放一次后回待机。忙碌时不触发点击或偶发动作，新状态可以打断旧片段，旧 Promise 迟到完成不能恢复旧状态。暂停、隐藏、断线、模型或映射变化取消待完成动作及偶发计时。Click／Ambient 各最多 20 项，随机选一项。快速切换模型会销毁迟到实例。
 

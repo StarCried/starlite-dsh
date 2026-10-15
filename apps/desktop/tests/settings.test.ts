@@ -38,6 +38,10 @@ async function launch(initial:DesktopSettings=installed,prepared:DesktopSettings
   if(command==="prepare_model"){if(prepared instanceof Error)throw prepared;current=structuredClone(prepared);}
   else if(command==="get_model_license")return terms;
   else if(command==="select_model")current={...current,activeModelId:args!.modelId!};
+  else if(command==="remove_model"){
+   current={...current,models:current.models.filter(item=>item.id!==args!.modelId),activeModelId:current.activeModelId===args!.modelId?null:current.activeModelId};
+   return {settings:structuredClone(current)};
+  }
   else if(command==="update_preferences")current={...current,preferences:args!.preferences!};
   else if(command==="update_model_mappings")current={...current,models:current.models.map(item => item.id===args!.modelId?{...item,mappings:args!.mappings!}:item)};
   else throw new Error("unexpected command: "+command);
@@ -102,12 +106,71 @@ it("honors the last click even when it returns to the already active model",asyn
  await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledWith("select_model",{modelId:"weiguang-default"}));
  expect(current.activeModelId).toBe("weiguang-default");
 });
-it("keeps uncached default model selectable while opted out",async () => {
+it("does not reintroduce an absent starter after removal or opting out",async () => {
  await launch({...empty,activeModelId:null});
- expect(document.querySelector('[data-model-id="weiguang-default"]')!.textContent).toContain("待下载");
- document.querySelector<HTMLButtonElement>('[data-model-id="weiguang-default"]')!.click();
- await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledWith("select_model",{modelId:"weiguang-default"}));
- await vi.waitFor(() => expect(document.getElementById("settings-status")!.textContent).toContain("重启 DSH"));
+ expect(document.querySelector('[data-model-id="weiguang-default"]')).toBeNull();
+ expect(button().disabled).toBe(false);
+});
+
+it.each(["weiguang-default","custom"])("removes %s with explicit confirmation and preserves the other model",async id => {
+ await launch({...installed,models:[model,custom],activeModelId:id});
+ document.querySelector<HTMLButtonElement>('[aria-label="移除'+(id==="custom"?custom.title:model.title)+'"]')!.click();
+ const dialog=document.querySelector<HTMLDialogElement>(".model-remove-dialog")!;
+ expect(dialog.open).toBe(true);
+ expect(dialog.textContent).toContain(id==="custom"?custom.title:model.title);
+ expect(dialog.textContent).toContain("原始 VRM 文件保留");
+ expect(native.invoke.mock.calls.some(([command])=>command==="remove_model")).toBe(false);
+ [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(item=>item.textContent==="移除")!.click();
+ await vi.waitFor(()=>expect(current.models).toHaveLength(1));
+ expect(current.models[0]!.id).not.toBe(id);expect(current.activeModelId).toBeNull();
+ expect(document.querySelector('[data-model-id="'+id+'"]')).toBeNull();
+ expect(document.getElementById("mapping-section")!.hidden).toBe(true);
+ expect(document.getElementById("settings-status")!.textContent).toBe("模型已移除");
+});
+
+it("removes an inactive model without switching or remounting the active choice",async()=>{
+ await launch({...installed,models:[model,custom]});
+ document.querySelector<HTMLButtonElement>('[aria-label="移除自定义角色"]')!.click();
+ document.querySelector<HTMLDialogElement>(".model-remove-dialog")!.close("remove");
+ await vi.waitFor(()=>expect(current.models).toHaveLength(1));
+ expect(current.activeModelId).toBe(model.id);expect(activeIdle().value).toBe("RelaxedBreath");
+});
+
+it("cancels removal without native writes, including closing the confirmation",async()=>{
+ await launch();
+ const remove=()=>document.querySelector<HTMLButtonElement>('[aria-label="移除微光"]')!.click();
+ remove();document.querySelector<HTMLButtonElement>(".model-remove-dialog button")!.click();await tick();
+ remove();document.querySelector<HTMLDialogElement>(".model-remove-dialog")!.close();await tick();
+ expect(native.invoke.mock.calls.some(([command])=>command==="remove_model")).toBe(false);
+ expect(current.models).toHaveLength(1);
+});
+
+it("keeps the last model and its selection when removal cannot be saved",async()=>{
+ await launch();native.invoke.mockRejectedValueOnce(new Error("removal could not be saved"));
+ document.querySelector<HTMLButtonElement>('[aria-label="移除微光"]')!.click();
+ document.querySelector<HTMLDialogElement>(".model-remove-dialog")!.close("remove");
+ await vi.waitFor(()=>expect(document.getElementById("settings-error")!.textContent).toContain("removal could not be saved"));
+ expect(current.models).toHaveLength(1);expect(current.activeModelId).toBe(model.id);
+});
+
+it("reports cleanup failure as saved removal rather than claiming a failed setting write",async()=>{
+ await launch();
+ const removed={...installed,models:[],activeModelId:null};
+ native.invoke.mockResolvedValueOnce({settings:removed,cleanupWarning:"模型已移除，但本机副本清理未完成；原始 VRM 文件未改变。"});
+ document.querySelector<HTMLButtonElement>('[aria-label="移除微光"]')!.click();
+ document.querySelector<HTMLDialogElement>(".model-remove-dialog")!.close("remove");
+ await vi.waitFor(()=>expect(document.getElementById("settings-status")!.textContent).toContain("本机副本清理未完成"));
+ expect(document.querySelector('[data-model-id="weiguang-default"]')).toBeNull();
+ expect(document.getElementById("settings-error")!.textContent).toBe("");
+ expect(document.getElementById("mapping-section")!.hidden).toBe(true);
+});
+
+it("allows cancelling a pending starter download without an installed model entry",async()=>{
+ await launch(empty);
+ document.querySelector<HTMLButtonElement>('[aria-label="移除微光"]')!.click();
+ document.querySelector<HTMLDialogElement>(".model-remove-dialog")!.close("remove");
+ await vi.waitFor(()=>expect(current.activeModelId).toBeNull());
+ expect(current.models).toHaveLength(0);expect(document.querySelector('[data-model-id="weiguang-default"]')).toBeNull();
 });
 it("preserves legacy models without advertising disabled Inochi2D as VRM",async () => {
  await launch({...installed,models:[model,{...custom,backend:"inochi2d"}]});

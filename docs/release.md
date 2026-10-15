@@ -1,6 +1,8 @@
 # StarLite for DSH alpha 发布检查
 
-本次发行目标为 `0.1.0-alpha.1`，包含可选眨眼、模型移除、默认资源获取策略、断线后点击恢复及安装诊断改进，见[版本变化](../CHANGELOG.md)。需要针对新版本重新构建、打包并核验公开下载；不能将下方 alpha.0 或开发版本候选的哈希和结果改记为 alpha.1 已发布。
+[`dsh-starlite@0.1.0-alpha.1`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.1) 与 [Release `v0.1.0-alpha.1`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.1) 已公开，发行源码为 [`918f15c`](https://github.com/StarCried/starlite-dsh/commit/918f15ce1d342a79a90c9c1ac0d6646939ced2e6)，共享运行时为 [`903fe2c`](https://github.com/StarCried/starlite/commit/903fe2cab9e0f37ad36cd904e301fa482af2508e)。精确源码的[主 CI](https://github.com/StarCried/starlite-dsh/actions/runs/38703696617) 与 [DSH latest 兼容作业](https://github.com/StarCried/starlite-dsh/actions/runs/38704010721) 均成功；更改见[版本变化](../CHANGELOG.md)。
+
+匿名公开下载的 npm tarball 为 3,922,149 字节，SHA-256 `e7abb12285656a12bac3bd896c426755afd3d4bc9abcb7060f593d6a10d84e7d`，与最终本地发行包逐字节一致，SHA-512 完整性值与 registry 一致。这个真正公开下载的包已在官方 DSH `0.2.1-alpha.2` 的 Windows 与 WSL2 环境中通过隔离安装、认证首页、fail-open 和退出回收，未调用付费 API。`alpha` 指向 alpha.1，`latest` 仍保留 alpha.0；安装使用 `dsh-starlite@alpha`。完整 SRI、来源和验收边界见[发布验收](dsh-compatibility.md)。旧版和本地开发候选的记录保留原身份，没有改写为本次程序的全面复验。
 
 ## 首次发行基线
 

@@ -1,8 +1,16 @@
 # DSH 兼容性与发布验收
 
-## 0.1.0-alpha.1 发布准备（2026-10-15）
+## 当前公开发行 0.1.0-alpha.1（2026-10-15）
 
-当前源码版本已统一为 `0.1.0-alpha.1`，正在准备发行。此次变更包括可选眨眼、模型移除、默认模型获取策略、断线重连后的点击恢复、平台与安装诊断，见[版本变化](../CHANGELOG.md)。正式来源、CI、新版本产物及公开 registry 下载验证完成后另行记录；下方旧版本与本地候选结果保留原身份，不作为 alpha.1 已发布的证据。
+[`dsh-starlite@0.1.0-alpha.1`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.1) 与 [Release `v0.1.0-alpha.1`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.1) 已公开。发行源码固定为 [`918f15c`](https://github.com/StarCried/starlite-dsh/commit/918f15ce1d342a79a90c9c1ac0d6646939ced2e6)，共享运行时固定为 [`903fe2c`](https://github.com/StarCried/starlite/commit/903fe2cab9e0f37ad36cd904e301fa482af2508e)。后续文档提交不改变发行 tag、SOURCE_REVISION 或程序产物。
+
+- 此次包含可选眨眼、模型移除、默认模型获取策略、断线重连后的点击恢复、已解决的模型准备错误提示清理，以及平台与安装诊断；详见[版本变化](../CHANGELOG.md)。微光模型及其他动作资产没有更新，仍独立授权、独立下载。
+- 精确发行提交的[主 CI #38703696617](https://github.com/StarCried/starlite-dsh/actions/runs/38703696617) 与 [DSH latest 兼容检查 #38704010721](https://github.com/StarCried/starlite-dsh/actions/runs/38704010721) 均成功。主 CI 覆盖 Windows 构建、打包与安装检查；兼容作业的 Windows／Ubuntu 均成功。该源码本地完整 `pnpm check` 为 484 项通过，Rust 58 项通过、1 项既有私有模型测试忽略，fmt 与 debug／release 严格 Clippy 通过。
+- 已匿名从公开 npm registry 全新下载 tarball：3,922,149 字节，SHA-256 `e7abb12285656a12bac3bd896c426755afd3d4bc9abcb7060f593d6a10d84e7d`，与本地最终发行包逐字节一致。计算得到的完整性值与 registry 一致：`sha512-YKkSPomqxwK+90+pqM7TttKzixiP16JJFKCbAVkAHIZf7Q13IKiE26jxB9IEtXql+TcPxCYOSIlJz14QIgdLAg==`。该包保持 11 文件白名单，不包含角色资源。
+- 对上述真正公开下载的文件，官方 DSH `0.2.1-alpha.2` 在 Windows（Node 24.15.0）和 WSL2（Node 22.22.1）的实际隔离安装、认证首页、fail-open 与退出回收均通过。没有用工作区或本地 tarball 替代公开下载；没有调用付费模型 API、下载角色或修改日常 profile。原生界面、模型外观及用户操作结果保留下方各自的验收身份，不将安装 smoke 记为全面视觉复验。
+- 公开 registry 的 `alpha` 已指向 alpha.1；首次发行自动产生的 `latest` 仍为 alpha.0，安装明确使用 `dsh-starlite@alpha`。完整下载与两平台检查结果保存在本机未跟踪的 `release-output/public-registry-alpha1-dsh/public-registry-qualification.json`，不含认证 URL、密钥或会话内容。
+
+修复版的单击与模型移除已由用户确认；睡眠唤醒后再次单击的复测仍由用户延期，未改记为通过。下方旧发行与开发候选保留原版本、哈希和实测范围，不冒充本次程序的全面重验。
 
 ## 首次公开发行 0.1.0-alpha.0（2026-10-15）
 
@@ -25,9 +33,9 @@
 
 ## 历史本地候选与人工验收
 
-### 重连后点击动作恢复（本地修复，单击已验收，睡眠复测待做）
+### 重连后点击动作恢复（已随 alpha.1 发行，单击已验收，睡眠复测待做）
 
-已发布的 `0.1.0-alpha.0` 存在短暂断线后动画状态丢失的问题：相同序号的缓存状态被过滤，余额、呼吸与视线恢复后，点击动作仍被拦截。本地修复允许每条新 SSE 流重新同步一次当前有效快照，同一连接内的重复与倒序消息继续过滤；不回放前一个 Host 的本地缓存。回归测试覆盖两次连续断线后不依赖新事件恢复点击，以及旧序号、重复帧和新状态的过滤。用户已确认修复版单击正常；该修复版的睡眠唤醒后单击检查由用户延期，仍待复测。此修复尚未发布。
+已发布的 `0.1.0-alpha.0` 存在短暂断线后动画状态丢失的问题：相同序号的缓存状态被过滤，余额、呼吸与视线恢复后，点击动作仍被拦截。本地修复允许每条新 SSE 流重新同步一次当前有效快照，同一连接内的重复与倒序消息继续过滤；不回放前一个 Host 的本地缓存。回归测试覆盖两次连续断线后不依赖新事件恢复点击，以及旧序号、重复帧和新状态的过滤。用户已确认修复版单击正常；该修复版的睡眠唤醒后单击检查由用户延期，仍待复测。修复现已包含在 alpha.1；此处保留原候选的测试证据，不将延期项目改记为通过。
 
 以下记录保留各次候选的源码、产物和人工结果。「当前」「本轮」及未推送、本机模型来源等描述均指记录当时；现在的公开交付状态以上节为准，旧结果不会被改记为新包的全面复验。
 

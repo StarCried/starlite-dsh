@@ -87,7 +87,7 @@ pub fn inspect(
     let model = read_limited(path, MODEL_LIMIT)?;
     let parsed = parse_glb(&model, false)?;
     validate_humanoid(&parsed.json)?;
-    validate_blink(&parsed.json)?;
+    validate_blink_bindings(&parsed.json)?;
     let meta = if parsed.json["extensions"]["VRM"].is_object() {
         &parsed.json["extensions"]["VRM"]["meta"]
     } else {
@@ -797,82 +797,81 @@ fn validate_humanoid(json: &Value) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_blink(model: &Value) -> Result<(), String> {
+fn validate_blink_bindings(model: &Value) -> Result<(), String> {
     let meshes = array(model, "meshes")?;
     let nodes = array(model, "nodes")?;
     let vrm0 = model["extensions"]["VRM"].is_object();
-    let bound_expression = |expression: &Value| -> bool {
-        let binds = if vrm0 {
-            &expression["binds"]
-        } else {
-            &expression["morphTargetBinds"]
-        };
-        let Some(binds) = binds
-            .as_array()
-            .filter(|binds| !binds.is_empty() && binds.len() <= 256)
-        else {
-            return false;
-        };
-        let mut visible = false;
+    // Blink is an optional capability. Missing, empty and zero-weight presets
+    // do not prevent import, but declared resource references must remain valid.
+    let validate_expression = |expression: &Value| -> Result<(), String> {
+        if !expression.is_object() {
+            return Err("眨眼表达格式无效。请检查 VRM 表达配置后重新导出。".into());
+        }
+        let binds = array(expression, if vrm0 { "binds" } else { "morphTargetBinds" })?;
+        if binds.len() > 256 {
+            return Err("眨眼表达绑定数量超过限制。".into());
+        }
         for bind in binds {
             let mesh = if vrm0 {
-                index(&bind["mesh"], meshes.len()).ok()
+                index(&bind["mesh"], meshes.len())
             } else {
                 index(&bind["node"], nodes.len())
-                    .ok()
-                    .and_then(|node| index(&nodes[node]["mesh"], meshes.len()).ok())
-            };
-            let Some(mesh) = mesh else {
-                return false;
-            };
+                    .and_then(|node| index(&nodes[node]["mesh"], meshes.len()))
+            }
+            .map_err(|_| "眨眼表达引用了无效的模型网格。")?;
             let Some(target) = bind["index"]
                 .as_u64()
                 .and_then(|target| usize::try_from(target).ok())
             else {
-                return false;
+                return Err("眨眼表达的形态键索引无效。".into());
             };
-            let Ok(primitives) = array(&meshes[mesh], "primitives") else {
-                return false;
-            };
+            let primitives = array(&meshes[mesh], "primitives")?;
             if primitives.is_empty()
                 || primitives.iter().any(|primitive| {
                     !array(primitive, "targets").is_ok_and(|targets| target < targets.len())
                 })
             {
-                return false;
+                return Err("眨眼表达引用了不存在的形态键。".into());
             }
-            let Some(weight) = bind["weight"].as_f64().filter(|weight| {
-                weight.is_finite() && (0.0..=if vrm0 { 100.0 } else { 1.0 }).contains(weight)
-            }) else {
-                return false;
-            };
-            visible |= weight > 0.0;
+            if !bind["weight"].as_f64().is_some_and(|weight| {
+                weight.is_finite() && (0.0..=if vrm0 { 100.0 } else { 1.0 }).contains(&weight)
+            }) {
+                return Err("眨眼表达的形态键权重无效。".into());
+            }
         }
-        visible
-    };
-    let usable = |name: &str| -> bool {
-        if vrm0 {
-            array(
-                &model["extensions"]["VRM"]["blendShapeMaster"],
-                "blendShapeGroups",
-            )
-            .is_ok_and(|groups| {
-                groups.iter().any(|group| {
-                    group["presetName"].as_str() == Some(name) && bound_expression(group)
-                })
-            })
-        } else {
-            bound_expression(&model["extensions"]["VRMC_vrm"]["expressions"]["preset"][name])
-        }
-    };
-    if usable("blink")
-        || (vrm0 && usable("blink_l") && usable("blink_r"))
-        || (!vrm0 && usable("blinkLeft") && usable("blinkRight"))
-    {
         Ok(())
-    } else {
-        Err("模型缺少可用的眨眼形态键绑定。请在 VRM 中设置 Blink，或同时设置左眼和右眼 Blink 预设，再导出模型。".into())
+    };
+    if vrm0 {
+        let Some(master) = model["extensions"]["VRM"].get("blendShapeMaster") else {
+            return Ok(());
+        };
+        if !master.is_object() {
+            return Err("invalid VRM blendShapeMaster".into());
+        }
+        for expression in array(master, "blendShapeGroups")? {
+            if matches!(
+                expression["presetName"].as_str(),
+                Some("blink" | "blink_l" | "blink_r")
+            ) {
+                validate_expression(expression)?;
+            }
+        }
+    } else if let Some(expressions) = model["extensions"]["VRMC_vrm"].get("expressions") {
+        if !expressions.is_object() {
+            return Err("invalid VRM expressions".into());
+        }
+        if let Some(presets) = expressions.get("preset") {
+            if !presets.is_object() {
+                return Err("invalid VRM expression presets".into());
+            }
+            for name in ["blink", "blinkLeft", "blinkRight"] {
+                if let Some(expression) = presets.get(name) {
+                    validate_expression(expression)?;
+                }
+            }
+        }
     }
+    Ok(())
 }
 fn animation_duration(glb: &Glb<'_>) -> Result<f64, String> {
     let animations = array(&glb.json, "animations")?;
@@ -1240,6 +1239,25 @@ mod tests {
         value["nodes"][2]["mesh"] = 0.into();
         value
     }
+    fn model_vrm1() -> Value {
+        let mut value = model();
+        let bones = value["extensions"]["VRM"]["humanoid"]["humanBones"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|bone| {
+                (
+                    bone["bone"].as_str().unwrap().to_string(),
+                    json!({"node":bone["node"]}),
+                )
+            })
+            .collect::<serde_json::Map<_, _>>();
+        value["extensions"] = json!({"VRMC_vrm":{
+            "specVersion":"1.0", "humanoid":{"humanBones":bones},
+            "expressions":{"preset":{"blink":{"morphTargetBinds":[{"node":2,"index":0,"weight":1}]}}}
+        }});
+        value
+    }
     #[test]
     fn rejects_external_references_and_cycles() {
         let mut value = model();
@@ -1272,33 +1290,120 @@ mod tests {
         );
     }
     #[test]
-    fn blink_is_required_and_must_bind_real_morph_targets() {
-        let value = model();
-        assert!(validate_blink(&value).is_ok());
-        for invalid in [
-            Value::Null,
-            json!([]),
-            json!([{"presetName":"blink","binds":[]}]),
-            json!([{"presetName":"blink","binds":[{"mesh":0,"index":9,"weight":100}]}]),
-            json!([{"presetName":"blink","binds":[{"mesh":0,"index":0,"weight":0}]}]),
-        ] {
-            let mut broken = value.clone();
-            broken["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"] = invalid;
-            assert!(validate_blink(&broken).unwrap_err().contains("眨眼"));
+    fn vrm0_and_vrm1_without_blink_can_be_imported_and_installed() {
+        for mut value in [model(), model_vrm1()] {
+            if let Some(vrm) = value["extensions"].get_mut("VRM") {
+                vrm.as_object_mut().unwrap().remove("blendShapeMaster");
+            } else {
+                value["extensions"]["VRMC_vrm"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("expressions");
+            }
+            let temp = tempfile::tempdir().unwrap();
+            let source = temp.path().join("model.vrm");
+            let bytes = glb(value.clone(), vec![]);
+            fs::write(&source, &bytes).unwrap();
+            let prepared = inspect(&source, &[], None).unwrap();
+            assert_eq!(prepared.default_mappings.idle, DEFAULT_IDLE_NAME);
+            let (path, data) = prepared.write(&temp.path().join("installed")).unwrap();
+            assert_eq!(fs::read(path).unwrap(), bytes);
+            assert_eq!(data.animations[0].name, DEFAULT_IDLE_NAME);
+            if let Some(vrm) = value["extensions"].get_mut("VRM") {
+                vrm["humanoid"]["humanBones"]
+                    .as_array_mut()
+                    .unwrap()
+                    .remove(0);
+            } else {
+                value["extensions"]["VRMC_vrm"]["humanoid"]["humanBones"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("hips");
+            }
+            fs::write(&source, glb(value, vec![])).unwrap();
+            assert!(inspect(&source, &[], None)
+                .err()
+                .unwrap()
+                .contains("required humanoid bone"));
         }
-        let mut split = value;
-        let mut left =
-            split["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"][0].clone();
-        left["presetName"] = "blink_l".into();
-        let mut right = left.clone();
-        right["presetName"] = "blink_r".into();
-        split["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"] = json!([left, right]);
-        assert!(validate_blink(&split).is_ok());
-        split["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"]
-            .as_array_mut()
-            .unwrap()
-            .pop();
-        assert!(validate_blink(&split).is_err());
+    }
+    #[test]
+    fn blink_presets_are_optional_but_declared_resource_bindings_are_checked() {
+        for vrm0 in [true, false] {
+            let baseline = if vrm0 { model() } else { model_vrm1() };
+            let bind = if vrm0 {
+                json!({"mesh":0,"index":0,"weight":100})
+            } else {
+                json!({"node":2,"index":0,"weight":1})
+            };
+            let field = if vrm0 { "binds" } else { "morphTargetBinds" };
+            let set_presets = |value: &mut Value, presets: Vec<(&str, Value)>| {
+                if vrm0 {
+                    value["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"] = presets
+                        .into_iter()
+                        .map(|(name, mut expression)| {
+                            expression["presetName"] = name.into();
+                            expression
+                        })
+                        .collect();
+                } else {
+                    value["extensions"]["VRMC_vrm"]["expressions"]["preset"] = presets
+                        .into_iter()
+                        .map(|(name, expression)| (name.to_owned(), expression))
+                        .collect::<serde_json::Map<_, _>>()
+                        .into();
+                }
+            };
+            let expression = json!({field:[bind.clone()]});
+            let mut zero_bind = bind.clone();
+            zero_bind["weight"] = 0.into();
+            let left = if vrm0 { "blink_l" } else { "blinkLeft" };
+            let right = if vrm0 { "blink_r" } else { "blinkRight" };
+            for presets in [
+                vec![],
+                vec![("blink", json!({}))],
+                vec![("blink", json!({field:[]}))],
+                vec![("blink", json!({field:[zero_bind]}))],
+                vec![("blink", expression.clone())],
+                vec![(left, expression.clone())],
+                vec![(right, expression.clone())],
+                vec![(left, expression.clone()), (right, expression.clone())],
+            ] {
+                let mut value = baseline.clone();
+                set_presets(&mut value, presets);
+                let temp = tempfile::tempdir().unwrap();
+                let source = temp.path().join("model.vrm");
+                fs::write(&source, glb(value, vec![])).unwrap();
+                assert!(inspect(&source, &[], None).is_ok());
+            }
+            for (key, invalid) in [
+                (if vrm0 { "mesh" } else { "node" }, json!(99)),
+                ("index", json!(9)),
+                ("index", json!(-1)),
+                ("weight", json!(-1)),
+                ("weight", json!(if vrm0 { 101 } else { 2 })),
+                ("weight", Value::Null),
+            ] {
+                let mut value = baseline.clone();
+                let mut invalid_bind = bind.clone();
+                invalid_bind[key] = invalid;
+                set_presets(
+                    &mut value,
+                    vec![
+                        ("blink", expression.clone()),
+                        (left, json!({field:[invalid_bind]})),
+                    ],
+                );
+                let temp = tempfile::tempdir().unwrap();
+                let source = temp.path().join("model.vrm");
+                fs::write(&source, glb(value, vec![])).unwrap();
+                assert!(inspect(&source, &[], None).err().unwrap().contains("眨眼"));
+                assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
+            }
+            let mut malformed = baseline;
+            set_presets(&mut malformed, vec![("blink", json!({field:42}))]);
+            assert!(validate_blink_bindings(&malformed).is_err());
+        }
     }
     #[test]
     fn corrupt_motion_does_not_create_installed_files() {

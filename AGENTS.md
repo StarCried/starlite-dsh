@@ -55,8 +55,10 @@
 - Test the packed bundle in an isolated DSH profile and verify fail-open DSH
   behavior when the adapter is incompatible.
 - Preserve exact-name animation validation. Disabled mappings stay neutral.
-  Model-only onboarding directly imports standard humanoid VRM 0/1 files with
-  usable blink morph bindings. The bundled StarLiteIdle provides baseline
+  Model-only onboarding directly imports standard humanoid VRM 0/1 files.
+  Blink and eye tracking are optional capabilities; missing bindings disable
+  the corresponding behavior without rejecting an otherwise valid model.
+  Declared bindings must still reference valid resources. The bundled StarLiteIdle provides baseline
   standing and breathing when the model has no Idle. List embedded standard
   glTF motions for optional mappings; never invent missing event actions.
   Do not restore the retired custom ZIP resource-pack format or import UI.

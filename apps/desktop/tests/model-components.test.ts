@@ -105,6 +105,8 @@ it("keeps import instructions behind a formatted, read-only document dialog", as
   expect(dialog.getAttribute("aria-label")).toBe("VRM 模型导入说明");
   expect([...dialog.querySelectorAll(".license-content h3")].map(item => item.textContent)).toContain("人形骨骼");
   expect(dialog.textContent).toContain("Humanoid");
+  expect(dialog.textContent).toContain("眨眼是可选功能");
+  expect(dialog.textContent).toContain("没有闭眼表达的模型仍可导入");
   expect(dialog.textContent).toContain("blinkLeft");
   expect(dialog.textContent).toContain("lookAt");
   expect(dialog.querySelector("pre code")!.textContent).toContain("rightLowerLeg");

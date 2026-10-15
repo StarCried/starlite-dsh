@@ -133,7 +133,7 @@ describe("DSH compatibility adapter", () => {
     await expect(startDshAdapter({ on: vi.fn() }, {
       host: () => undefined,
       startServer,
-    })).rejects.toThrow(/WSL2/);
+    })).rejects.toMatchObject({code:"unsupported-platform",message:expect.stringMatching(/Windows 11 x64.*WSL2 x64/)});
     expect(startServer).not.toHaveBeenCalled();
   });
 
@@ -243,7 +243,7 @@ describe("DSH compatibility adapter", () => {
       host: () => "wsl",
       startServer: async () => ({ port: 41234, token: "a".repeat(43), close }),
       launch,
-    })).rejects.toThrow("incompatible stream subscription");
+    })).rejects.toMatchObject({code:"incompatible-api",message:expect.stringContaining("required plugin API")});
     expect(disposed).toEqual(["agent/error", "agent/status"]);
     expect(close).toHaveBeenCalledOnce();
     expect(launch).not.toHaveBeenCalled();

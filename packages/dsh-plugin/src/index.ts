@@ -1,5 +1,7 @@
 export const name = "dsh-starlite";
 
+import { DshStartupError } from "./startup-error.js";
+
 interface PluginContext {
   get?(name: string): unknown;
   on(event: string, listener: (...arguments_: unknown[]) => void): unknown;
@@ -19,9 +21,10 @@ export async function apply(context: PluginContext): Promise<() => Promise<void>
     return async () => {
       await dispose();
     };
-  } catch {
+  } catch (error) {
     context.logger?.warn?.(
-      "StarLite for DSH is disabled because this DSH build is incompatible or the bridge could not start.",
+      error instanceof DshStartupError ? error.message
+        : "StarLite for DSH could not start its local status bridge. Restart DSH and check the StarLite installation; DSH will continue without the companion.",
     );
     return async () => undefined;
   }

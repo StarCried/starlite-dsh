@@ -5,6 +5,7 @@ import { startStatusServer, type StatusServer } from "./server.js";
 import { DeepSeekBilling, type BillingContext } from "./billing.js";
 import {QuestionBridge} from "./questions.js";
 import {createDshNavigator} from "./navigation.js";
+import {DshStartupError} from "./startup-error.js";
 
 type Listener = (...arguments_: unknown[]) => unknown;
 type Disposer = () => void | Promise<void>;
@@ -31,11 +32,11 @@ export async function startDshAdapter(
   dependencies: AdapterDependencies = {},
 ): Promise<Disposer> {
   if (!context || typeof context.on !== "function") {
-    throw new Error("incompatible DSH context: event subscription is unavailable");
+    throw new DshStartupError("incompatible-api");
   }
   const host = (dependencies.host ?? detectCompanionHost)();
   if (!host) {
-    throw new Error("StarLite requires a Windows x64 or WSL2 x64 DSH Host");
+    throw new DshStartupError("unsupported-platform");
   }
 
   const navigator = createDshNavigator(context, dependencies.openBrowser);
@@ -164,8 +165,12 @@ function subscribeRequired(
   listener: Listener,
   options?: {prepend?:boolean},
 ): void {
-  const result = context.on(event, listener, options);
-  if (typeof result === "function") disposers.push(result as Disposer);
+  try {
+    const result = context.on(event, listener, options);
+    if (typeof result === "function") disposers.push(result as Disposer);
+  } catch {
+    throw new DshStartupError("incompatible-api");
+  }
 }
 
 function subscribeOptional(

@@ -125,7 +125,10 @@ export async function startSettings(): Promise<void> {
   async function viewInfo(modelId: string): Promise<void> {
     const model = settings.models.find(item => item.id === modelId);
     if (!model) return;
-    try { showModelInspection(await invoke<ModelInspection>("inspect_model", {path:model.modelPath, animationSources:model.vrm?.animations ?? [], profilePath:model.vrm?.profilePath})); }
+    // Native inspection adds the approved program Idle itself; installed
+    // copies must not be mistaken for a user-supplied reserved-name motion.
+    const animationSources = model.vrm?.animations.filter(animation => animation.name !== "StarLiteIdle") ?? [];
+    try { showModelInspection(await invoke<ModelInspection>("inspect_model", {path:model.modelPath, animationSources, profilePath:model.vrm?.profilePath})); }
     catch (reason) { reportFailure(reason); }
   }
   async function removeModel(modelId: string, title: string): Promise<void> {

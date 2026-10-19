@@ -43,7 +43,8 @@ export function petQuickSettings(actions:PetQuickSettingsActions,close:()=>void)
   ]};
 }
 
-export async function createPetQuickMenu(factory:(options:QuickMenuOptions)=>Promise<QuickMenu>,actions:PetQuickSettingsActions):Promise<QuickMenu> {
+export interface PetQuickMenu extends QuickMenu {refresh():void}
+export async function createPetQuickMenu(factory:(options:QuickMenuOptions)=>Promise<QuickMenu>,actions:PetQuickSettingsActions):Promise<PetQuickMenu> {
   let menu:QuickMenu;
   const options=()=>petQuickSettings(actions,()=>menu.close());
   menu=await factory(options());
@@ -52,6 +53,7 @@ export async function createPetQuickMenu(factory:(options:QuickMenuOptions)=>Pro
     get isOpen(){return menu.isOpen;},
     open(x,y){menu.update(options());menu.open(x,y);},
     close:()=>menu.close(),
+    refresh:()=>menu.update(options()),
     update:()=>menu.update(options()),
     destroy:()=>menu.destroy(),
   };

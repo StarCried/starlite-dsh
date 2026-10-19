@@ -11,11 +11,11 @@ import {
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { message } from "@tauri-apps/plugin-dialog";
 import {parsePetConnectionUrl} from "@starcried/starlite-dsh-protocol";
-import type { PetSnapshot, WidgetController, QuickMenu } from "./vendor-types.js";
+import type { PetSnapshot, WidgetController } from "./vendor-types.js";
 import type { DesktopSettings } from "./types.js";
 import { StatusConnection } from "./connection.js";
 import { createModelSlot, createQuickMenu, mountModel } from "./renderer.js";
-import {createPetQuickMenu, type PetUiState} from "./quick-settings.js";
+import {createPetQuickMenu, type PetUiState, type PetQuickMenu} from "./quick-settings.js";
 import { renderingIdentity, selectedModel } from "./model-selection.js";
 import { StateAnimator } from "./state-animator.js";
 import { InteractionMaskBridge } from "./interaction-mask.js";
@@ -61,7 +61,7 @@ export async function startPet(): Promise<void> {
   let offlineTimer: ReturnType<typeof setTimeout> | undefined;
   let pausedByTray = false;
   let ui:PetUiState={paused:false,visible:true,clickThrough:false};
-  let quickMenu:QuickMenu|undefined;
+  let quickMenu:PetQuickMenu|undefined;
   let connected = false;
   let connection: StatusConnection | undefined;
   let cancelClick=()=>{};
@@ -144,11 +144,13 @@ export async function startPet(): Promise<void> {
     const left=Math.max(0,(area.position.x-position.x)/dpi)+8,top=Math.max(0,(area.position.y-position.y)/dpi)+8;
     const right=Math.min(innerWidth,(area.position.x+(area.size?.width??monitor.size.width)-position.x)/dpi)-8;
     const bottom=Math.min(innerHeight,(area.position.y+(area.size?.height??monitor.size.height)-position.y)/dpi)-8;
-    quickMenu.element.style.maxWidth=`${Math.max(0,right-left)}px`;
-    quickMenu.element.style.maxHeight=`${Math.max(0,bottom-top)}px`;
+    const style=quickMenu.element.style;
+    const assign=(key:"maxWidth"|"maxHeight"|"left"|"top",value:string)=>{if(style[key]!==value)style[key]=value;};
+    assign("maxWidth",`${Math.max(0,right-left)}px`);
+    assign("maxHeight",`${Math.max(0,bottom-top)}px`);
     const next=quickMenu.element.getBoundingClientRect();
-    quickMenu.element.style.left=`${Math.max(left,Math.min(next.left,right-next.width))}px`;
-    quickMenu.element.style.top=`${Math.max(top,Math.min(next.top,bottom-next.height))}px`;
+    assign("left",`${Math.max(left,Math.min(next.left,right-next.width))}px`);
+    assign("top",`${Math.max(top,Math.min(next.top,bottom-next.height))}px`);
     updateMenuRegion();
   };
   const hostPosition=new HostPositionBridge(
@@ -259,7 +261,7 @@ export async function startPet(): Promise<void> {
     }
   };
   const menuResize=new ResizeObserver(()=>{updateMenuRegion();void fitQuickMenu().catch(()=>{});});
-  const menuMutation=new MutationObserver(updateMenuRegion);
+  const menuMutation=new MutationObserver(()=>{updateMenuRegion();void fitQuickMenu().catch(()=>{});});
   const closeQuickMenu=()=>{quickMenu?.close();updateMenuRegion();};
   globalThis.addEventListener("blur",closeQuickMenu);
   globalThis.addEventListener("pagehide", () => { closing=true; if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
@@ -269,7 +271,7 @@ export async function startPet(): Promise<void> {
     ++settingsRevision;
     const previous=settings;
     settings = payload;
-    quickMenu?.update({tabs:[]});
+    quickMenu?.refresh();
     fees.cancel();
     if (latestSnapshot && modelAvailable()) workBubble.update(latestSnapshot, settings.preferences);
     else workBubble.clear();
@@ -380,7 +382,7 @@ export async function startPet(): Promise<void> {
   });
   await listen<PetUiState>("pet-ui-state",({payload})=>{
     ui=payload;pausedByTray=payload.paused;
-    quickMenu?.update({tabs:[]});
+    quickMenu?.refresh();
     if(!payload.visible||payload.clickThrough)quickMenu?.close();
     syncRendering();
   });

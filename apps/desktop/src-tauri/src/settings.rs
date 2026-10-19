@@ -93,6 +93,49 @@ pub struct DesktopPreferences {
     pub bubble_mode: BubbleMode,
     #[serde(default)]
     pub performance_overlay: bool,
+    #[serde(default = "enabled_by_default")]
+    pub bubbles_visible: bool,
+    #[serde(default = "enabled_by_default")]
+    pub pointer_enabled: bool,
+}
+
+fn enabled_by_default() -> bool {
+    true
+}
+
+/// A quick-menu write only changes its named fields, never a stale UI snapshot.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreferencesPatch {
+    pub fps: Option<u16>,
+    pub max_device_pixel_ratio: Option<f64>,
+    pub scale: Option<f64>,
+    pub privacy_mode: Option<bool>,
+    pub bubble_mode: Option<BubbleMode>,
+    pub performance_overlay: Option<bool>,
+    pub bubbles_visible: Option<bool>,
+    pub pointer_enabled: Option<bool>,
+}
+
+impl PreferencesPatch {
+    pub fn apply(self, current: &DesktopPreferences) -> Result<DesktopPreferences, String> {
+        let next = DesktopPreferences {
+            fps: self.fps.unwrap_or(current.fps),
+            max_device_pixel_ratio: self
+                .max_device_pixel_ratio
+                .unwrap_or(current.max_device_pixel_ratio),
+            scale: self.scale.unwrap_or(current.scale),
+            privacy_mode: self.privacy_mode.unwrap_or(current.privacy_mode),
+            bubble_mode: self.bubble_mode.unwrap_or(current.bubble_mode),
+            performance_overlay: self
+                .performance_overlay
+                .unwrap_or(current.performance_overlay),
+            bubbles_visible: self.bubbles_visible.unwrap_or(current.bubbles_visible),
+            pointer_enabled: self.pointer_enabled.unwrap_or(current.pointer_enabled),
+        };
+        validate_preferences(&next)?;
+        Ok(next)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -112,6 +155,8 @@ impl Default for DesktopPreferences {
             privacy_mode: false,
             bubble_mode: BubbleMode::Compact,
             performance_overlay: false,
+            bubbles_visible: true,
+            pointer_enabled: true,
         }
     }
 }
@@ -892,5 +937,84 @@ mod tests {
         assert!(current.add_model(test_model("overflow")).is_err());
         assert_eq!(current.models.len(), 64);
         assert!(decode_settings(&vec![b' '; SETTINGS_LIMIT + 1]).is_err());
+    }
+
+    #[test]
+    fn quick_menu_preferences_default_enabled_for_existing_settings_and_round_trip() {
+        let mut value = serde_json::to_value(DesktopSettings::default()).unwrap();
+        value["preferences"]
+            .as_object_mut()
+            .unwrap()
+            .remove("bubblesVisible");
+        value["preferences"]
+            .as_object_mut()
+            .unwrap()
+            .remove("pointerEnabled");
+        value["preferences"]["scale"] = 0.8.into();
+        let migrated = decode_settings(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(migrated.preferences.bubbles_visible);
+        assert!(migrated.preferences.pointer_enabled);
+        assert_eq!(migrated.preferences.scale, 0.8);
+        value["preferences"]["bubblesVisible"] = false.into();
+        value["preferences"]["pointerEnabled"] = false.into();
+        let disabled = decode_settings(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(!disabled.preferences.bubbles_visible);
+        assert!(!disabled.preferences.pointer_enabled);
+        let restored = decode_settings(&settings_bytes(&disabled).unwrap()).unwrap();
+        assert!(!restored.preferences.bubbles_visible);
+        assert!(!restored.preferences.pointer_enabled);
+        value["preferences"]["bubblesVisible"] = "false".into();
+        assert!(decode_settings(&serde_json::to_vec(&value).unwrap()).is_err());
+    }
+
+    #[test]
+    fn preference_patches_merge_latest_fields_without_overwriting_other_ui_changes() {
+        let current = DesktopPreferences {
+            scale: 0.8,
+            privacy_mode: true,
+            ..Default::default()
+        };
+        let menu: PreferencesPatch = serde_json::from_value(
+            serde_json::json!({"bubblesVisible":false,"pointerEnabled":false}),
+        )
+        .unwrap();
+        let next = menu.apply(&current).unwrap();
+        let settings: PreferencesPatch = serde_json::from_value(
+            serde_json::json!({"bubbleMode":"detailed","performanceOverlay":true}),
+        )
+        .unwrap();
+        let next = settings.apply(&next).unwrap();
+        assert!(!next.bubbles_visible);
+        assert!(!next.pointer_enabled);
+        assert_eq!(next.scale, 0.8);
+        assert!(next.privacy_mode);
+        assert_eq!(next.bubble_mode, BubbleMode::Detailed);
+        assert!(next.performance_overlay);
+        assert_eq!(next.fps, 30);
+        let unchanged = PreferencesPatch::default().apply(&next).unwrap();
+        assert_eq!(
+            serde_json::to_value(next).unwrap(),
+            serde_json::to_value(unchanged).unwrap()
+        );
+    }
+
+    #[test]
+    fn preference_patches_reject_unknown_fields_invalid_types_and_out_of_range_values() {
+        assert!(
+            serde_json::from_value::<PreferencesPatch>(serde_json::json!({"unknown":true}))
+                .is_err()
+        );
+        assert!(serde_json::from_value::<PreferencesPatch>(
+            serde_json::json!({"pointerEnabled":"false"})
+        )
+        .is_err());
+        for value in [
+            serde_json::json!({"scale":0.0}),
+            serde_json::json!({"fps":120}),
+            serde_json::json!({"maxDevicePixelRatio":2.0}),
+        ] {
+            let patch: PreferencesPatch = serde_json::from_value(value).unwrap();
+            assert!(patch.apply(&DesktopPreferences::default()).is_err());
+        }
     }
 }

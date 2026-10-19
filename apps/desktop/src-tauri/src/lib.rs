@@ -63,6 +63,20 @@ async fn update_preferences(
 }
 
 #[tauri::command]
+async fn patch_preferences(
+    app: AppHandle,
+    patch: settings::PreferencesPatch,
+) -> Result<settings::DesktopSettings, String> {
+    mutate_model_settings(app, move |app| {
+        let mut next = settings::load(app);
+        next.preferences = patch.apply(&next.preferences)?;
+        settings::store(app, &next)?;
+        Ok(next)
+    })
+    .await
+}
+
+#[tauri::command]
 async fn get_model_license(
     app: AppHandle,
     model_id: String,
@@ -172,6 +186,7 @@ pub fn run() {
             select_model,
             remove_model,
             update_preferences,
+            patch_preferences,
             get_model_license,
             install_model,
             update_model_mappings,
@@ -182,6 +197,11 @@ pub fn run() {
             hit_test::set_model_hit_mask,
             model_viewport::set_model_viewport,
             hit_test::set_bubble_interaction_region,
+            hit_test::set_menu_interaction_region,
+            model_viewport::restore_default_position,
+            tray::get_pet_ui_state,
+            tray::set_pet_paused,
+            tray::set_pet_visible,
             hit_test::begin_model_drag,
             hit_test::move_model_drag,
             hit_test::end_model_drag,

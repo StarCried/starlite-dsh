@@ -70,6 +70,7 @@ pub struct HitTestState {
     pub(crate) window_geometry: Mutex<()>,
     mask: Mutex<Option<HitMask>>,
     bubble: Mutex<Option<BubbleRegion>>,
+    menu: Mutex<Option<BubbleRegion>>,
     drag: Mutex<Option<DragOrigin>>,
 }
 
@@ -86,6 +87,10 @@ impl HitTestState {
             .bubble
             .lock()
             .map_err(|_| "interaction state unavailable")? = None;
+        *self
+            .menu
+            .lock()
+            .map_err(|_| "interaction state unavailable")? = None;
         if let Some(drag) = self
             .drag
             .lock()
@@ -96,6 +101,16 @@ impl HitTestState {
             drag.position.y = drag.position.y.saturating_add(delta.y);
         }
         Ok(())
+    }
+
+    fn controls_contain(&self, x: f64, y: f64, width: u32, height: u32) -> bool {
+        [&self.bubble, &self.menu].iter().any(|region| {
+            region.lock().is_ok_and(|region| {
+                region
+                    .as_ref()
+                    .is_some_and(|r| r.contains(x, y, width, height))
+            })
+        })
     }
 }
 
@@ -132,7 +147,7 @@ impl BubbleRegion {
             || self.left + self.width > self.viewport_width
             || self.top + self.height > self.viewport_height
         {
-            return Err("invalid bubble interaction region".into());
+            return Err("invalid interaction region".into());
         }
         Ok(())
     }
@@ -159,6 +174,28 @@ pub fn set_bubble_interaction_region(
         .bubble
         .lock()
         .map_err(|_| "interaction state unavailable")?;
+    *current = None;
+    if let Some(region) = region {
+        region.validate()?;
+        *current = Some(region);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_menu_interaction_region(
+    window: tauri::WebviewWindow,
+    state: tauri::State<HitTestState>,
+    region: Option<BubbleRegion>,
+) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("menu interaction belongs to the pet window".into());
+    }
+    let mut current = state
+        .menu
+        .lock()
+        .map_err(|_| "interaction state unavailable")?;
+    // A malformed or removed card must never leave an invisible click blocker.
     *current = None;
     if let Some(region) = region {
         region.validate()?;
@@ -385,12 +422,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
                     });
                     // Never dispatch window/IPC work while holding the mask mutex.
                     if let Some((hit, gaze)) = coverage {
-                        let hit = hit
-                            || state.bubble.lock().is_ok_and(|region| {
-                                region
-                                    .as_ref()
-                                    .is_some_and(|r| r.contains(x, y, size.width, size.height))
-                            });
+                        let hit = hit || state.controls_contain(x, y, size.width, size.height);
                         let force = app.state::<crate::tray::UiState>().click_through();
                         let down = primary_button_down();
                         let active_drag = state.drag.lock().is_ok_and(|drag| drag.is_some());
@@ -429,6 +461,14 @@ mod tests {
             viewport_width: 320.0,
             viewport_height: 480.0,
         });
+        *state.menu.lock().unwrap() = Some(BubbleRegion {
+            left: 0.0,
+            top: 250.0,
+            width: 200.0,
+            height: 200.0,
+            viewport_width: 320.0,
+            viewport_height: 480.0,
+        });
         *state.drag.lock().unwrap() = Some(DragOrigin {
             x: 500.0,
             y: 300.0,
@@ -440,6 +480,7 @@ mod tests {
             .unwrap();
         assert!(state.mask.lock().unwrap().is_none());
         assert!(state.bubble.lock().unwrap().is_none());
+        assert!(state.menu.lock().unwrap().is_none());
         let drag = state.drag.lock().unwrap();
         let drag = drag.as_ref().unwrap();
         assert_eq!(
@@ -468,6 +509,34 @@ mod tests {
         assert!(r.validate().is_err());
         r.width = f64::INFINITY;
         assert!(r.validate().is_err());
+    }
+
+    #[test]
+    fn menu_and_bubble_coverage_coexist_without_capturing_transparent_background() {
+        let state = HitTestState::default();
+        *state.bubble.lock().unwrap() = Some(BubbleRegion {
+            left: 16.0,
+            top: 10.0,
+            width: 200.0,
+            height: 100.0,
+            viewport_width: 576.0,
+            viewport_height: 1204.0,
+        });
+        *state.menu.lock().unwrap() = Some(BubbleRegion {
+            left: 250.0,
+            top: 550.0,
+            width: 280.0,
+            height: 400.0,
+            viewport_width: 576.0,
+            viewport_height: 1204.0,
+        });
+        assert!(state.controls_contain(100.0, 100.0, 1152, 2408));
+        assert!(state.controls_contain(600.0, 1200.0, 1152, 2408));
+        assert!(!state.controls_contain(450.0, 800.0, 1152, 2408));
+        assert!(!state.controls_contain(1100.0, 1200.0, 1152, 2408));
+        *state.menu.lock().unwrap() = None;
+        assert!(!state.controls_contain(600.0, 1200.0, 1152, 2408));
+        assert!(state.controls_contain(100.0, 100.0, 1152, 2408));
     }
     #[test]
     fn drag_uses_the_original_physical_cursor_and_window_position() {

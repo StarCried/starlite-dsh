@@ -27,8 +27,9 @@ impl ModelViewport {
         ]
         .iter()
         .all(|value| value.is_finite())
-            || self.base_width != 320.0
-            || self.base_height != 480.0
+            || !(80.0..=960.0).contains(&self.base_width)
+            || !(120.0..=1440.0).contains(&self.base_height)
+            || (self.base_width * 1.5 - self.base_height).abs() > 1.0
             || self.left > 0.0
             || self.top > 0.0
             || self.width > 4096.0
@@ -200,6 +201,108 @@ struct Geometry {
     position: PhysicalPosition<i32>,
     size: PhysicalSize<u32>,
     delta: PhysicalPosition<i32>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModelBodyRect {
+    left: f64,
+    top: f64,
+    width: f64,
+    height: f64,
+}
+
+impl ModelBodyRect {
+    fn validate(&self) -> Result<(), String> {
+        if ![self.left, self.top, self.width, self.height]
+            .iter()
+            .all(|v| v.is_finite())
+            || self.left < 0.0
+            || self.top < 0.0
+            || self.width <= 0.0
+            || self.height <= 0.0
+            || self.left + self.width > 16384.0
+            || self.top + self.height > 16384.0
+        {
+            return Err("invalid model body rectangle".into());
+        }
+        Ok(())
+    }
+}
+
+fn default_body_position(
+    model: ModelBodyRect,
+    scale: f64,
+    work_origin: PhysicalPosition<i32>,
+    work_size: PhysicalSize<u32>,
+) -> Result<PhysicalPosition<i32>, String> {
+    model.validate()?;
+    if !scale.is_finite()
+        || !(0.25..=8.0).contains(&scale)
+        || work_size.width == 0
+        || work_size.height == 0
+    {
+        return Err("invalid monitor geometry".into());
+    }
+    // Align the portrait, not the large transparent area reserved for actions
+    // and questions. Leave taskbars and negative-origin monitors intact.
+    let body_x = f64::from(work_origin.x)
+        + (f64::from(work_size.width) - (model.width + 24.0) * scale).max(0.0);
+    let body_y = f64::from(work_origin.y)
+        + (f64::from(work_size.height) - (model.height + 48.0) * scale).max(0.0);
+    Ok(PhysicalPosition::new(
+        (body_x - model.left * scale).round() as i32,
+        (body_y - model.top * scale).round() as i32,
+    ))
+}
+
+#[tauri::command]
+pub fn restore_default_position(
+    window: tauri::WebviewWindow,
+    interaction: tauri::State<crate::hit_test::HitTestState>,
+    model_rect: ModelBodyRect,
+) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("model position belongs to the pet window".into());
+    }
+    model_rect.validate()?;
+    let _movement = interaction
+        .window_geometry
+        .lock()
+        .map_err(|_| "window geometry unavailable")?;
+    let scale = window
+        .scale_factor()
+        .map_err(|_| "window scale unavailable")?;
+    if !scale.is_finite() || !(0.25..=8.0).contains(&scale) {
+        return Err("invalid window scale".into());
+    }
+    let size = window.inner_size().map_err(|_| "window size unavailable")?;
+    if model_rect.left + model_rect.width > f64::from(size.width) / scale + 1.0
+        || model_rect.top + model_rect.height > f64::from(size.height) / scale + 1.0
+    {
+        return Err("model body rectangle exceeds the pet window".into());
+    }
+    let origin = window
+        .inner_position()
+        .map_err(|_| "window position unavailable")?;
+    let center_x = f64::from(origin.x) + (model_rect.left + model_rect.width / 2.0) * scale;
+    let center_y = f64::from(origin.y) + (model_rect.top + model_rect.height / 2.0) * scale;
+    let monitor = window
+        .monitor_from_point(center_x, center_y)
+        .map_err(|_| "monitor unavailable")?
+        .or(window
+            .current_monitor()
+            .map_err(|_| "monitor unavailable")?)
+        .or(window
+            .primary_monitor()
+            .map_err(|_| "monitor unavailable")?)
+        .ok_or("monitor unavailable")?;
+    let area = monitor.work_area();
+    let position =
+        default_body_position(model_rect, monitor.scale_factor(), area.position, area.size)?;
+    window
+        .set_position(position)
+        .map_err(|_| "window movement unavailable".to_string())
 }
 
 fn geometry(
@@ -407,6 +510,90 @@ mod tests {
             base_width: 320.0,
             base_height: 480.0,
         }
+    }
+
+    #[test]
+    fn true_model_scaling_preserves_body_anchor_and_validates_aspect() {
+        let previous = fixed_vrm_viewport();
+        let origin = PhysicalPosition::new(200, -100);
+        for model_scale in [0.25_f64, 0.5, 0.73, 1.0, 1.5, 3.0] {
+            let width = (320.0 * model_scale).round();
+            let height = (480.0 * model_scale).round();
+            let next = ModelViewport {
+                base_width: width,
+                base_height: height,
+                width: width + 256.0,
+                height: height + 724.0,
+                ..previous
+            };
+            for dpi in [1.0, 1.25, 1.5, 2.0] {
+                let resized = geometry(Some(previous), next, origin, dpi).unwrap();
+                assert_eq!(resized.position, origin);
+                assert_eq!(resized.size.width, (next.width * dpi).round() as u32);
+            }
+            assert!(ModelViewport {
+                base_height: height + 3.0,
+                ..next
+            }
+            .validate()
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn default_position_aligns_body_not_transparent_reserved_window() {
+        let model = ModelBodyRect {
+            left: 128.0,
+            top: 532.0,
+            width: 320.0,
+            height: 480.0,
+        };
+        for dpi in [1.0, 1.25, 1.5, 2.0] {
+            let origin = PhysicalPosition::new(-2560, 80);
+            let area = PhysicalSize::new(2560, 1440);
+            let position = default_body_position(model, dpi, origin, area).unwrap();
+            let right = f64::from(position.x) + (model.left + model.width) * dpi;
+            let bottom = f64::from(position.y) + (model.top + model.height) * dpi;
+            assert_eq!(right, -24.0 * dpi);
+            assert_eq!(bottom, 1520.0 - 48.0 * dpi);
+            assert!(f64::from(position.y) + model.top * dpi >= f64::from(origin.y));
+        }
+    }
+
+    #[test]
+    fn default_position_handles_oversized_models_and_rejects_invalid_geometry() {
+        let model = ModelBodyRect {
+            left: 128.0,
+            top: 532.0,
+            width: 960.0,
+            height: 1440.0,
+        };
+        let origin = PhysicalPosition::new(20, 30);
+        let small = PhysicalSize::new(640, 480);
+        assert_eq!(
+            default_body_position(model, 1.0, origin, small).unwrap(),
+            PhysicalPosition::new(-108, -502)
+        );
+        assert!(default_body_position(model, f64::NAN, origin, small).is_err());
+        assert!(default_body_position(model, 1.0, origin, PhysicalSize::new(0, 480)).is_err());
+        assert!(ModelBodyRect {
+            left: -1.0,
+            ..model
+        }
+        .validate()
+        .is_err());
+        assert!(ModelBodyRect {
+            width: 0.0,
+            ..model
+        }
+        .validate()
+        .is_err());
+        assert!(ModelBodyRect {
+            height: f64::INFINITY,
+            ..model
+        }
+        .validate()
+        .is_err());
     }
 
     #[test]

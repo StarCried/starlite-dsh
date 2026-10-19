@@ -17,7 +17,7 @@
     "build": "pnpm --recursive --if-present run build",
     "lint": "oxlint --deny-warnings packages tools apps/desktop/src",
     "typecheck": "pnpm --recursive --if-present run typecheck",
-    "test": "pnpm --dir packages/protocol build && vitest run",
+    "test": "pnpm --dir packages/protocol build && vitest run && pnpm test:dependency-audit",
     "test:watch": "vitest",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "check:core": "pnpm lint && pnpm typecheck && pnpm test && pnpm --dir packages/dsh-plugin build && pnpm --dir tools/mock-source build",
@@ -30,7 +30,9 @@
     "sync:runtime": "node tools/sync-model-runtime.mjs",
     "check:dsh-contract": "node tools/check-dsh-contract.mjs",
     "check:release": "node tools/check-release.mjs",
-    "release:metadata": "node tools/generate-release-metadata.mjs"
+    "release:metadata": "node tools/generate-release-metadata.mjs",
+    "check:dependencies": "node tools/check-dependency-audit.mjs",
+    "test:dependency-audit": "node --test tools/check-dependency-audit.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

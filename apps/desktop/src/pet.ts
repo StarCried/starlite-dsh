@@ -16,6 +16,7 @@ import type { DesktopSettings } from "./types.js";
 import { StatusConnection } from "./connection.js";
 import { createModelSlot, createQuickMenu, mountModel } from "./renderer.js";
 import {createPetQuickMenu, type PetUiState, type PetQuickMenu} from "./quick-settings.js";
+import {menuWorkArea} from "./menu-placement.js";
 import { renderingIdentity, selectedModel } from "./model-selection.js";
 import { StateAnimator } from "./state-animator.js";
 import { InteractionMaskBridge } from "./interaction-mask.js";
@@ -133,18 +134,13 @@ export async function startPet(): Promise<void> {
     const [position,monitors]=await Promise.all([window.outerPosition(),availableMonitors()]);
     return {x:position.x,y:position.y,monitors:monitors as Monitor[],scale:devicePixelRatio||1};
   };
-  const fitQuickMenu=async()=>{
+  const fitQuickMenu=async(pointer:{x:number;y:number})=>{
     if(!quickMenu?.isOpen)return;
     const position=await readPosition();
     if(!quickMenu?.isOpen)return;
-    const dpi=position.scale,rect=quickMenu.element.getBoundingClientRect();
-    const point={x:position.x+(rect.left+rect.width/2)*dpi,y:position.y+(rect.top+rect.height/2)*dpi};
-    const monitor=position.monitors.find(m=>point.x>=m.position.x&&point.x<m.position.x+m.size.width&&point.y>=m.position.y&&point.y<m.position.y+m.size.height)??position.monitors[0];
-    if(!monitor)return;
-    const area=monitor.workArea;
-    const left=Math.max(0,(area.position.x-position.x)/dpi)+8,top=Math.max(0,(area.position.y-position.y)/dpi)+8;
-    const right=Math.min(innerWidth,(area.position.x+(area.size?.width??monitor.size.width)-position.x)/dpi)-8;
-    const bottom=Math.min(innerHeight,(area.position.y+(area.size?.height??monitor.size.height)-position.y)/dpi)-8;
+    const bounds=menuWorkArea(position,position.scale,{width:innerWidth,height:innerHeight},pointer,position.monitors);
+    if(!bounds){quickMenu.close();return;}
+    const {left,top,right,bottom}=bounds;
     const style=quickMenu.element.style;
     const assign=(key:"maxWidth"|"maxHeight"|"left"|"top",value:string)=>{if(style[key]!==value)style[key]=value;};
     assign("maxWidth",`${Math.max(0,right-left)}px`);
@@ -421,9 +417,12 @@ export async function startPet(): Promise<void> {
   }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), (x,y) => {
     const generation=++menuOpenGeneration;
     void viewport.reserveMenuSpace(true).then(async()=>{
+      // Native set_size acknowledges before WebView layout necessarily catches
+      // up. Complete that layout before the one-time placement measurement.
+      await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
       if(closing||generation!==menuOpenGeneration)return;
       quickMenu?.open(x,y);
-      await fitQuickMenu();
+      await fitQuickMenu({x,y});
       controller?.refreshInteractionMask?.();updateMenuRegion();
     }).catch(()=>{});
   },()=>{

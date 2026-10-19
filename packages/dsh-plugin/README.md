@@ -6,6 +6,8 @@ Alpha `0.1.0-alpha.2`，需要 Windows 11 x64、WebView2，以及官方 Windows 
 
 [先看模型效果](https://starcried.github.io/)（桌面浏览器，无需安装；工作状态与问答需安装插件）。
 
+**快速开始**：[自己安装](#安装与启动) · [让 Agent 安装](#让-agent-帮你)
+
 ## 安装与启动
 
 **Windows 桌面版**：侧栏「插件 → 添加插件」，输入 `dsh-starlite@alpha`，安装并启用；按 DSH 提示重启。
@@ -20,6 +22,29 @@ dsh --profile web
 将 `web` 换成自己的 profile。插件自动准备 Windows 程序，资源未缓存时自动下载并配置微光；已有 VRM 模型、映射与偏好保留。以后只需启动 DSH。
 
 **使用微光即表示同意其独立许可；不同意请在模型列表选择「不显示模型」。** 模型卡片可切换模型或查看许可，「添加 VRM 模型」直接选择文件，详细要求可点「查看导入说明」；设置自动保存。当前仅支持 VRM，Inochi2D 导入和显示已停用。
+
+## 让 Agent 帮你
+
+把下面这段发给能操作本机的 Agent，它会按[安装指南](https://github.com/StarCried/starlite-dsh/blob/main/docs/user-guide.md)识别环境并完成安装：
+
+```text
+请阅读 https://github.com/StarCried/starlite-dsh/blob/main/docs/user-guide.md
+为我正在使用的 DeepSeek Harness 安装 npm 已发布的 dsh-starlite@alpha。
+先识别 Windows 桌面版、Windows CLI/Web 或 WSL2 及实际 profile，使用对应安装入口。
+保留模型和偏好，不升级 DSH、不另开第二个 Host。
+完成不调用付费模型 API 的本地检查，告诉我如何启动和打开设置。
+```
+
+<details>
+<summary>只想先了解用法？复制这个提示词</summary>
+
+```text
+请阅读 https://github.com/StarCried/starlite-dsh/blob/main/docs/user-guide.md
+结合我的 DSH 安装方式，简要说明如何启动、升级、换模型和设置气泡。
+这次只解释，不安装或修改配置。
+```
+
+</details>
 
 ## 日常使用
 

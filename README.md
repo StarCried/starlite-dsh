@@ -6,6 +6,8 @@
 
 Alpha `0.1.0-alpha.2`，需要 **Windows 11 x64 + WebView2**。支持官方 Windows 桌面版、Windows 原生 CLI/Web 和 WSL2 DSH。[版本变化](CHANGELOG.md)
 
+**快速开始**：[自己安装](#安装并体验微光) · [让 Agent 安装](#让-agent-帮你)
+
 ## 安装并体验微光
 
 **官方 Windows 桌面版**：打开侧栏「插件 → 添加插件」，填入 `dsh-starlite@alpha`，安装后启用；如 DSH 提示需要重启，请从托盘退出后重新打开。
@@ -22,6 +24,29 @@ dsh --profile web
 以后只需启动 DSH，桌宠随之出现。无需另装桌宠软件、手动解压模型或填写 EXE 路径。程序使用系统 WebView2，不打包浏览器。
 
 **使用微光即表示同意其独立许可；不同意请在模型列表选择「不显示模型」。** 每个模型都可查看自己的许可。本版本仅启用 VRM，Inochi2D 暂不提供导入和显示。
+
+## 让 Agent 帮你
+
+把下面这段发给能操作本机的 Agent，它会按[安装指南](docs/user-guide.md)识别环境并完成安装：
+
+```text
+请阅读 https://github.com/StarCried/starlite-dsh/blob/main/docs/user-guide.md
+为我正在使用的 DeepSeek Harness 安装 npm 已发布的 dsh-starlite@alpha。
+先识别 Windows 桌面版、Windows CLI/Web 或 WSL2 及实际 profile，使用对应安装入口。
+保留模型和偏好，不升级 DSH、不另开第二个 Host。
+完成不调用付费模型 API 的本地检查，告诉我如何启动和打开设置。
+```
+
+<details>
+<summary>只想先了解用法？复制这个提示词</summary>
+
+```text
+请阅读 https://github.com/StarCried/starlite-dsh/blob/main/docs/user-guide.md
+结合我的 DSH 安装方式，简要说明如何启动、升级、换模型和设置气泡。
+这次只解释，不安装或修改配置。
+```
+
+</details>
 
 ## 日常操作
 

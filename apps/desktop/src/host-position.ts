@@ -24,9 +24,9 @@ interface MonitorBounds {
 }
 
 /** Select by the fixed portrait, regardless of the transparent margins. */
-export function screenSpaceAboveModel(point:Position,scale:number,monitors:readonly MonitorBounds[]):number|undefined {
+export function screenSpaceAboveModel(point:Position,scale:number,monitors:readonly MonitorBounds[],size={width:320,height:480}):number|undefined {
   if (!Number.isFinite(scale) || scale<=0) return undefined;
-  const center={x:(point.x+160)*scale,y:(point.y+240)*scale};
+  const center={x:(point.x+size.width/2)*scale,y:(point.y+size.height/2)*scale};
   const monitor=monitors.find(value=>center.x>=value.position.x&&center.x<value.position.x+value.size.width
     &&center.y>=value.position.y&&center.y<value.position.y+value.size.height);
   return monitor ? point.y-monitor.workArea.position.y/scale : undefined;

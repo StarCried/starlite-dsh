@@ -11,10 +11,11 @@ import {
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { message } from "@tauri-apps/plugin-dialog";
 import {parsePetConnectionUrl} from "@starcried/starlite-dsh-protocol";
-import type { PetSnapshot, WidgetController } from "./vendor-types.js";
+import type { PetSnapshot, WidgetController, QuickMenu } from "./vendor-types.js";
 import type { DesktopSettings } from "./types.js";
 import { StatusConnection } from "./connection.js";
-import { createModelSlot, mountModel } from "./renderer.js";
+import { createModelSlot, createQuickMenu, mountModel } from "./renderer.js";
+import {createPetQuickMenu, type PetUiState} from "./quick-settings.js";
 import { renderingIdentity, selectedModel } from "./model-selection.js";
 import { StateAnimator } from "./state-animator.js";
 import { InteractionMaskBridge } from "./interaction-mask.js";
@@ -59,6 +60,8 @@ export async function startPet(): Promise<void> {
   let latestSnapshot: PetSnapshot | undefined;
   let offlineTimer: ReturnType<typeof setTimeout> | undefined;
   let pausedByTray = false;
+  let ui:PetUiState={paused:false,visible:true,clickThrough:false};
+  let quickMenu:QuickMenu|undefined;
   let connected = false;
   let connection: StatusConnection | undefined;
   let cancelClick=()=>{};
@@ -83,10 +86,24 @@ export async function startPet(): Promise<void> {
       ?{left,top,width:right-left,height:bottom-top,viewportWidth:innerWidth,viewportHeight:innerHeight}:null;
     regionPending=region;void sendRegion();
   };
+  let menuRegionPending:Region|undefined,menuRegionSending=false;
+  const updateMenuRegion=()=>{
+    const rect=quickMenu?.element.getBoundingClientRect();
+    const left=Math.max(0,rect?.left??0),top=Math.max(0,rect?.top??0),right=Math.min(innerWidth,rect?.right??0),bottom=Math.min(innerHeight,rect?.bottom??0);
+    menuRegionPending=quickMenu?.isOpen&&document.visibilityState==="visible"&&right>left&&bottom>top
+      ?{left,top,width:right-left,height:bottom-top,viewportWidth:innerWidth,viewportHeight:innerHeight}:null;
+    if(menuRegionSending)return;
+    menuRegionSending=true;
+    void (async()=>{
+      try{while(menuRegionPending!==undefined){const region=menuRegionPending;menuRegionPending=undefined;await geometryInvoke("set_menu_interaction_region",{region});}}
+      catch{quickMenu?.close();}
+      finally{menuRegionSending=false;}
+    })();
+  };
   let availabilityQueue=Promise.resolve();
   const syncInputAvailable=()=>{
     availabilityQueue=availabilityQueue.catch(()=>{}).then(async()=>{
-      if(connected)await connection?.setInputAvailable(modelAvailable()&&!settings.preferences.privacyMode&&document.visibilityState==="visible");
+      if(connected)await connection?.setInputAvailable(modelAvailable()&&ui.visible&&!ui.clickThrough&&settings.preferences.bubblesVisible!==false&&!settings.preferences.privacyMode&&document.visibilityState==="visible");
     }).catch(()=>{});
   };
   const workBubble=new WorkBubble(bubble,{
@@ -100,8 +117,8 @@ export async function startPet(): Promise<void> {
       if (!connection) throw new Error("billing disconnected");
       return connection.readBilling();
     },
-    allowed: () => connected && modelAvailable() && !settings.preferences.privacyMode && !latestSnapshot?.inputRequest,
-    render: view => {renderBillingBubble(bubble, view,latestSnapshot?.session?.title);updateRegion();},
+    allowed: () => connected && modelAvailable() && settings.preferences.bubblesVisible!==false && !settings.preferences.privacyMode && !latestSnapshot?.inputRequest,
+    render: view => {if(settings.preferences.bubblesVisible!==false)renderBillingBubble(bubble, view,latestSnapshot?.session?.title);else bubble.hidden=true;updateRegion();},
     restore: () => {
       if (latestSnapshot && modelAvailable()) workBubble.update(latestSnapshot, settings.preferences);
       else bubble.hidden = true;
@@ -113,7 +130,26 @@ export async function startPet(): Promise<void> {
   );
   const readPosition=async()=>{
     const [position,monitors]=await Promise.all([window.outerPosition(),availableMonitors()]);
-    return {x:position.x,y:position.y,monitors,scale:devicePixelRatio||1};
+    return {x:position.x,y:position.y,monitors:monitors as Monitor[],scale:devicePixelRatio||1};
+  };
+  const fitQuickMenu=async()=>{
+    if(!quickMenu?.isOpen)return;
+    const position=await readPosition();
+    if(!quickMenu?.isOpen)return;
+    const dpi=position.scale,rect=quickMenu.element.getBoundingClientRect();
+    const point={x:position.x+(rect.left+rect.width/2)*dpi,y:position.y+(rect.top+rect.height/2)*dpi};
+    const monitor=position.monitors.find(m=>point.x>=m.position.x&&point.x<m.position.x+m.size.width&&point.y>=m.position.y&&point.y<m.position.y+m.size.height)??position.monitors[0];
+    if(!monitor)return;
+    const area=monitor.workArea;
+    const left=Math.max(0,(area.position.x-position.x)/dpi)+8,top=Math.max(0,(area.position.y-position.y)/dpi)+8;
+    const right=Math.min(innerWidth,(area.position.x+(area.size?.width??monitor.size.width)-position.x)/dpi)-8;
+    const bottom=Math.min(innerHeight,(area.position.y+(area.size?.height??monitor.size.height)-position.y)/dpi)-8;
+    quickMenu.element.style.maxWidth=`${Math.max(0,right-left)}px`;
+    quickMenu.element.style.maxHeight=`${Math.max(0,bottom-top)}px`;
+    const next=quickMenu.element.getBoundingClientRect();
+    quickMenu.element.style.left=`${Math.max(left,Math.min(next.left,right-next.width))}px`;
+    quickMenu.element.style.top=`${Math.max(top,Math.min(next.top,bottom-next.height))}px`;
+    updateMenuRegion();
   };
   const hostPosition=new HostPositionBridge(
     readPosition,
@@ -121,14 +157,14 @@ export async function startPet(): Promise<void> {
     position=>{
       const point=viewport.hostPosition(position,position.scale);
       controller?.setHostPosition?.(point.x,point.y);
-      const space=screenSpaceAboveModel(point,position.scale,position.monitors);
+      const space=screenSpaceAboveModel(point,position.scale,position.monitors,viewport.modelRect);
       if(space!==undefined)viewport.setScreenSpace(space);
     },
   );
   const viewport = new ModelViewportBridge(host,anchor,
     value=>geometryInvoke("set_model_viewport",{viewport:value}),
-    ()=>{hostPosition.invalidate();interaction.invalidateForViewport();regionPending=null;},
-    ()=>{updateRegion();void hostPosition.sync().catch(()=>{});},
+    ()=>{hostPosition.invalidate();interaction.invalidateForViewport();regionPending=null;menuRegionPending=null;},
+    ()=>{updateRegion();updateMenuRegion();void hostPosition.sync().catch(()=>{});},
     ()=>{void window.hide();void invoke("open_settings");},
     bubble,updateRegion,
   );
@@ -142,6 +178,7 @@ export async function startPet(): Promise<void> {
     if (closing) return;
     if (modelAvailable()) interaction.resizeFixedViewport(innerWidth,innerHeight);
     updateRegion();
+    void fitQuickMenu().catch(()=>{});updateMenuRegion();
     void hostPosition.sync().catch(()=>{});
   };
   globalThis.addEventListener("resize",syncWindowGeometry);
@@ -151,11 +188,12 @@ export async function startPet(): Promise<void> {
   });
 
   const syncRendering = () => {
-    const paused = !modelAvailable() || pausedByTray || document.visibilityState !== "visible";
+    const paused = !modelAvailable() || !ui.visible || pausedByTray || document.visibilityState !== "visible";
     animator?.setPaused(paused);
     if (paused) controller?.pause();
     else controller?.resume();
-    syncInputAvailable();updateRegion();
+    if(document.visibilityState!=="visible")quickMenu?.close();
+    syncInputAvailable();updateRegion();updateMenuRegion();
   };
   // A fast initial connection can show the hidden window before later native
   // subscriptions resolve. Observe that first visibility change before mount.
@@ -163,6 +201,7 @@ export async function startPet(): Promise<void> {
 
   const beginOfflineCountdown = () => {
     connected = false;
+    quickMenu?.close();
     fees.cancel();
     cancelClick();workBubble.clear();
     animator?.disconnected();
@@ -188,7 +227,7 @@ export async function startPet(): Promise<void> {
     slot.destroy(); controller = undefined;
     interaction.update(undefined);
     if (!enabled) void window.hide();
-    await viewport.configure(enabled);
+    await viewport.configure(enabled,next.preferences.scale);
     if(generation!==mountGeneration)return;
     host.replaceChildren(); empty.hidden = !enabled || Boolean(model);
     syncInputAvailable();
@@ -200,6 +239,8 @@ export async function startPet(): Promise<void> {
       if(generation!==mountGeneration)return;
       controller = mounted;
       mounted.setPerformanceVisible?.(settings.preferences.performanceOverlay);
+      mounted.setPointerEnabled?.(settings.preferences.pointerEnabled!==false);
+      mounted.setBubblesVisible?.(false);
       void hostPosition.sync().catch(()=>{});
       mounted.observeInteractionMask(mask => {
         // A frame drawn before the native resize still describes the old
@@ -217,19 +258,34 @@ export async function startPet(): Promise<void> {
       empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-  globalThis.addEventListener("pagehide", () => { closing=true; if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
+  const menuResize=new ResizeObserver(()=>{updateMenuRegion();void fitQuickMenu().catch(()=>{});});
+  const menuMutation=new MutationObserver(updateMenuRegion);
+  const closeQuickMenu=()=>{quickMenu?.close();updateMenuRegion();};
+  globalThis.addEventListener("blur",closeQuickMenu);
+  globalThis.addEventListener("pagehide", () => { closing=true; if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
   let preparing = true;
   await listen<DesktopSettings>("settings-changed", ({ payload }) => {
     ++settingsRevision;
     const previous=settings;
     settings = payload;
+    quickMenu?.update({tabs:[]});
     fees.cancel();
     if (latestSnapshot && modelAvailable()) workBubble.update(latestSnapshot, settings.preferences);
     else workBubble.clear();
     syncInputAvailable();
     if (preparing) return;
     if (renderingIdentity(previous) === renderingIdentity(settings)) {
+      controller?.setFrameRate?.(settings.preferences.fps);
+      controller?.setPointerEnabled?.(settings.preferences.pointerEnabled!==false);
+      if(previous.preferences.scale!==settings.preferences.scale){
+        const scale=settings.preferences.scale;
+        void viewport.configure(modelAvailable(),scale).then(()=>{
+          if(settings.preferences.scale!==scale)return;
+          controller?.setDisplaySize?.(320*scale,480*scale);
+          controller?.refreshInteractionMask?.();
+        }).catch(()=>{});
+      }
       if (previous.preferences.performanceOverlay !== settings.preferences.performanceOverlay) {
         controller?.setPerformanceVisible?.(settings.preferences.performanceOverlay);
       }
@@ -244,7 +300,7 @@ export async function startPet(): Promise<void> {
     }
     void remount()
       .then(() => {
-        if (connected && modelAvailable() && controller) void window.show();
+        if (connected && ui.visible && modelAvailable() && controller) void window.show();
       })
       .catch(() => {
         empty.hidden = false;
@@ -275,8 +331,8 @@ export async function startPet(): Promise<void> {
       if (offlineTimer) clearTimeout(offlineTimer);
       offlineTimer = undefined;
       void invoke("set_connection_state", { connected: true });
-      if (modelAvailable() && controller) void window.show();
-      else if (settings.activeModelId !== null) void invoke("open_settings");
+      if (ui.visible && modelAvailable() && controller) void window.show();
+      else if (settings.activeModelId !== null && (!modelAvailable() || !controller)) void invoke("open_settings");
       syncInputAvailable();
     },
     onDisconnected() {
@@ -322,6 +378,26 @@ export async function startPet(): Promise<void> {
     if (payload === "pause" || payload === "resume") syncRendering();
     if (payload === "reset") controller?.resetCamera();
   });
+  await listen<PetUiState>("pet-ui-state",({payload})=>{
+    ui=payload;pausedByTray=payload.paused;
+    quickMenu?.update({tabs:[]});
+    if(!payload.visible||payload.clickThrough)quickMenu?.close();
+    syncRendering();
+  });
+  ui=await invoke<PetUiState>("get_pet_ui_state");pausedByTray=ui.paused;syncRendering();
+  quickMenu=await createPetQuickMenu(createQuickMenu,{
+    readSettings:()=>settings,readUi:()=>ui,
+    patch:async patch=>{await invoke("patch_preferences",{patch});},
+    pause:async paused=>{await invoke("set_pet_paused",{paused});},
+    hide:async()=>{await invoke("set_pet_visible",{visible:false});},
+    restorePosition:async()=>{await geometryTask(()=>invoke("restore_default_position",{modelRect:viewport.modelRect}));void hostPosition.sync().catch(()=>{});},
+    openSettings:async()=>{await invoke("open_settings");},
+    openDsh:async()=>{if(connection&&connected)await openDisplayedDsh(connection,latestSnapshot?.session?.ref);},
+    selectModel:async modelId=>{await invoke("select_model",{modelId});},
+  });
+  quickMenu.element.addEventListener("starlite-menu-change",updateMenuRegion);
+  menuResize.observe(quickMenu.element);
+  menuMutation.observe(quickMenu.element,{attributes:true,childList:true,subtree:true});
   cancelClick=installPointerBehavior(host, {
     begin: (x, y) => invoke("begin_model_drag",{x,y}),
     move: () => invoke("move_model_drag"),
@@ -329,11 +405,11 @@ export async function startPet(): Promise<void> {
       try{return await invoke("end_model_drag");}
       finally{void hostPosition.sync().catch(()=>{});}
     },
-  }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), () => { void invoke("open_settings"); },()=>{
+  }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), (x,y) => { quickMenu?.open(x,y);void fitQuickMenu().catch(()=>{});updateMenuRegion(); },()=>{
     const ref=latestSnapshot?.session?.ref;
     if(!connected||!connection)return;
     void openDisplayedDsh(connection,ref).catch(()=>{
-      if(latestSnapshot?.session?.ref===ref&&!latestSnapshot?.inputRequest){renderPlainBubble(bubble,ref?"暂时无法打开 DSH 会话":"暂时无法打开 DSH","notice",settings.preferences.privacyMode?"DSH":latestSnapshot?.session?.title);updateRegion();}
+      if(settings.preferences.bubblesVisible!==false&&latestSnapshot?.session?.ref===ref&&!latestSnapshot?.inputRequest){renderPlainBubble(bubble,ref?"暂时无法打开 DSH 会话":"暂时无法打开 DSH","notice",settings.preferences.privacyMode?"DSH":latestSnapshot?.session?.title);updateRegion();}
     });
   });
   await keepWindowVisible(window);
@@ -348,7 +424,7 @@ export function installPointerBehavior(
   drag: {begin: (x: number, y: number) => Promise<unknown>; move: () => Promise<unknown>; end: () => Promise<unknown>},
   click: () => void | Promise<void>,
   hitTest: (x: number, y: number) => boolean,
-  openSettings?: () => void,
+  openSettings?: (x:number,y:number) => void,
   doubleClick?: () => void | Promise<void>,
 ): () => void {
   let gesture: {id: number; x: number; y: number; moved: boolean; queued: boolean; chain: Promise<unknown>} | undefined;
@@ -370,7 +446,7 @@ export function installPointerBehavior(
   element.addEventListener("contextmenu", event => {
     if (!openSettings || !hitTest(event.clientX, event.clientY)) return;
     cancel();
-    event.preventDefault(); openSettings();
+    event.preventDefault(); openSettings(event.clientX,event.clientY);
   });
   const finish = (event: PointerEvent, cancelled: boolean) => {
     const current = gesture;

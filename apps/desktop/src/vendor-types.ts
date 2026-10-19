@@ -38,6 +38,11 @@ export interface WidgetController {
   setPointerPosition(clientX: number, clientY: number): void;
   setHostPosition?(x: number, y: number): void;
   setPerformanceVisible?(visible: boolean): void;
+  setDisplaySize?(width: number, height: number): void;
+  setFrameRate?(fps: number | "display"): void;
+  setPointerEnabled?(enabled: boolean): void;
+  setBubblesVisible?(visible: boolean): void;
+  refreshInteractionMask?(): void;
   destroy(): void;
 }
 
@@ -51,6 +56,19 @@ export interface ModelSlot {
   destroy(): void;
 }
 export interface ModelCore {
+  QuickSettingsMenu: new (options: QuickMenuOptions) => QuickMenu;
   ModelMountSlot: new () => ModelSlot;
   mountModelWidget(host: HTMLElement, config: Record<string, unknown>, modules: Record<ModelBackend, () => Promise<ModelModule>>, options?: {signal?: AbortSignal}): Promise<WidgetController>;
+}
+
+export type QuickSettingItem = {id:string;label:string;disabled?:boolean;description?:string} & (
+  | {kind:"toggle";value:boolean;onChange:(value:boolean)=>void|Promise<void>}
+  | {kind:"range";value:number;min:number;max:number;step?:number;formatValue?:(value:number)=>string;onChange:(value:number)=>void|Promise<void>}
+  | {kind:"select";value:string;options:readonly {value:string;label:string}[];onChange:(value:string)=>void|Promise<void>}
+  | {kind:"action";onAction:()=>void|Promise<void>}
+);
+export interface QuickMenuOptions {title?:string;tabs:readonly {id:string;label:string;items:readonly QuickSettingItem[]}[]}
+export interface QuickMenu {
+  readonly element:HTMLElement;readonly isOpen:boolean;
+  open(x:number,y:number):void;close():void;update(options:QuickMenuOptions):void;destroy():void;
 }

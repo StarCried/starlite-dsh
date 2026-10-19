@@ -2,12 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopSettings } from "../src/types.js";
 import type { WidgetController } from "../src/vendor-types.js";
+import type {PetUiState} from "../src/quick-settings.js";
 import { startPet } from "../src/pet.js";
 
 const native = vi.hoisted(() => ({
   invoke: vi.fn(), listen: vi.fn(), getCurrent: vi.fn(), onOpenUrl: vi.fn(),
   getCurrentWindow: vi.fn(), availableMonitors: vi.fn(), primaryMonitor: vi.fn(),
-  createModelSlot: vi.fn(), mountModel: vi.fn(), connection: vi.fn(), message: vi.fn(),
+  createModelSlot: vi.fn(), createQuickMenu:vi.fn(), mountModel: vi.fn(), connection: vi.fn(), message: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/core", () => ({invoke: native.invoke}));
 vi.mock("@tauri-apps/api/event", () => ({listen: native.listen}));
@@ -17,7 +18,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 vi.mock("@tauri-apps/plugin-deep-link", () => ({getCurrent: native.getCurrent, onOpenUrl: native.onOpenUrl}));
 vi.mock("@tauri-apps/plugin-dialog", () => ({message:native.message}));
-vi.mock("../src/renderer.js", () => ({createModelSlot: native.createModelSlot, mountModel: native.mountModel}));
+vi.mock("../src/renderer.js", () => ({createModelSlot: native.createModelSlot,createQuickMenu:native.createQuickMenu, mountModel: native.mountModel}));
 vi.mock("../src/connection.js", () => ({StatusConnection: class {
   constructor(callbacks: unknown) { return native.connection(callbacks); }
 }}));
@@ -39,6 +40,7 @@ let finishDeepLinks: (() => void) | undefined;
 let finishTraySubscription: (() => void) | undefined;
 let trayListener: ((event: {payload: string}) => void) | undefined;
 let settingsListener: ((event: {payload: DesktopSettings}) => void) | undefined;
+let uiListener: ((event:{payload:PetUiState})=>void)|undefined;
 let deepLinkListener: ((urls:string[])=>void) | undefined;
 const INITIAL_URL = `dsh-inochi2d-pet://connect?port=41234&token=${"a".repeat(43)}&instance=12345678-1234-4234-8234-123456789abc`;
 
@@ -58,7 +60,7 @@ beforeEach(() => {
     pause: vi.fn(() => {running = false;}), resume: vi.fn(() => {running = true;}),
     getAnimations: () => [{name: "Idle", durationMs: 1_000}],
     playAnimation: vi.fn(async () => "stopped" as const), stopAnimation: vi.fn(), resetCamera: vi.fn(),
-    observeInteractionMask: vi.fn(), setPointerPosition: vi.fn(), setPerformanceVisible: vi.fn(), destroy: vi.fn(),
+    observeInteractionMask: vi.fn(), setPointerPosition: vi.fn(), setPerformanceVisible: vi.fn(),setFrameRate:vi.fn(),setDisplaySize:vi.fn(),setPointerEnabled:vi.fn(),refreshInteractionMask:vi.fn(), destroy: vi.fn(),
   };
   const monitor = {position: {x: 0, y: 0}, size: {width: 1920, height: 1080}, workArea: {position: {x: 0, y: 0}}};
   native.availableMonitors.mockResolvedValue([monitor]); native.primaryMonitor.mockResolvedValue(monitor);
@@ -68,13 +70,15 @@ beforeEach(() => {
     onMoved: vi.fn(async () => () => undefined), outerPosition: vi.fn(async () => ({x: 400, y: 400})),
     outerSize: vi.fn(async () => ({width: 320, height: 480})), setPosition: vi.fn(async () => undefined),
   });
-  native.invoke.mockImplementation(async command => command === "get_settings" || command === "prepare_model" ? structuredClone(settings) : command === "get_initial_connection" ? INITIAL_URL : undefined);
+  native.invoke.mockImplementation(async command => command === "get_settings" || command === "prepare_model" ? structuredClone(settings) : command === "get_initial_connection" ? INITIAL_URL : command === "get_pet_ui_state" ? {paused:false,visible:true,clickThrough:false}:undefined);
+  native.createQuickMenu.mockResolvedValue({element:document.createElement("aside"),isOpen:false,open:vi.fn(),close:vi.fn(),update:vi.fn(),destroy:vi.fn()});
   native.listen.mockImplementation(async (event, listener) => {
     if (event === "tray-action") {
       trayListener = listener;
       await new Promise<void>(resolve => {finishTraySubscription = resolve;});
     }
     if (event === "settings-changed") settingsListener = listener;
+    if (event === "pet-ui-state") uiListener = listener;
     return () => undefined;
   });
   native.getCurrent.mockResolvedValue([INITIAL_URL]);
@@ -105,6 +109,39 @@ afterEach(async () => {
 });
 
 describe("desktop hidden-window startup", () => {
+  it("hides work and question bubbles without remounting or intercepting DSH input",async()=>{
+    const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    const callbacks=native.connection.mock.calls[0]![0] as ConnectionCallbacks,bridge=native.connection.mock.results[0]!.value;
+    const next=structuredClone(settings);next.preferences.bubblesVisible=false;settingsListener!({payload:next});
+    callbacks.onSnapshot({protocolVersion:1,sequence:3,emittedAt:1,state:"working",bubble:{kind:"response",text:"hidden"}});
+    await vi.waitFor(()=>expect(bridge.setInputAvailable).toHaveBeenLastCalledWith(false));
+    expect(document.querySelector<HTMLOutputElement>("#bubble")!.hidden).toBe(true);
+    expect(native.mountModel).toHaveBeenCalledOnce();
+    next.preferences.bubblesVisible=true;settingsListener!({payload:next});
+    await vi.waitFor(()=>expect(bridge.setInputAvailable).toHaveBeenLastCalledWith(true));
+    expect(document.querySelector<HTMLOutputElement>("#bubble")!.hidden).toBe(false);
+  });
+  it("hot-updates size while paused and explicitly refreshes the native interaction mask",async()=>{
+    const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    uiListener!({payload:{paused:true,visible:true,clickThrough:false}});
+    const next=structuredClone(settings);next.preferences.scale=.8;next.preferences.fps=60;next.preferences.pointerEnabled=false;
+    settingsListener!({payload:next});
+    await vi.waitFor(()=>expect(controller.setDisplaySize).toHaveBeenCalledWith(256,384));
+    expect(controller.refreshInteractionMask).toHaveBeenCalled();expect(controller.setFrameRate).toHaveBeenLastCalledWith(60);expect(controller.setPointerEnabled).toHaveBeenLastCalledWith(false);
+    expect(controller.status).toBe("paused");expect(native.mountModel).toHaveBeenCalledOnce();
+  });
+  it("keeps an explicitly hidden pet hidden on Host reconnect and releases input during click-through",async()=>{
+    const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    const callbacks=native.connection.mock.calls[0]![0] as ConnectionCallbacks,bridge=native.connection.mock.results[0]!.value;
+    show.mockClear();uiListener!({payload:{paused:false,visible:false,clickThrough:false}});callbacks.onConnected();
+    await vi.waitFor(()=>expect(bridge.setInputAvailable).toHaveBeenLastCalledWith(false));
+    expect(show).not.toHaveBeenCalled();expect(native.invoke).not.toHaveBeenCalledWith("open_settings");
+    uiListener!({payload:{paused:false,visible:true,clickThrough:true}});
+    await vi.waitFor(()=>expect(bridge.setInputAvailable).toHaveBeenLastCalledWith(false));
+  });
   it("retains a performance toggle changed while the initial model is loading",async()=>{
     let finishMount!:(value:WidgetController)=>void;
     native.mountModel.mockImplementationOnce(()=>new Promise<WidgetController>(resolve=>{finishMount=resolve;}));
@@ -168,7 +205,7 @@ describe("desktop hidden-window startup", () => {
 
   it("buffers the first valid runtime launches during model preparation without invalid URLs occupying the buffer",async()=>{
     let finishModel!: (value:DesktopSettings)=>void;
-    native.invoke.mockImplementation(async command=>command==="get_settings"?structuredClone(settings):command==="prepare_model"?new Promise(resolve=>{finishModel=resolve;}):command==="get_initial_connection"?INITIAL_URL:undefined);
+    native.invoke.mockImplementation(async command=>command==="get_settings"?structuredClone(settings):command==="prepare_model"?new Promise(resolve=>{finishModel=resolve;}):command==="get_initial_connection"?INITIAL_URL:command==="get_pet_ui_state"?{paused:false,visible:true,clickThrough:false}:undefined);
     const ready=startPet();
     await vi.waitFor(()=>expect(finishModel).toBeDefined());
     const first=INITIAL_URL.replace("41234","41235"),later=INITIAL_URL.replace("41234","41236");
@@ -255,7 +292,7 @@ describe("desktop hidden-window startup", () => {
   });
   it("keeps a disabled model hidden without mounting, bubbles or input interception", async () => {
     const disabled = {...structuredClone(settings),activeModelId:null};
-    native.invoke.mockImplementation(async command => command === "get_settings" || command === "prepare_model" ? disabled : undefined);
+    native.invoke.mockImplementation(async command => command === "get_settings" || command === "prepare_model" ? disabled : command==="get_pet_ui_state"?{paused:false,visible:true,clickThrough:false}:undefined);
     const ready = startPet();
     await vi.waitFor(() => expect(finishDeepLinks).toBeDefined());
     finishDeepLinks!();

@@ -51,6 +51,18 @@ it("never resizes, moves the anchor or clears hit coverage when actions or bubbl
   expect(send).toHaveBeenCalledOnce();expect(invalidate).toHaveBeenCalledOnce();
 });
 
+it("changes the real display area only for an explicit size change and keeps text size independent",async()=>{
+  const send=vi.fn(async()=>{}),bridge=new ModelViewportBridge(host,anchor,send,vi.fn(),vi.fn(),vi.fn(),bubble);
+  await bridge.configure(true);await bridge.configure(true,.5);await bridge.configure(true,.5);
+  expect(send).toHaveBeenCalledTimes(2);
+  expect(send).toHaveBeenLastCalledWith({left:-128,top:-532,width:416,height:964,baseWidth:160,baseHeight:240});
+  expect(bridge.modelRect).toEqual({left:128,top:532,width:160,height:240});
+  expect(anchor.style.getPropertyValue("--bubble-width")).toBe("288px");
+  expect(bridge.hostPosition({x:0,y:0},1)).toEqual({x:128,y:532});
+  await expect(bridge.configure(true,Infinity)).rejects.toThrow("invalid model size");
+  expect(send).toHaveBeenCalledTimes(2);await bridge.destroy();
+});
+
 it("waits for the one native resize and ignores renderer events while it is pending",async()=>{
   let finish!:()=>void;const applied=vi.fn();
   const send=vi.fn(()=>new Promise<void>(done=>{finish=done;}));

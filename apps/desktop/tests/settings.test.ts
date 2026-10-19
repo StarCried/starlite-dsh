@@ -21,7 +21,7 @@ const custom:LibraryModel={...model,id:"custom",title:"自定义角色"};
 const button=() => document.querySelector<HTMLButtonElement>("#add-model")!;
 const activeIdle=() => document.querySelector<HTMLSelectElement>('#animation-mappings select[data-state="idle"]')!;
 const tick=() => new Promise(resolve => setTimeout(resolve,0));
-type NativeArgs={preferences?:DesktopPreferences;modelId?:string|null;mappings?:AnimationMappings};
+type NativeArgs={patch?:Partial<DesktopPreferences>;modelId?:string|null;mappings?:AnimationMappings};
 let current:DesktopSettings;
 
 beforeEach(() => {
@@ -42,7 +42,7 @@ async function launch(initial:DesktopSettings=installed,prepared:DesktopSettings
    current={...current,models:current.models.filter(item=>item.id!==args!.modelId),activeModelId:current.activeModelId===args!.modelId?null:current.activeModelId};
    return {settings:structuredClone(current)};
   }
-  else if(command==="update_preferences")current={...current,preferences:args!.preferences!};
+  else if(command==="patch_preferences")current={...current,preferences:{...current.preferences,...args!.patch!}};
   else if(command==="update_model_mappings")current={...current,models:current.models.map(item => item.id===args!.modelId?{...item,mappings:args!.mappings!}:item)};
   else throw new Error("unexpected command: "+command);
   return structuredClone(current);
@@ -77,7 +77,7 @@ describe("settings model library",() => {
   const field=document.getElementById("performance-overlay") as HTMLInputElement;
   expect(field.checked).toBe(false);
   field.checked=true;field.dispatchEvent(new Event("change",{bubbles:true}));
-  await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledWith("update_preferences",{preferences:{...preferences,performanceOverlay:true}}));
+  await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledWith("patch_preferences",{patch:{performanceOverlay:true}}));
   expect(current.preferences.scale).toBe(preferences.scale);
   const callback=(native.listen.mock.calls[0] as unknown as [string,(event:{payload:DesktopSettings})=>void])[1];
   callback({payload:{...structuredClone(current),preferences:{...current.preferences,performanceOverlay:false}}});
@@ -255,8 +255,8 @@ describe("automatic settings persistence",() => {
  it("coalesces fast preference edits and preserves focused fields",async () => {
   await launch();
   const scale=edit("scale","0.75");scale.focus();edit("dpr","1.1");edit("fps","30");
-  await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledWith("update_preferences",{preferences:{...preferences,scale:.75,maxDevicePixelRatio:1.1,fps:30}}));
-  expect(native.invoke.mock.calls.filter(([command]) => command==="update_preferences")).toHaveLength(1);
+  await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledWith("patch_preferences",{patch:{scale:.75,maxDevicePixelRatio:1.1,fps:30}}));
+  expect(native.invoke.mock.calls.filter(([command]) => command==="patch_preferences")).toHaveLength(1);
   expect(document.activeElement).toBe(scale);
   expect(document.querySelector("#settings-status")!.textContent).toBe("已自动保存");
  });
@@ -278,7 +278,7 @@ describe("automatic settings persistence",() => {
  it("validates preferences before native writes",async () => {
   await launch();edit("dpr","9");
   expect(document.getElementById("settings-error")!.textContent).toContain("DPR");
-  expect(native.invoke.mock.calls.some(([command]) => command==="update_preferences")).toBe(false);
+  expect(native.invoke.mock.calls.some(([command]) => command==="patch_preferences")).toBe(false);
  });
  it("autosaves animation pools to the correct model while switching",async () => {
   await launch({...installed,models:[model,custom]});
@@ -297,7 +297,7 @@ describe("automatic settings persistence",() => {
    if(command==="get_settings")return structuredClone(empty);
    if(command==="prepare_model")return new Promise<DesktopSettings>(resolve=>{prepared=resolve;});
    if(command==="select_model"){current={...current,activeModelId:args!.modelId!};return structuredClone(current);}
-   if(command==="update_preferences"){current={...current,preferences:args!.preferences!};return structuredClone(current);}
+   if(command==="patch_preferences"){current={...current,preferences:{...current.preferences,...args!.patch!}};return structuredClone(current);}
    throw new Error(command);
   });
   const started=startSettings();

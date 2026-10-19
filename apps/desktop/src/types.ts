@@ -33,6 +33,8 @@ export interface DesktopPreferences {
   privacyMode: boolean;
   bubbleMode: "compact" | "detailed";
   performanceOverlay: boolean;
+  bubblesVisible?: boolean;
+  pointerEnabled?: boolean;
 }
 
 export interface DesktopSettings {

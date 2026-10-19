@@ -15,6 +15,17 @@ function fixture(read:()=>Promise<PetInteraction>){
 afterEach(()=>vi.useRealTimers());
 
 describe("timed and continued question presentation",()=>{
+  it("hides every work/question bubble and cancels a late form when bubbles are off",async()=>{
+    let resolve!:(value:PetInteraction)=>void;
+    const read=vi.fn(()=>new Promise<PetInteraction>(done=>{resolve=done;})),f=fixture(read);
+    f.bubble.update(snapshot,preferences);
+    f.bubble.update(snapshot,{...preferences,bubblesVisible:false});
+    resolve(request);await settle();
+    expect(f.element.hidden).toBe(true);expect(f.element.childElementCount).toBe(0);
+    f.bubble.update({...snapshot,sequence:2,state:"working"},{...preferences,bubblesVisible:false});
+    expect(read).toHaveBeenCalledOnce();expect(f.element.hidden).toBe(true);
+    f.bubble.clear();
+  });
   it("uses the Host deadline despite delayed reads and only updates presentation at expiry",async()=>{
     vi.useFakeTimers();vi.setSystemTime(1_800_000_000_000);
     let resolve!:(value:PetInteraction)=>void;

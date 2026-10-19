@@ -10,6 +10,6 @@ export function renderingIdentity(settings: DesktopSettings): string {
   const model = selectedModel(settings);
   return JSON.stringify([
     model?.id, model?.backend, model?.modelPath, model?.vrm, model?.mappings.idle,
-    settings.preferences.fps, settings.preferences.maxDevicePixelRatio, settings.preferences.scale,
+    settings.preferences.maxDevicePixelRatio,
   ]);
 }

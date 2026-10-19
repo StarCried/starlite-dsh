@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { DesktopSettings } from "./types.js";
-import type { ModelCore, ModelModule, ModelSlot, WidgetController } from "./vendor-types.js";
+import type { ModelCore, ModelModule, ModelSlot, WidgetController, QuickMenu, QuickMenuOptions } from "./vendor-types.js";
 import { VRM_VIEWPORT_PADDING } from "./model-viewport.js";
 import { selectedModel } from "./model-selection.js";
 const CORE_URL = "/runtime/core/index.js";
@@ -10,6 +10,10 @@ export async function createModelSlot(): Promise<ModelSlot> {
   const { ModelMountSlot } = await loadCore();
   return new ModelMountSlot();
 }
+export async function createQuickMenu(options: QuickMenuOptions): Promise<QuickMenu> {
+  const { QuickSettingsMenu } = await loadCore();
+  return new QuickSettingsMenu(options);
+}
 export function modelConfig(settings: DesktopSettings): Record<string, unknown> {
   const model = selectedModel(settings);
   if (settings.activeModelId === null) throw new Error("Model is disabled");
@@ -18,10 +22,10 @@ export function modelConfig(settings: DesktopSettings): Record<string, unknown> 
   if (!model.vrm) throw new Error("Model component is incomplete");
   return {
     backend: model.backend, model: convertFileSrc(model.modelPath), fallback: TRANSPARENT_PIXEL,
-    display: { width: 320, height: 480 },
+    display: { width: 320 * settings.preferences.scale, height: 480 * settings.preferences.scale },
     performance: { show: settings.preferences.performanceOverlay },
-    render: { fps: settings.preferences.fps, maxDevicePixelRatio: settings.preferences.maxDevicePixelRatio, initialScale: settings.preferences.scale, autoFit: true, fitPadding:.92,viewportPadding:VRM_VIEWPORT_PADDING },
-    mobile: { show: true }, interactions: { pointer: true, click: false, drag: false },
+    render: { fps: settings.preferences.fps, maxDevicePixelRatio: settings.preferences.maxDevicePixelRatio, initialScale: 1, autoFit: true, fitPadding:.92,viewportPadding:VRM_VIEWPORT_PADDING },
+    mobile: { show: true }, interactions: { pointer: settings.preferences.pointerEnabled !== false, click: false, drag: false },
     embeddedAnimations: model.vrm.embeddedAnimations ?? [],
     animations: model.vrm.animations.map(({name,path}) => ({name,url:convertFileSrc(path)})),
     ...(model.vrm.profilePath ? {profile:convertFileSrc(model.vrm.profilePath)} : {}),

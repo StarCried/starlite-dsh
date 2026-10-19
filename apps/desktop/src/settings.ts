@@ -23,7 +23,7 @@ interface SettingsWrite {
   waiters: Array<{ resolve: (settings: DesktopSettings) => void; reject: (reason: unknown) => void }>;
 }
 const PREFERENCE_FIELDS = {
-  fps:"fps", dpr:"maxDevicePixelRatio", scale:"scale", privacy:"privacyMode", "bubble-mode":"bubbleMode", "performance-overlay":"performanceOverlay",
+  fps:"fps", dpr:"maxDevicePixelRatio", scale:"scale", privacy:"privacyMode", "bubble-mode":"bubbleMode", "performance-overlay":"performanceOverlay", "pointer-enabled":"pointerEnabled", "bubbles-visible":"bubblesVisible",
 } as const;
 
 export async function startSettings(): Promise<void> {
@@ -161,7 +161,8 @@ export async function startSettings(): Promise<void> {
         void enqueueWrite("preferences", async () => {
           const revisions = new Map(dirtyPreferences);
           const preferences = mergedPreferences();
-          const result = await invoke<DesktopSettings>("update_preferences", {preferences});
+          const patch = Object.fromEntries([...revisions.keys()].map(key => [key, preferences[key]]));
+          const result = await invoke<DesktopSettings>("patch_preferences", {patch});
           for (const [key, revision] of revisions) if (dirtyPreferences.get(key) === revision) dirtyPreferences.delete(key);
           return result;
         }).catch(reportFailure);
@@ -331,14 +332,16 @@ function populatePreferences(preferences: DesktopPreferences): void {
   requiredElement<HTMLInputElement>("privacy").checked = preferences.privacyMode;
   requiredElement<HTMLSelectElement>("bubble-mode").value = preferences.bubbleMode;
   requiredElement<HTMLInputElement>("performance-overlay").checked = preferences.performanceOverlay;
+  requiredElement<HTMLInputElement>("pointer-enabled").checked = preferences.pointerEnabled !== false;
+  requiredElement<HTMLInputElement>("bubbles-visible").checked = preferences.bubblesVisible !== false;
 }
 
 function readPreferences(): DesktopPreferences {
-  const {fps, maxDevicePixelRatio, scale, privacyMode, bubbleMode, performanceOverlay} = readUncheckedPreferences();
+  const {fps, maxDevicePixelRatio, scale, privacyMode, bubbleMode, performanceOverlay, pointerEnabled, bubblesVisible} = readUncheckedPreferences();
   if (fps !== 30 && fps !== 60) throw new Error("帧率只能是 30 或 60。");
   if (!Number.isFinite(maxDevicePixelRatio) || maxDevicePixelRatio < 1 || maxDevicePixelRatio > 1.5) throw new Error("DPR 上限必须在 1 到 1.5 之间。");
   if (!Number.isFinite(scale) || scale < 0.25 || scale > 3) throw new Error("模型缩放必须在 0.25 到 3 之间。");
-  return {fps,maxDevicePixelRatio,scale,privacyMode,bubbleMode,performanceOverlay};
+  return {fps,maxDevicePixelRatio,scale,privacyMode,bubbleMode,performanceOverlay,pointerEnabled:pointerEnabled!==false,bubblesVisible:bubblesVisible!==false};
 }
 
 function readUncheckedPreferences(): DesktopPreferences {
@@ -349,6 +352,8 @@ function readUncheckedPreferences(): DesktopPreferences {
     privacyMode:requiredElement<HTMLInputElement>("privacy").checked,
     bubbleMode:requiredElement<HTMLSelectElement>("bubble-mode").value === "detailed" ? "detailed" : "compact",
     performanceOverlay:requiredElement<HTMLInputElement>("performance-overlay").checked,
+    pointerEnabled:requiredElement<HTMLInputElement>("pointer-enabled").checked,
+    bubblesVisible:requiredElement<HTMLInputElement>("bubbles-visible").checked,
   };
 }
 

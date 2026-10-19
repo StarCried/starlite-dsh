@@ -30,6 +30,7 @@ const FIXED: ModelViewport = {
  * bubble layout, never native geometry or the model's screen anchor. */
 export class ModelViewportBridge {
   #vrm = false;
+  #scale = 1;
   #viewport = BASE;
   #screenSpace: number | undefined;
   readonly #bubbleResize: ResizeObserver;
@@ -55,10 +56,15 @@ export class ModelViewportBridge {
 
   get pending(): boolean { return this.#pending > 0; }
 
-  configure(vrm: boolean): Promise<void> {
-    if (vrm === this.#vrm) return this.#tail;
+  configure(vrm: boolean, scale = 1): Promise<void> {
+    if (!Number.isFinite(scale) || scale < .25 || scale > 3) return Promise.reject(new Error("invalid model size"));
+    if (vrm === this.#vrm && (!vrm || scale === this.#scale)) return this.#tail;
     this.#vrm = vrm;
-    this.#apply(vrm ? FIXED : null);
+    this.#scale = scale;
+    const baseWidth = Math.round(BASE.width * scale), baseHeight = Math.round(BASE.height * scale);
+    this.#apply(vrm ? {...FIXED, baseWidth, baseHeight,
+      width:baseWidth + VRM_VIEWPORT_PADDING.left + VRM_VIEWPORT_PADDING.right,
+      height:baseHeight + VRM_VIEWPORT_PADDING.top + VRM_VIEWPORT_PADDING.bottom + RESERVE} : null);
     return this.#tail;
   }
 
@@ -79,6 +85,11 @@ export class ModelViewportBridge {
   }
 
   ready(): Promise<void> { return this.#tail; }
+
+  get modelRect(): {left:number;top:number;width:number;height:number} {
+    const value=this.#viewport;
+    return {left:-value.left,top:-value.top,width:value.baseWidth,height:value.baseHeight};
+  }
 
   destroy(): Promise<void> {
     this.#bubbleResize.disconnect();
@@ -113,7 +124,7 @@ export class ModelViewportBridge {
     const variables: Record<string,string> = value ? {
       "--model-left":`${-value.left}px`, "--model-top":`${-value.top}px`,
       "--model-width":`${value.baseWidth}px`, "--model-height":`${value.baseHeight}px`,
-      "--bubble-left":`${-value.left+value.baseWidth/2}px`, "--bubble-width":`${value.baseWidth-32}px`,
+      "--bubble-left":`${-value.left+value.baseWidth/2}px`, "--bubble-width":`${BASE.width-32}px`,
     } : {};
     for (const key of ["--model-left","--model-top","--model-width","--model-height","--bubble-left","--bubble-top","--bubble-width","--bubble-max-height"]) {
       if (variables[key]) this.anchor.style.setProperty(key,variables[key]);

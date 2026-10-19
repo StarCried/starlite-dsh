@@ -33,6 +33,7 @@ export class WorkBubble {
   clear():void{this.#stopCountdown();this.#hostFrame=undefined;++this.#generation;this.#key=undefined;this.element.hidden=true;this.element.replaceChildren();delete this.element.dataset.interactive;this.actions.changed()}
   update(snapshot:PetSnapshot,preferences:DesktopPreferences):void{
     this.#latest=snapshot;this.#preferences=preferences;
+    if(preferences.bubblesVisible===false){this.clear();return;}
     const key=!preferences.privacyMode&&snapshot.inputRequest&&snapshot.session?`${snapshot.session.ref}/${snapshot.inputRequest}`:undefined;
     if(!this.#hostFrame||snapshot.sequence>this.#hostFrame.sequence){
       this.#hostFrame={sequence:snapshot.sequence,emittedAt:snapshot.emittedAt,receivedAt:performance.now()};

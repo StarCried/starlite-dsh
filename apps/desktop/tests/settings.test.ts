@@ -65,7 +65,7 @@ describe("settings model library",() => {
   await vi.waitFor(()=>expect(document.querySelector(".model-license-dialog[open]")).not.toBeNull());
   expect(native.invoke).toHaveBeenCalledWith("inspect_model",{path:other.modelPath,animationSources:external,profilePath:other.vrm!.profilePath});
   const dialog=document.querySelector<HTMLDialogElement>("dialog")!;
-  expect(dialog.textContent).toContain("自动眨眼：不可用");expect(dialog.textContent).toContain("1.00 MiB");
+  expect(dialog.textContent).toContain("自动眨眼：未配置");expect(dialog.textContent).toContain("1.00 MiB");
   expect(dialog.querySelector("img")).toBeNull();expect(dialog.textContent).toContain("<img src=x>");
   expect(current).toEqual(before);
   expect(native.invoke.mock.calls.some(([command])=>command==="select_model"||command==="install_model")).toBe(false);

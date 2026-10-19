@@ -25,6 +25,8 @@ pub struct ModelInspection {
     license: Option<ModelLicense>,
     default_mappings: AnimationMappings,
     animations: Vec<Value>,
+    capabilities: Value,
+    metrics: Value,
     compatibility_supported: bool,
     issues: Vec<Value>,
 }
@@ -221,6 +223,8 @@ pub fn inspect(
         license: prepared.license,
         default_mappings: prepared.default_mappings,
         animations,
+        capabilities: prepared.capabilities,
+        metrics: prepared.metrics,
         compatibility_supported: true,
         issues: vec![],
     })

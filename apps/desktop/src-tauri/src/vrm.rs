@@ -5,7 +5,7 @@ use crate::settings::{
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     fs::{self, File},
     io::Read,
     path::Path,
@@ -23,6 +23,8 @@ pub struct Prepared {
     pub model_name: Option<String>,
     pub license: Option<ModelLicense>,
     pub default_mappings: AnimationMappings,
+    pub capabilities: Value,
+    pub metrics: Value,
     model: Vec<u8>,
     animations: Vec<(String, f64, Vec<u8>)>,
     embedded_animations: Vec<(String, f64)>,
@@ -86,8 +88,21 @@ pub fn inspect(
     }
     let model = read_limited(path, MODEL_LIMIT)?;
     let parsed = parse_glb(&model, false)?;
-    validate_humanoid(&parsed.json)?;
-    validate_blink_bindings(&parsed.json)?;
+    let extension_name = if parsed.json["extensions"]["VRM"].is_object() {
+        "VRM"
+    } else {
+        "VRMC_vrm"
+    };
+    if parsed.json.get("extensionsUsed").is_some()
+        && !array(&parsed.json, "extensionsUsed")?
+            .iter()
+            .any(|name| name == extension_name)
+    {
+        return Err("missing VRM extension declaration：请使用 VRM 导出器重新导出模型。".into());
+    }
+    let bones = validate_humanoid(&parsed.json)?;
+    let capabilities = inspect_capabilities(&parsed.json, &bones)?;
+    let metrics = inspect_metrics(&parsed.json, model.len())?;
     let meta = if parsed.json["extensions"]["VRM"].is_object() {
         &parsed.json["extensions"]["VRM"]["meta"]
     } else {
@@ -96,7 +111,7 @@ pub fn inspect(
     let model_name = meta["title"]
         .as_str()
         .or_else(|| meta["name"].as_str())
-        .map(str::to_owned);
+        .map(|name| name.chars().filter(|c| !c.is_control()).take(128).collect());
     let extras = &parsed.json["extras"]["starlite"];
     let license = if extras["license"].is_null() {
         metadata_license(meta)?
@@ -206,6 +221,8 @@ pub fn inspect(
         model_name,
         license,
         default_mappings,
+        capabilities,
+        metrics,
         model,
         animations,
         embedded_animations,
@@ -428,7 +445,7 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
         || u32_at(bytes, 4)? != 2
         || u32_at(bytes, 8)? as usize != bytes.len()
     {
-        return Err("invalid GLB header or size".into());
+        return Err("invalid GLB header or size：请使用完整的二进制 VRM / VRMA 文件（模型不超过 64 MiB，单个动作不超过 16 MiB）；FBX 或普通 JSON glTF 不能直接导入。".into());
     }
     let mut at = 12;
     let mut count = 0;
@@ -439,7 +456,7 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
         let kind = u32_at(bytes, at + 4)?;
         at += 8;
         if size % 4 != 0 || size > bytes.len() - at {
-            return Err("invalid GLB chunk size".into());
+            return Err("invalid GLB chunk size：文件不完整或已损坏，请重新下载或导出。".into());
         }
         match (count, kind) {
             (0, 0x4e4f534a) => {
@@ -448,18 +465,18 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
                 }
                 value = Some(
                     serde_json::from_slice::<Value>(&bytes[at..at + size])
-                        .map_err(|e| e.to_string())?,
+                        .map_err(|_| "invalid GLB JSON：请使用 VRM 导出器重新导出文件。")?,
                 )
             }
             (1, 0x004e4942) => bin = &bytes[at..at + size],
-            _ => return Err("unexpected GLB chunk".into()),
+            _ => return Err("unexpected GLB chunk：请重新导出单文件 VRM / VRMA。".into()),
         }
         at += size;
         count += 1;
     }
     let json = value.ok_or("GLB JSON is missing")?;
     if json["asset"]["version"] != "2.0" {
-        return Err("glTF 2.0 is required".into());
+        return Err("glTF 2.0 is required：请使用 VRM 0.0 / 1.0 导出器。".into());
     }
     let ext = &json["extensions"];
     if animation {
@@ -468,10 +485,10 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
         }
     } else if ext["VRM"].is_object() {
         if ext["VRM"]["specVersion"] != "0.0" || ext["VRMC_vrm"].is_object() {
-            return Err("unsupported VRM version".into());
+            return Err("unsupported VRM version：请导出 VRM 0.0 或 1.0。".into());
         }
     } else if ext["VRMC_vrm"]["specVersion"] != "1.0" {
-        return Err("VRM 0 or VRM 1 is required".into());
+        return Err("VRM 0 or VRM 1 is required：普通 GLB、FBX 需要先通过 VRM 导出器转换。".into());
     }
     let allowed = [
         "VRM",
@@ -489,7 +506,10 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
         .iter()
         .any(|v| !v.as_str().is_some_and(|s| allowed.contains(&s)))
     {
-        return Err("unsupported required glTF extension".into());
+        return Err(
+            "unsupported required glTF extension：请关闭额外的几何或贴图压缩扩展后重新导出。"
+                .into(),
+        );
     }
     reject_uris(&json, 0)?;
     let buffers = array(&json, "buffers")?;
@@ -724,7 +744,7 @@ fn reject_uris(value: &Value, depth: usize) -> Result<(), String> {
         Value::Object(map) => {
             for (key, value) in map {
                 if key == "uri" {
-                    return Err("external glTF resources are not supported".into());
+                    return Err("external glTF resources are not supported：请将全部贴图和缓冲区内嵌到同一个 VRM / VRMA 文件后重新导出。".into());
                 }
                 reject_uris(value, depth + 1)?
             }
@@ -763,125 +783,459 @@ fn walk_nodes(
     active.remove(&i);
     Ok(())
 }
-fn validate_humanoid(json: &Value) -> Result<(), String> {
-    let mut bones = HashSet::new();
-    let node_count = array(json, "nodes")?.len();
-    if json["extensions"]["VRM"].is_object() {
-        for bone in array(&json["extensions"]["VRM"]["humanoid"], "humanBones")? {
-            let name = bone["bone"].as_str().ok_or("invalid humanoid bone")?;
-            if !bones.insert(name) {
-                return Err("duplicate humanoid bone".into());
+const REQUIRED_HUMAN_BONES: [&str; 15] = [
+    "hips",
+    "spine",
+    "head",
+    "leftUpperLeg",
+    "leftLowerLeg",
+    "leftFoot",
+    "leftUpperArm",
+    "leftLowerArm",
+    "leftHand",
+    "rightUpperLeg",
+    "rightLowerLeg",
+    "rightFoot",
+    "rightUpperArm",
+    "rightLowerArm",
+    "rightHand",
+];
+fn optional_human_bones() -> Vec<String> {
+    let mut names: Vec<String> = ["chest", "upperChest", "neck", "jaw"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    for side in ["left", "right"] {
+        for part in [
+            "Eye",
+            "Shoulder",
+            "Toes",
+            "ThumbMetacarpal",
+            "ThumbProximal",
+            "ThumbIntermediate",
+            "ThumbDistal",
+        ] {
+            names.push(format!("{side}{part}"));
+        }
+        for finger in ["Index", "Middle", "Ring", "Little"] {
+            for part in ["Proximal", "Intermediate", "Distal"] {
+                names.push(format!("{side}{finger}{part}"));
             }
-            index(&bone["node"], node_count)?;
-        }
-    } else {
-        for (name, bone) in json["extensions"]["VRMC_vrm"]["humanoid"]["humanBones"]
-            .as_object()
-            .ok_or("missing humanoid bones")?
-        {
-            bones.insert(name.as_str());
-            index(&bone["node"], node_count)?;
         }
     }
-    for name in [
-        "hips",
-        "spine",
-        "head",
-        "leftUpperArm",
-        "leftLowerArm",
-        "leftHand",
-        "rightUpperArm",
-        "rightLowerArm",
-        "rightHand",
-        "leftUpperLeg",
-        "leftLowerLeg",
-        "leftFoot",
-        "rightUpperLeg",
-        "rightLowerLeg",
-        "rightFoot",
-    ] {
-        if !bones.contains(name) {
-            return Err(format!("required humanoid bone is missing: {name}"));
-        }
-    }
-    Ok(())
+    names
 }
-
-fn validate_blink_bindings(model: &Value) -> Result<(), String> {
+fn validate_humanoid(json: &Value) -> Result<BTreeMap<String, usize>, String> {
+    let optional = optional_human_bones();
+    let known: HashSet<&str> = REQUIRED_HUMAN_BONES
+        .into_iter()
+        .chain(optional.iter().map(String::as_str))
+        .collect();
+    let node_count = array(json, "nodes")?.len();
+    let vrm0 = json["extensions"]["VRM"].is_object();
+    let human = if vrm0 {
+        &json["extensions"]["VRM"]["humanoid"]["humanBones"]
+    } else {
+        &json["extensions"]["VRMC_vrm"]["humanoid"]["humanBones"]
+    };
+    let entries: Vec<(&str, &Value)> = if vrm0 {
+        let mut entries = Vec::new();
+        for bone in human.as_array().into_iter().flatten() {
+            let name = bone["bone"]
+                .as_str()
+                .ok_or("invalid humanoid bone：人形骨骼条目缺少标准名称，请重新导出 VRM。")?;
+            entries.push((name, bone));
+        }
+        entries
+    } else {
+        human
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(name, bone)| (name.as_str(), bone))
+            .collect()
+    };
+    let mut bones = BTreeMap::new();
+    let mut used = BTreeMap::new();
+    let mut invalid = Vec::new();
+    let mut duplicate = Vec::new();
+    let mut all_names = HashSet::new();
+    for (name, bone) in entries {
+        // Restrict diagnostic names to the public humanoid vocabulary; model
+        // authored names and URI-like strings are never copied into errors.
+        if !known.contains(name) {
+            if !all_names.insert(name) {
+                return Err(
+                    "duplicate humanoid bone：额外的人形骨骼条目重复，请在导出器中移除重复映射。"
+                        .into(),
+                );
+            }
+            index(&bone["node"], node_count).map_err(|_| {
+                "invalid humanoid bone：额外的人形骨骼条目引用了无效节点，请重新导出 VRM。"
+            })?;
+            continue;
+        }
+        all_names.insert(name);
+        if bones.contains_key(name) {
+            duplicate.push(name);
+        }
+        match index(&bone["node"], node_count) {
+            Ok(node) => {
+                if let Some(previous) = used.insert(node, name) {
+                    if previous != name {
+                        duplicate.extend([previous, name]);
+                    }
+                }
+                bones.insert(name.to_owned(), node);
+            }
+            Err(_) => invalid.push(name),
+        }
+    }
+    let missing: Vec<&str> = REQUIRED_HUMAN_BONES
+        .into_iter()
+        .filter(|name| !bones.contains_key(*name) && !invalid.contains(name))
+        .collect();
+    if !missing.is_empty() || !invalid.is_empty() || !duplicate.is_empty() {
+        invalid.sort_unstable();
+        invalid.dedup();
+        duplicate.sort_unstable();
+        duplicate.dedup();
+        let mut issues = Vec::new();
+        if !missing.is_empty() {
+            issues.push(format!("缺少：{}", missing.join(", ")));
+        }
+        if !invalid.is_empty() {
+            issues.push(format!("节点无效：{}", invalid.join(", ")));
+        }
+        if !duplicate.is_empty() {
+            issues.push(format!("重复绑定：{}", duplicate.join(", ")));
+        }
+        return Err(format!("invalid required humanoid bone：{}。请在 VRM 导出器中为这些人形骨骼指定有效、互不重复的骨骼节点后重新导出。", issues.join("；")));
+    }
+    Ok(bones)
+}
+fn vrm_extension(model: &Value) -> (&Value, bool) {
+    let vrm0 = model["extensions"]["VRM"].is_object();
+    (
+        &model["extensions"][if vrm0 { "VRM" } else { "VRMC_vrm" }],
+        vrm0,
+    )
+}
+fn canonical_vrm0_preset(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "a" => "aa",
+        "e" => "ee",
+        "i" => "ih",
+        "o" => "oh",
+        "u" => "ou",
+        "joy" => "happy",
+        "angry" => "angry",
+        "sorrow" => "sad",
+        "fun" => "relaxed",
+        "neutral" => "neutral",
+        "blink" => "blink",
+        "blink_l" => "blinkLeft",
+        "blink_r" => "blinkRight",
+        "lookup" => "lookUp",
+        "lookdown" => "lookDown",
+        "lookleft" => "lookLeft",
+        "lookright" => "lookRight",
+        _ => return None,
+    })
+}
+fn registered_vrm0_name(expression: &Value) -> Option<&str> {
+    expression["presetName"]
+        .as_str()
+        .and_then(canonical_vrm0_preset)
+        .or_else(|| expression["name"].as_str())
+}
+fn expression_for<'a>(model: &'a Value, canonical_name: &str) -> Result<Option<&'a Value>, String> {
+    let (extension, vrm0) = vrm_extension(model);
+    if vrm0 {
+        Ok(array(&extension["blendShapeMaster"], "blendShapeGroups")?
+            .iter()
+            .find(|expression| registered_vrm0_name(expression) == Some(canonical_name)))
+    } else {
+        Ok(extension["expressions"]["preset"].get(canonical_name))
+    }
+}
+fn morph_expression_usable(
+    model: &Value,
+    expression: &Value,
+    name: &str,
+    blink: bool,
+) -> Result<bool, String> {
+    let (_, vrm0) = vrm_extension(model);
+    let label = if blink { "眨眼" } else { "视线" };
+    let problem = |detail: &str| {
+        format!("{label}表达（{name}）{detail}。请在 VRM 导出器中检查网格、形态键索引和权重后重新导出。")
+    };
+    if !expression.is_object() {
+        return Err(problem("格式无效"));
+    }
+    let binds = array(expression, if vrm0 { "binds" } else { "morphTargetBinds" })
+        .map_err(|_| problem("绑定列表无效"))?;
+    if binds.len() > 256 {
+        return Err(problem("绑定数量超过 256 个"));
+    }
     let meshes = array(model, "meshes")?;
     let nodes = array(model, "nodes")?;
-    let vrm0 = model["extensions"]["VRM"].is_object();
-    // Blink is an optional capability. Missing, empty and zero-weight presets
-    // do not prevent import, but declared resource references must remain valid.
-    let validate_expression = |expression: &Value| -> Result<(), String> {
-        if !expression.is_object() {
-            return Err("眨眼表达格式无效。请检查 VRM 表达配置后重新导出。".into());
+    let accessors = array(model, "accessors")?;
+    let mut usable = false;
+    for bind in binds {
+        let mesh = if vrm0 {
+            index(&bind["mesh"], meshes.len())
+        } else {
+            index(&bind["node"], nodes.len())
+                .and_then(|node| index(&nodes[node]["mesh"], meshes.len()))
         }
-        let binds = array(expression, if vrm0 { "binds" } else { "morphTargetBinds" })?;
-        if binds.len() > 256 {
-            return Err("眨眼表达绑定数量超过限制。".into());
+        .map_err(|_| problem("引用了无效的模型网格"))?;
+        let target = bind["index"]
+            .as_u64()
+            .and_then(|n| usize::try_from(n).ok())
+            .ok_or_else(|| problem("的形态键索引无效"))?;
+        let primitives = array(&meshes[mesh], "primitives")?;
+        if primitives.is_empty()
+            || primitives.iter().any(|primitive| {
+                !array(primitive, "targets").is_ok_and(|targets| target < targets.len())
+            })
+        {
+            return Err(problem("引用了不存在的形态键"));
         }
-        for bind in binds {
-            let mesh = if vrm0 {
-                index(&bind["mesh"], meshes.len())
-            } else {
-                index(&bind["node"], nodes.len())
-                    .and_then(|node| index(&nodes[node]["mesh"], meshes.len()))
-            }
-            .map_err(|_| "眨眼表达引用了无效的模型网格。")?;
-            let Some(target) = bind["index"]
-                .as_u64()
-                .and_then(|target| usize::try_from(target).ok())
-            else {
-                return Err("眨眼表达的形态键索引无效。".into());
-            };
-            let primitives = array(&meshes[mesh], "primitives")?;
-            if primitives.is_empty()
-                || primitives.iter().any(|primitive| {
-                    !array(primitive, "targets").is_ok_and(|targets| target < targets.len())
+        let weight = bind["weight"]
+            .as_f64()
+            .filter(|weight| {
+                weight.is_finite() && (0.0..=if vrm0 { 100.0 } else { 1.0 }).contains(weight)
+            })
+            .ok_or_else(|| problem("的形态键权重无效"))?;
+        let instantiated = !vrm0
+            || nodes
+                .iter()
+                .any(|node| node["mesh"].as_u64() == Some(mesh as u64));
+        let has_morphs = primitives.iter().all(|primitive| {
+            array(primitive, "targets").is_ok_and(|targets| {
+                targets.iter().any(|target| {
+                    ["POSITION", "NORMAL", "COLOR_0"]
+                        .iter()
+                        .any(|semantic| index(&target[*semantic], accessors.len()).is_ok())
                 })
-            {
-                return Err("眨眼表达引用了不存在的形态键。".into());
-            }
-            if !bind["weight"].as_f64().is_some_and(|weight| {
-                weight.is_finite() && (0.0..=if vrm0 { 100.0 } else { 1.0 }).contains(&weight)
-            }) {
-                return Err("眨眼表达的形态键权重无效。".into());
-            }
-        }
-        Ok(())
-    };
+            })
+        });
+        usable |= weight > 0.0 && instantiated && has_morphs;
+    }
+    Ok(usable)
+}
+fn validate_blink_bindings(model: &Value) -> Result<(), String> {
+    let (extension, vrm0) = vrm_extension(model);
     if vrm0 {
-        let Some(master) = model["extensions"]["VRM"].get("blendShapeMaster") else {
+        let Some(master) = extension.get("blendShapeMaster") else {
             return Ok(());
         };
         if !master.is_object() {
-            return Err("invalid VRM blendShapeMaster".into());
+            return Err("眨眼表达格式无效：invalid VRM blendShapeMaster。请重新导出 VRM。".into());
         }
         for expression in array(master, "blendShapeGroups")? {
-            if matches!(
-                expression["presetName"].as_str(),
-                Some("blink" | "blink_l" | "blink_r")
-            ) {
-                validate_expression(expression)?;
+            if let Some(name @ ("blink" | "blinkLeft" | "blinkRight")) =
+                registered_vrm0_name(expression)
+            {
+                morph_expression_usable(model, expression, name, true)?;
             }
         }
-    } else if let Some(expressions) = model["extensions"]["VRMC_vrm"].get("expressions") {
+    } else if let Some(expressions) = extension.get("expressions") {
         if !expressions.is_object() {
-            return Err("invalid VRM expressions".into());
+            return Err("眨眼表达格式无效：invalid VRM expressions。请重新导出 VRM。".into());
         }
         if let Some(presets) = expressions.get("preset") {
             if !presets.is_object() {
-                return Err("invalid VRM expression presets".into());
+                return Err(
+                    "眨眼表达格式无效：invalid VRM expression presets。请重新导出 VRM。".into(),
+                );
             }
             for name in ["blink", "blinkLeft", "blinkRight"] {
                 if let Some(expression) = presets.get(name) {
-                    validate_expression(expression)?;
+                    morph_expression_usable(model, expression, name, true)?;
                 }
             }
         }
     }
     Ok(())
+}
+fn inspect_capabilities(model: &Value, bones: &BTreeMap<String, usize>) -> Result<Value, String> {
+    validate_blink_bindings(model)?;
+    let usable = |name, blink| {
+        expression_for(model, name)?
+            .map(|expression| morph_expression_usable(model, expression, name, blink))
+            .transpose()
+            .map(|value| value.unwrap_or(false))
+    };
+    let combined = usable("blink", true)?;
+    let left = usable("blinkLeft", true)?;
+    let right = usable("blinkRight", true)?;
+    let optional: Vec<_> = optional_human_bones()
+        .into_iter()
+        .filter(|name| bones.contains_key(name))
+        .collect();
+    Ok(
+        json!({"humanoid":{"requiredBones":REQUIRED_HUMAN_BONES,"optionalBones":optional},
+        "blink":{"automatic":combined || (left && right),"combined":combined,"left":left,"right":right},
+        "lookAt":inspect_look_at(model, bones)?}),
+    )
+}
+fn inspect_look_at(model: &Value, bones: &BTreeMap<String, usize>) -> Result<Value, String> {
+    let (extension, vrm0) = vrm_extension(model);
+    let empty = json!({"mode":"none","head":true,"eyes":false,"horizontal":false,"vertical":false});
+    let Some(look_at) = extension.get(if vrm0 { "firstPerson" } else { "lookAt" }) else {
+        return Ok(empty);
+    };
+    if !look_at.is_object() {
+        return Err("视线配置格式无效，请重新导出 VRM。".into());
+    }
+    // three-vrm requires an expression manager even for bone-driven lookAt.
+    if extension
+        .get(if vrm0 {
+            "blendShapeMaster"
+        } else {
+            "expressions"
+        })
+        .is_none_or(Value::is_null)
+    {
+        return Ok(empty);
+    }
+    let kind = &look_at[if vrm0 { "lookAtTypeName" } else { "type" }];
+    if !kind.is_null()
+        && !kind.as_str().is_some_and(|name| {
+            if vrm0 {
+                ["Bone", "BlendShape"].contains(&name)
+            } else {
+                ["bone", "expression"].contains(&name)
+            }
+        })
+    {
+        return Err("视线类型无效，请在 VRM 导出器中选择骨骼或表达视线模式。".into());
+    }
+    let expression_mode = kind == if vrm0 { "BlendShape" } else { "expression" };
+    let scale = |key| -> Result<f64, String> {
+        let range = &look_at[key];
+        if !range.is_null() && !range.is_object() {
+            return Err("视线角度范围格式无效，请重新导出 VRM。".into());
+        }
+        for field in [
+            if vrm0 { "xRange" } else { "inputMaxValue" },
+            if vrm0 { "yRange" } else { "outputScale" },
+        ] {
+            if !range[field].is_null()
+                && !range[field]
+                    .as_f64()
+                    .is_some_and(|value| value.is_finite() && value >= 0.0)
+            {
+                return Err("视线角度范围无效，请设置有限、非负的输入和输出角度。".into());
+            }
+        }
+        Ok(range[if vrm0 { "yRange" } else { "outputScale" }]
+            .as_f64()
+            .unwrap_or(if expression_mode { 1.0 } else { 10.0 }))
+    };
+    let horizontal = scale(if vrm0 {
+        "lookAtHorizontalOuter"
+    } else {
+        "rangeMapHorizontalOuter"
+    })?;
+    let inner = scale(if vrm0 {
+        "lookAtHorizontalInner"
+    } else {
+        "rangeMapHorizontalInner"
+    })?;
+    let up = scale(if vrm0 {
+        "lookAtVerticalUp"
+    } else {
+        "rangeMapVerticalUp"
+    })?;
+    let down = scale(if vrm0 {
+        "lookAtVerticalDown"
+    } else {
+        "rangeMapVerticalDown"
+    })?;
+    let (horizontal, vertical) = if expression_mode {
+        let usable = |name| {
+            expression_for(model, name)?
+                .map(|expression| morph_expression_usable(model, expression, name, false))
+                .transpose()
+                .map(|value| value.unwrap_or(false))
+        };
+        // Validate each declared direction even when the other half is absent.
+        let left_usable = usable("lookLeft")?;
+        let right_usable = usable("lookRight")?;
+        let up_usable = usable("lookUp")?;
+        let down_usable = usable("lookDown")?;
+        (
+            horizontal > 0.0 && left_usable && right_usable,
+            up > 0.0 && down > 0.0 && up_usable && down_usable,
+        )
+    } else {
+        let eyes = bones.contains_key("leftEye") || bones.contains_key("rightEye");
+        (
+            eyes && (horizontal > 0.0 || inner > 0.0),
+            eyes && (up > 0.0 || down > 0.0),
+        )
+    };
+    Ok(
+        json!({"mode":if expression_mode {"expression"} else {"bone"},"head":true,"eyes":horizontal || vertical,"horizontal":horizontal,"vertical":vertical}),
+    )
+}
+fn inspect_metrics(model: &Value, file_bytes: usize) -> Result<Value, String> {
+    let meshes = array(model, "meshes")?;
+    let accessors = array(model, "accessors")?;
+    let mut primitive_count = 0_u64;
+    let mut vertex_count = 0_u64;
+    let mut triangle_count = 0_u64;
+    let mut morph_target_count = 0_u64;
+    for mesh in meshes {
+        for primitive in array(mesh, "primitives")? {
+            primitive_count += 1;
+            let positions =
+                &accessors[index(&primitive["attributes"]["POSITION"], accessors.len())?];
+            let vertices = positions["count"]
+                .as_u64()
+                .ok_or("invalid mesh positions")?;
+            let indices = if primitive["indices"].is_null() {
+                vertices
+            } else {
+                accessors[index(&primitive["indices"], accessors.len())?]["count"]
+                    .as_u64()
+                    .ok_or("invalid mesh indices")?
+            };
+            vertex_count += vertices;
+            triangle_count += match primitive["mode"].as_u64().unwrap_or(4) {
+                4 => indices / 3,
+                5 | 6 => indices.saturating_sub(2),
+                _ => 0,
+            };
+            morph_target_count += array(primitive, "targets")?.len() as u64;
+        }
+    }
+    let mut decoded = 0_u64;
+    for accessor in accessors {
+        let width = component_size(&accessor["componentType"])? as u64;
+        let components = match accessor["type"].as_str() {
+            Some("SCALAR") => 1,
+            Some("VEC2") => 2,
+            Some("VEC3") => 3,
+            Some("VEC4") => 4,
+            Some("MAT2") => (2 * width).div_ceil(4) * 4 * 2 / width,
+            Some("MAT3") => (3 * width).div_ceil(4) * 4 * 3 / width,
+            Some("MAT4") => 16,
+            _ => return Err("invalid accessor type".into()),
+        };
+        decoded += accessor["count"]
+            .as_u64()
+            .ok_or("invalid accessor allocation")?
+            * width
+            * components;
+    }
+    // This is logical decoded accessor storage, not a GPU/process measurement.
+    Ok(
+        json!({"fileBytes":file_bytes,"nodeCount":array(model,"nodes")?.len(),"meshCount":meshes.len(),"primitiveCount":primitive_count,"materialCount":array(model,"materials")?.len(),"textureCount":array(model,"textures")?.len(),"imageCount":array(model,"images")?.len(),"vertexCount":vertex_count,"triangleCount":triangle_count,"morphTargetCount":morph_target_count,"decodedAccessorBytes":decoded}),
+    )
 }
 fn animation_duration(glb: &Glb<'_>) -> Result<f64, String> {
     let animations = array(&glb.json, "animations")?;
@@ -1414,6 +1768,253 @@ mod tests {
             set_presets(&mut malformed, vec![("blink", json!({field:42}))]);
             assert!(validate_blink_bindings(&malformed).is_err());
         }
+    }
+    #[test]
+    fn inspection_names_missing_invalid_and_duplicate_standard_bones() {
+        for baseline in [model(), model_vrm1()] {
+            let vrm0 = baseline["extensions"]["VRM"].is_object();
+            for name in REQUIRED_HUMAN_BONES {
+                let mut value = baseline.clone();
+                if vrm0 {
+                    value["extensions"]["VRM"]["humanoid"]["humanBones"]
+                        .as_array_mut()
+                        .unwrap()
+                        .retain(|bone| bone["bone"] != name);
+                } else {
+                    value["extensions"]["VRMC_vrm"]["humanoid"]["humanBones"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove(name);
+                }
+                let error = validate_humanoid(&value).unwrap_err();
+                assert!(
+                    error.contains(name) && error.contains("VRM 导出器"),
+                    "{error}"
+                );
+                assert!(error.contains("required humanoid bone"));
+            }
+            let mut value = baseline;
+            value["nodes"][0]["name"] = "file:///private/token=secret".into();
+            if vrm0 {
+                let bones = value["extensions"]["VRM"]["humanoid"]["humanBones"]
+                    .as_array_mut()
+                    .unwrap();
+                bones[0]["node"] = 999.into();
+                bones[3]["node"] = bones[6]["node"].clone();
+            } else {
+                let bones = &mut value["extensions"]["VRMC_vrm"]["humanoid"]["humanBones"];
+                bones["hips"]["node"] = 999.into();
+                bones["leftUpperArm"]["node"] = bones["rightUpperArm"]["node"].clone();
+            }
+            let error = validate_humanoid(&value).unwrap_err();
+            assert!(
+                error.contains("hips")
+                    && error.contains("leftUpperArm")
+                    && error.contains("rightUpperArm")
+            );
+            assert!(!error.contains("secret") && !error.contains("file:"));
+        }
+        let mut value = model();
+        let bones = value["extensions"]["VRM"]["humanoid"]["humanBones"]
+            .as_array_mut()
+            .unwrap();
+        bones.push(bones[0].clone());
+        assert!(validate_humanoid(&value)
+            .unwrap_err()
+            .contains("重复绑定：hips"));
+    }
+    #[test]
+    fn reports_actual_optional_blink_capability_and_logical_resource_metrics() {
+        for mut value in [model(), model_vrm1()] {
+            let vrm0 = value["extensions"]["VRM"].is_object();
+            let field = if vrm0 { "binds" } else { "morphTargetBinds" };
+            let mut expression = if vrm0 {
+                value["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"][0].clone()
+            } else {
+                value["extensions"]["VRMC_vrm"]["expressions"]["preset"]["blink"].clone()
+            };
+            let set = |model: &mut Value, presets: Vec<(&str, Value)>| {
+                if vrm0 {
+                    model["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"] = presets
+                        .into_iter()
+                        .map(|(name, mut expression)| {
+                            expression["presetName"] = name.into();
+                            expression
+                        })
+                        .collect();
+                } else {
+                    model["extensions"]["VRMC_vrm"]["expressions"]["preset"] = presets
+                        .into_iter()
+                        .map(|(name, expression)| (name.to_owned(), expression))
+                        .collect::<serde_json::Map<_, _>>()
+                        .into();
+                }
+            };
+            let bones = validate_humanoid(&value).unwrap();
+            assert_eq!(
+                inspect_capabilities(&value, &bones).unwrap()["blink"],
+                json!({"automatic":true,"combined":true,"left":false,"right":false})
+            );
+            set(
+                &mut value,
+                vec![(
+                    if vrm0 { "blink_l" } else { "blinkLeft" },
+                    expression.clone(),
+                )],
+            );
+            assert_eq!(
+                inspect_capabilities(&value, &bones).unwrap()["blink"],
+                json!({"automatic":false,"combined":false,"left":true,"right":false})
+            );
+            set(
+                &mut value,
+                vec![
+                    (
+                        if vrm0 { "blink_l" } else { "blinkLeft" },
+                        expression.clone(),
+                    ),
+                    (
+                        if vrm0 { "blink_r" } else { "blinkRight" },
+                        expression.clone(),
+                    ),
+                ],
+            );
+            assert_eq!(
+                inspect_capabilities(&value, &bones).unwrap()["blink"]["automatic"],
+                true
+            );
+            expression[field][0]["weight"] = 0.into();
+            set(&mut value, vec![("blink", expression)]);
+            assert_eq!(
+                inspect_capabilities(&value, &bones).unwrap()["blink"]["automatic"],
+                false
+            );
+            value["meshes"][0]["primitives"][0]["targets"] = json!([{}]);
+            assert_eq!(
+                inspect_capabilities(&value, &bones).unwrap()["blink"]["combined"],
+                false
+            );
+            let metrics = inspect_metrics(&value, 1000).unwrap();
+            assert_eq!(metrics["fileBytes"], 1000);
+            assert_eq!(metrics["nodeCount"], 15);
+            assert_eq!(metrics["primitiveCount"], 1);
+            assert_eq!(metrics["vertexCount"], 1);
+            assert_eq!(metrics["triangleCount"], 0);
+            assert_eq!(metrics["decodedAccessorBytes"], 12);
+            assert_eq!(
+                inspect_capabilities(&value, &bones).unwrap()["lookAt"],
+                json!({"mode":"none","head":true,"eyes":false,"horizontal":false,"vertical":false})
+            );
+        }
+    }
+    #[test]
+    fn eye_tracking_requires_real_bones_or_usable_expression_pairs_and_ranges() {
+        for mut value in [model(), model_vrm1()] {
+            let vrm0 = value["extensions"]["VRM"].is_object();
+            let extension = if vrm0 { "VRM" } else { "VRMC_vrm" };
+            let config = if vrm0 { "firstPerson" } else { "lookAt" };
+            value["extensions"][extension][config] = if vrm0 {
+                json!({"lookAtTypeName":"Bone"})
+            } else {
+                json!({"type":"bone"})
+            };
+            let mut bones = validate_humanoid(&value).unwrap();
+            assert_eq!(inspect_look_at(&value, &bones).unwrap()["eyes"], false);
+            for name in ["leftEye", "rightEye"] {
+                let node = value["nodes"].as_array().unwrap().len();
+                value["nodes"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(json!({"name":name}));
+                if vrm0 {
+                    value["extensions"][extension]["humanoid"]["humanBones"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(json!({"bone":name,"node":node}));
+                } else {
+                    value["extensions"][extension]["humanoid"]["humanBones"][name] =
+                        json!({"node":node});
+                }
+            }
+            bones = validate_humanoid(&value).unwrap();
+            assert_eq!(
+                inspect_look_at(&value, &bones).unwrap(),
+                json!({"mode":"bone","head":true,"eyes":true,"horizontal":true,"vertical":true})
+            );
+            for key in if vrm0 {
+                [
+                    "lookAtHorizontalInner",
+                    "lookAtHorizontalOuter",
+                    "lookAtVerticalUp",
+                    "lookAtVerticalDown",
+                ]
+            } else {
+                [
+                    "rangeMapHorizontalInner",
+                    "rangeMapHorizontalOuter",
+                    "rangeMapVerticalUp",
+                    "rangeMapVerticalDown",
+                ]
+            } {
+                value["extensions"][extension][config][key] = if vrm0 {
+                    json!({"yRange":0})
+                } else {
+                    json!({"outputScale":0})
+                };
+            }
+            assert_eq!(inspect_look_at(&value, &bones).unwrap()["eyes"], false);
+            value["extensions"][extension][config] = if vrm0 {
+                json!({"lookAtTypeName":"BlendShape"})
+            } else {
+                json!({"type":"expression"})
+            };
+            let expression = if vrm0 {
+                value["extensions"][extension]["blendShapeMaster"]["blendShapeGroups"][0].clone()
+            } else {
+                value["extensions"][extension]["expressions"]["preset"]["blink"].clone()
+            };
+            for name in ["lookLeft", "lookRight", "lookUp", "lookDown"] {
+                if vrm0 {
+                    let mut item = expression.clone();
+                    item["presetName"] = name.to_ascii_lowercase().into();
+                    value["extensions"][extension]["blendShapeMaster"]["blendShapeGroups"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(item);
+                } else {
+                    value["extensions"][extension]["expressions"]["preset"][name] =
+                        expression.clone();
+                }
+            }
+            assert_eq!(
+                inspect_look_at(&value, &bones).unwrap(),
+                json!({"mode":"expression","head":true,"eyes":true,"horizontal":true,"vertical":true})
+            );
+            if vrm0 {
+                value["extensions"][extension]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("blendShapeMaster");
+            } else {
+                value["extensions"][extension]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("expressions");
+            }
+            assert_eq!(inspect_look_at(&value, &bones).unwrap()["mode"], "none");
+        }
+    }
+    #[test]
+    fn actionable_external_resource_errors_never_echo_the_resource_url() {
+        let mut value = model();
+        value["images"] =
+            json!([{"uri":"https://user:password@example.invalid/private?token=secret"}]);
+        let bytes = glb(value, vec![]);
+        let error = parse_glb(&bytes, false).err().unwrap();
+        assert!(error.contains("内嵌") && error.contains("external"));
+        assert!(
+            !error.contains("password") && !error.contains("secret") && !error.contains("private")
+        );
     }
     #[test]
     fn corrupt_motion_does_not_create_installed_files() {

@@ -1,5 +1,7 @@
 # DSH 兼容性与发布验收
 
+2026-10-19 未发布候选的维护、模型诊断、性能与安装检查见 [本地稳定化验收](stabilization.md)。以下公开版本与早期设备手验保留其原有身份，不据此声称新候选已上线。
+
 ## 当前公开发行 0.1.0-alpha.1（2026-10-15）
 
 [`dsh-starlite@0.1.0-alpha.1`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.1) 与 [Release `v0.1.0-alpha.1`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.1) 已公开。发行源码固定为 [`918f15c`](https://github.com/StarCried/starlite-dsh/commit/918f15ce1d342a79a90c9c1ac0d6646939ced2e6)，共享运行时固定为 [`903fe2c`](https://github.com/StarCried/starlite/commit/903fe2cab9e0f37ad36cd904e301fa482af2508e)。后续文档提交不改变发行 tag、SOURCE_REVISION 或程序产物。

@@ -1,6 +1,6 @@
 # StarLite 发布前候选验收记录
 
-本页保留首次发布前各候选的验收证据，以下「本轮」「当前」指记录当时。[程序 alpha.0](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.0)、npm 包和独立微光模型现已公开；最新交付与本地未发布修复以[兼容性记录](dsh-compatibility.md)为准。人工验收只按用户实际确认的项目记录。
+本页保留首次发布前各候选的验收证据，以下「本轮」「当前」指记录当时。[程序 alpha.0](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.0)、npm 包和独立微光模型现已公开；最新版本的发行状态与验收范围以[兼容性记录](dsh-compatibility.md)为准。人工验收只按用户实际确认的项目记录。
 
 ## 本轮 Windows Host 验收进度
 

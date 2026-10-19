@@ -2,7 +2,7 @@
 
 用动作和气泡陪伴你的 DSH 工作。**安装一个插件，启动 DSH 即默认使用微光**，无需另装软件或手动导入资源。
 
-Alpha `0.1.0-alpha.1`，需要 Windows 11 x64、WebView2，以及官方 Windows 桌面版、Windows 原生 CLI/Web 或 WSL2 DSH。
+Alpha `0.1.0-alpha.2`，需要 Windows 11 x64、WebView2，以及官方 Windows 桌面版、Windows 原生 CLI/Web 或 WSL2 DSH。
 
 [先看模型效果](https://starcried.github.io/)（桌面浏览器，无需安装；工作状态与问答需安装插件）。
 

@@ -11,7 +11,7 @@
 
 启动器接受 Windows x64 和 WSL2 x64 Host，共用插件内的 Windows GUI 程序、校验缓存及独立模型下载。原生 Windows 直接启动 EXE，WSL2 使用 Windows 互操作和 `wslpath`；Windows Known Folder 由固定 PowerShell 查询取得。普通 Node 与 Electron Node-mode Host 均不需要额外系统 Node。子进程仅接收启动所需的 OS 环境变量，不继承服务商凭据、`NODE_OPTIONS` 或 `ELECTRON_RUN_AS_NODE`。其他操作系统或架构会在创建桥接前禁用插件，不影响 DSH 启动。
 
-源码和包元数据统一使用 `StarCried/starlite` 与 `StarCried/starlite-dsh`，当前版本为 `0.1.0-alpha.1`。用户安装选择 `@alpha`；实际公开版本、来源及验证结果见 [兼容性记录](dsh-compatibility.md)，不要将本地构建记为公开包的验收。本文中的构建、打包和测试命令不会推送或发布。
+源码和包元数据统一使用 `StarCried/starlite` 与 `StarCried/starlite-dsh`，当前版本为 `0.1.0-alpha.2`。用户安装选择 `@alpha`；实际公开版本、来源及验证结果见 [兼容性记录](dsh-compatibility.md)，不要将本地构建记为公开包的验收。本文中的构建、打包和测试命令不会推送或发布。
 
 ## 1. 构建共享运行时
 
@@ -41,7 +41,7 @@ pnpm install --frozen-lockfile
 pnpm sync:runtime -- "../starlite"
 pnpm check
 pnpm desktop:build
-pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.1_x64-setup.exe"
+pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.2_x64-setup.exe"
 ```
 
 示例假设两个 checkout 位于同一父目录。若共享组件在 WSL 中，改为 `//wsl.localhost/Ubuntu/home/<user>/starlite`。同步源必须显式给出，也可用 `STARLITE_SOURCE` 环境变量。工具从同一个 checkout 收集 `packages/core/dist` 和 `packages/vrm/dist`，写入未跟踪的 `apps/desktop/public/runtime/{core,vrm}`，校验包名和许可证，并记录 Git revision／dirty 与各文件哈希。同步会移除已停用后端的受管生成目录，发布门拒绝残留的 Inochi2D 或 WASM 资源。发布只接受干净且匹配 pin 的运行时。
@@ -78,7 +78,7 @@ pnpm pack:plugin
 ```powershell
 $env:DSH_HOME = "E:/path/to/isolated-starlite-test-home"
 node tools/check-dsh-contract.mjs "E:/path/to/node_modules/@deepseek-ai/dsh"
-dsh plugin --profile starlite-test add "E:/path/to/starlite-dsh/packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.1.tgz"
+dsh plugin --profile starlite-test add "E:/path/to/starlite-dsh/packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.2.tgz"
 dsh --profile starlite-test --dump-config
 ```
 
@@ -105,7 +105,7 @@ git diff --check
 本机可对明确的官方 DSH 包目录和最终插件 tarball 运行同一检查：
 
 ```sh
-node tools/smoke-dsh-plugin.mjs /absolute/path/node_modules/@deepseek-ai/dsh /absolute/path/dsh-starlite-0.1.0-alpha.1.tgz
+node tools/smoke-dsh-plugin.mjs /absolute/path/node_modules/@deepseek-ai/dsh /absolute/path/dsh-starlite-0.1.0-alpha.2.tgz
 ```
 
 工具先调用官方 CLI 安装真实 tarball，再通过 `profile-boot` 公开的初始化／`runProfile`、返回的 shutdown、Cordis Context／Logger 和已安装插件的 `apply` 接口验收。它创建自己的临时 Harness home、user home 与 cwd，用不存在的 EXE 覆盖阻止启动桌宠／下载角色，不继承账户凭据、代理或 Node hooks；不提交提示，不调用模型或余额 API。只检查认证首页，不执行页面脚本，日志和认证 URL 不进入输出。检查结束删除自己的临时目录。CI 的 `stage-dsh-contract-fixture.mjs` 仅在干净 checkout 生成不可执行的 PE 头 fixture，已有程序构建会被拒绝覆盖；本机 smoke 应使用真实候选 tarball，无须运行该 staging 工具。

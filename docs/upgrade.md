@@ -1,6 +1,6 @@
 # 升级与支持
 
-StarLite for DSH 目前处于 alpha。只维护最新已公开 alpha；安装使用 `dsh-starlite@alpha`，精确版本与来源查看 [npm](https://www.npmjs.com/package/dsh-starlite) 和 [Releases](https://github.com/StarCried/starlite-dsh/releases)。源码、本地候选和 CHANGELOG 的「未发布」部分不等于已上线功能。
+StarLite for DSH 目前处于 alpha。只维护最新已公开 alpha；安装使用 `dsh-starlite@alpha`，精确版本与来源查看 [npm](https://www.npmjs.com/package/dsh-starlite) 和 [Releases](https://github.com/StarCried/starlite-dsh/releases)。本文介绍 `0.1.0-alpha.2`；源码版本和本地构建不等于 registry 已公开版本，发行状态见 [兼容性记录](dsh-compatibility.md)。
 
 支持 Windows 11 x64 + WebView2，Host 可以是同机的官方 Windows DSH 桌面版、Windows 原生 CLI/Web 或 WSL2 CLI/Web。不同 Host／profile 要分别安装插件，但使用同一 Windows 用户的模型和偏好；一次只连接一个 Host。支持范围与实测 DSH 版本见 [兼容性记录](dsh-compatibility.md)。
 
@@ -33,9 +33,9 @@ dsh --profile web
 
 更完整的行为及已知限制见 [安装与使用](user-guide.md)。升级失败时先确认使用了哪个 Host／profile、是否有另一实例占用连接，再按指南排查；不要启动第二个 Host 来替换仍在运行的连接。
 
-## 本地候选：性能参数
+## 性能参数（alpha.2 起）
 
-以下入口属于尚未发布的本地候选，不能在旧 npm 版本中寻找：从 StarLite 托盘打开「设置 → 显示」，勾选「显示性能参数（FPS 等）」。开关自动保存、立即生效，不重新加载模型；默认关闭。
+从 StarLite 托盘打开「设置 → 显示」，勾选「显示性能参数（FPS 等）」。开关自动保存、立即生效，不重新加载模型；默认关闭。alpha.1 及更早版本没有这个入口。
 
 模型角落显示实际渲染 FPS、帧间隔 p95、CPU 侧帧耗时 p95、draw calls 和三角面。每 500ms 最多更新一次，统计最近 240 个绘制帧；暂停、隐藏和恢复会重置数据。CPU 数字是模型更新和 WebGL 提交等工作的墙钟耗时，可能包含驱动等待，不是 GPU 执行时间、CPU 利用率或进程内存。它不代表 DSH 推理或整个系统的性能。
 
@@ -43,7 +43,7 @@ dsh --profile web
 
 ## 反馈问题
 
-本地候选的模型卡片增加「模型信息」，可查看必需／可选人形骨骼数、Blink 和眼球跟随能力、动作及几何统计；导入不会额外弹窗。缺少可选眨眼或眼球配置时，其他能力仍可使用。统计按网格 primitive 累加，不等于 GPU 或进程内存。导入错误会指出缺失的标准骨骼等原因；失败保持原有模型与设置。
+alpha.2 的模型卡片提供「模型信息」，可查看必需／可选人形骨骼数、Blink 和眼球跟随能力、动作及几何统计；导入不会额外弹窗。缺少可选眨眼或眼球配置时，其他能力仍可使用。统计按网格 primitive 累加，不等于 GPU 或进程内存。导入错误会指出缺失的标准骨骼等原因；失败保持原有模型与设置。
 
 信息按资源数字卡、基础能力和可展开的详细统计分组，颜色同时配文字。三角面单项参考 [VRChat PC 档位](https://creators.vrchat.com/avatars/avatar-performance-ranking-system/)：不超过 32,000 为「优秀」，不超过 70,000 为「良好」，更高显示「偏高」。这是资源规模参考，不是整体 VRChat 评级或 FPS 预测；材质数并非材质槽、人形映射数并非整个骨架的骨骼数，不能照搬评级。动作等数量使用中性色，眨眼／眼球跟随分别显示「可用」「部分可用」或「未配置」，详细说明保留缺失能力的修复建议。
 

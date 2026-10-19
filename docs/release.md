@@ -1,8 +1,12 @@
 # StarLite for DSH alpha 发布检查
 
+本次版本为 `0.1.0-alpha.2`，包含动作过渡修复、性能参数和模型信息界面；见 [版本变化](../CHANGELOG.md)。使用下列流程重建匹配版本的所有产物。版本准备不代表外部发布已完成，最终来源与公开下载校验结果按实际执行补记到 [发布验收](dsh-compatibility.md)。
+
+## 上次公开发行 alpha.1
+
 [`dsh-starlite@0.1.0-alpha.1`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.1) 与 [Release `v0.1.0-alpha.1`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.1) 已公开，发行源码为 [`918f15c`](https://github.com/StarCried/starlite-dsh/commit/918f15ce1d342a79a90c9c1ac0d6646939ced2e6)，共享运行时为 [`903fe2c`](https://github.com/StarCried/starlite/commit/903fe2cab9e0f37ad36cd904e301fa482af2508e)。精确源码的[主 CI](https://github.com/StarCried/starlite-dsh/actions/runs/38703696617) 与 [DSH latest 兼容作业](https://github.com/StarCried/starlite-dsh/actions/runs/38704010721) 均成功；更改见[版本变化](../CHANGELOG.md)。
 
-匿名公开下载的 npm tarball 为 3,922,149 字节，SHA-256 `e7abb12285656a12bac3bd896c426755afd3d4bc9abcb7060f593d6a10d84e7d`，与最终本地发行包逐字节一致，SHA-512 完整性值与 registry 一致。这个真正公开下载的包已在官方 DSH `0.2.1-alpha.2` 的 Windows 与 WSL2 环境中通过隔离安装、认证首页、fail-open 和退出回收，未调用付费 API。`alpha` 指向 alpha.1，`latest` 仍保留 alpha.0；安装使用 `dsh-starlite@alpha`。完整 SRI、来源和验收边界见[发布验收](dsh-compatibility.md)。旧版和本地开发候选的记录保留原身份，没有改写为本次程序的全面复验。
+匿名公开下载的 npm tarball 为 3,922,149 字节，SHA-256 `e7abb12285656a12bac3bd896c426755afd3d4bc9abcb7060f593d6a10d84e7d`，与最终本地发行包逐字节一致，SHA-512 完整性值与 registry 一致。这个真正公开下载的包已在官方 DSH `0.2.1-alpha.2` 的 Windows 与 WSL2 环境中通过隔离安装、认证首页、fail-open 和退出回收，未调用付费 API。该次发行后 `alpha` 指向 alpha.1，`latest` 仍保留 alpha.0；安装使用 `dsh-starlite@alpha`。完整 SRI、来源和验收边界见[发布验收](dsh-compatibility.md)。旧版和本地开发候选的记录保留原身份，没有改写为本次程序的全面复验。
 
 ## 首次发行基线
 
@@ -25,11 +29,11 @@
 5. 保持 workspace、desktop、protocol、plugin、Cargo、Tauri 版本一致。正式升级使用新版本。
 
 ```powershell
-pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.1_x64-setup.exe"
+pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.2_x64-setup.exe"
 pnpm stage:plugin -- release-output/default-model.json
 pnpm pack:plugin
 pnpm check:release
-pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.1.tgz "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.1_x64-setup.exe"
+pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.2.tgz "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.2_x64-setup.exe"
 ```
 
 资源描述只包含 `title`、固定 HTTPS `url`、VRM 的 `sha256` 和 `bytes`；程序清单 schema 为 2，使用 `defaultModel` 字段。首次元数据命令提供 staging 所需的依赖通知，打包后再生成最终 SHA256SUMS、CycloneDX SBOM 和第三方许可证。
@@ -65,10 +69,10 @@ pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.1.tg
 先公开并验证固定 pin 的共享源码，单独发布获准分发的微光 VRM 与许可，再核验固定 HTTPS 来源的全新缓存下载和离线复用。推送同版本 DSH 源码并确认 CI，通过默认发布门后发布已校验的 tarball：
 
 ```sh
-npm publish packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.1.tgz --tag alpha --access public
+npm publish packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.2.tgz --tag alpha --access public
 ```
 
-发布后核对 `npm view dsh-starlite@alpha version` 为 `0.1.0-alpha.1`，验证 registry tarball 与本地包一致，并在隔离 profile 安装 `dsh-starlite@alpha`。这些是发布后的验证步骤，不以文档中的安装命令代替实际结果。npm 发布指定 `alpha` 标签；升级必须使用新版本。Windows Release 随附匹配的安装器、可选免安装包、SHA256SUMS、SBOM 和依赖许可；微光作为独立授权资产分发，不夹进程序包。没有公开模型来源时仍只能验证本地候选。
+发布后核对 `npm view dsh-starlite@alpha version` 为 `0.1.0-alpha.2`，验证 registry tarball 与本地包一致，并在隔离 profile 安装 `dsh-starlite@alpha`。这些是发布后的验证步骤，不以文档中的安装命令代替实际结果。npm 发布指定 `alpha` 标签；升级必须使用新版本。Windows Release 随附匹配的安装器、可选免安装包、SHA256SUMS、SBOM 和依赖许可；微光作为独立授权资产分发，不夹进程序包。没有公开模型来源时仍只能验证本地候选。
 
 首次发行的实际标签（2026-10-15）：`alpha` 和 `latest` 均指向 `0.1.0-alpha.0`。npm 对新包首次发布会额外创建 `latest`，即使指定其他标签，见[上游记录](https://github.com/npm/cli/issues/8490)。本次删除 `latest` 返回 HTTP 400，保留现状，不重复删除或通过新增版本绕过。此前没有稳定版本，未覆盖已有稳定版的 `latest`；安装继续明确使用 `dsh-starlite@alpha`。
 

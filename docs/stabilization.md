@@ -1,6 +1,6 @@
 # 2026-10-19 本地稳定化验收
 
-本轮尚未推送、发布或部署。公开安装版本仍为 alpha.1；新功能与安装流程区分见 [升级说明](upgrade.md) 和 [Unreleased](../CHANGELOG.md)。共享组件的功能、体积预算、实际 VRM 矩阵与 Chrome 长测见 StarLite 仓库的 `docs/stabilization.md`、`docs/performance.md`。
+本页记录 `0.1.0-alpha.2` 形成前的本地功能、安装和性能验收，保留各自实际测试的程序身份。功能与安装流程见 [升级说明](upgrade.md) 和 [版本变化](../CHANGELOG.md)，精确发行来源与公开验证另记在 [兼容性记录](dsh-compatibility.md)。共享组件的功能、体积预算、实际 VRM 矩阵与 Chrome 长测见 StarLite 仓库的 `docs/stabilization.md`、`docs/performance.md`。
 
 ## 已完成
 
@@ -33,4 +33,4 @@
 
 本地原始证据位于忽略目录 `release-output/maturity-validation/`、`release-output/maturity-same-version-replacement.json` 和 `target/dependency-audit/`。不提交模型、真实会话、临时连接链接或凭据。
 
-正式发布时分配新版本并重建，先推送共享运行时固定 revision，再推送本仓库并核对云端检查；本轮不执行这些外部操作。私有模型许可及必要的博客托管范围不因程序发布改变。
+正式发行使用新的 `0.1.0-alpha.2` 版本重建，先公开共享运行时固定 revision，再推送本仓库并核对云端检查。版本重建、最终 tarball 安装及公开 registry 验证按其实际来源分别记录，不将本页早期候选的哈希或长测改记为最终发行包。私有模型许可及必要的博客托管范围不因程序发布改变。

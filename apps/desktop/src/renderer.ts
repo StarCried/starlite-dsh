@@ -19,6 +19,7 @@ export function modelConfig(settings: DesktopSettings): Record<string, unknown> 
   return {
     backend: model.backend, model: convertFileSrc(model.modelPath), fallback: TRANSPARENT_PIXEL,
     display: { width: 320, height: 480 },
+    performance: { show: settings.preferences.performanceOverlay },
     render: { fps: settings.preferences.fps, maxDevicePixelRatio: settings.preferences.maxDevicePixelRatio, initialScale: settings.preferences.scale, autoFit: true, fitPadding:.92,viewportPadding:VRM_VIEWPORT_PADDING },
     mobile: { show: true }, interactions: { pointer: true, click: false, drag: false },
     embeddedAnimations: model.vrm.embeddedAnimations ?? [],

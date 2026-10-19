@@ -9,7 +9,7 @@ const {invoke, open} = vi.hoisted(() => ({invoke:vi.fn(),open:vi.fn()}));
 vi.mock("@tauri-apps/api/core", () => ({invoke,convertFileSrc:(path:string) => "asset:" + path}));
 vi.mock("@tauri-apps/plugin-dialog", () => ({open}));
 vi.mock("@tauri-apps/api/event", () => ({listen:vi.fn(async () => () => {})}));
-const preferences = {fps:60 as const,maxDevicePixelRatio:1.5,scale:1,privacyMode:false,bubbleMode:"compact" as const};
+const preferences = {fps:60 as const,maxDevicePixelRatio:1.5,scale:1,privacyMode:false,bubbleMode:"compact" as const,performanceOverlay:false};
 const mappings = {idle:"StarLiteIdle",working:null,blocked:null,approval:null,completed:null,error:null,click:[],ambient:[]};
 const catalog = [{name:"StarLiteIdle",durationMs:6000}];
 const initial:DesktopSettings = {schemaVersion:4,preferences,models:[],activeModelId:null};
@@ -31,6 +31,8 @@ beforeEach(() => {
 });
 
 it("maps both embedded and external actions without a resource package", () => {
+  expect(modelConfig(installed).performance).toEqual({show:false});
+  expect(modelConfig({...installed,preferences:{...preferences,performanceOverlay:true}}).performance).toEqual({show:true});
   expect(modelConfig(installed)).toMatchObject({backend:"vrm",model:"asset:m.vrm",embeddedAnimations:[],animations:[{name:"StarLiteIdle",url:"asset:a.vrma"}],profile:"asset:p.json",ambient:{animations:["StarLiteIdle"]},render:{viewportPadding:{left:128,top:64,right:128,bottom:192}},camera:{pitchDegrees:5,targetHeight:.54}});
   expect(modelConfig({...installed,models:[{...model,vrm:{...model.vrm!,embeddedAnimations:["Wave"]}}]}).embeddedAnimations).toEqual(["Wave"]);
   expect(modelConfig(installed).neutralAnimation).toBe("StarLiteIdle");

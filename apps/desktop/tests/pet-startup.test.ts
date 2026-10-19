@@ -25,7 +25,7 @@ vi.mock("../src/connection.js", () => ({StatusConnection: class {
 interface ConnectionCallbacks {onConnected(): void; onDisconnected(): void; onSnapshot(value: unknown): void; onConflict(): void}
 const settings: DesktopSettings = {
   schemaVersion: 4,
-  preferences: {fps: 30, maxDevicePixelRatio: 1.5, scale: .67, privacyMode: false, bubbleMode: "compact"},
+  preferences: {fps: 30, maxDevicePixelRatio: 1.5, scale: .67, privacyMode: false, bubbleMode: "compact", performanceOverlay: false},
   activeModelId: "fixture",
   models: [{id: "fixture", title: "Fixture", backend: "vrm", modelPath: "C:\\fixture\\model.vrm", sourceSha256: "a".repeat(64),
     animations: [{name: "Idle", durationMs: 1_000}],
@@ -58,7 +58,7 @@ beforeEach(() => {
     pause: vi.fn(() => {running = false;}), resume: vi.fn(() => {running = true;}),
     getAnimations: () => [{name: "Idle", durationMs: 1_000}],
     playAnimation: vi.fn(async () => "stopped" as const), stopAnimation: vi.fn(), resetCamera: vi.fn(),
-    observeInteractionMask: vi.fn(), setPointerPosition: vi.fn(), destroy: vi.fn(),
+    observeInteractionMask: vi.fn(), setPointerPosition: vi.fn(), setPerformanceVisible: vi.fn(), destroy: vi.fn(),
   };
   const monitor = {position: {x: 0, y: 0}, size: {width: 1920, height: 1080}, workArea: {position: {x: 0, y: 0}}};
   native.availableMonitors.mockResolvedValue([monitor]); native.primaryMonitor.mockResolvedValue(monitor);
@@ -105,6 +105,30 @@ afterEach(async () => {
 });
 
 describe("desktop hidden-window startup", () => {
+  it("retains a performance toggle changed while the initial model is loading",async()=>{
+    let finishMount!:(value:WidgetController)=>void;
+    native.mountModel.mockImplementationOnce(()=>new Promise<WidgetController>(resolve=>{finishMount=resolve;}));
+    const ready=startPet();
+    await vi.waitFor(()=>expect(finishMount).toBeDefined());
+    const next=structuredClone(settings);next.preferences.performanceOverlay=true;
+    settingsListener!({payload:next});finishMount(controller);
+    await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    expect(controller.setPerformanceVisible).toHaveBeenLastCalledWith(true);
+    expect(native.mountModel).toHaveBeenCalledOnce();
+  });
+  it("toggles performance metrics without recreating the model or DSH connection",async()=>{
+    const ready=startPet();
+    await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    expect(controller.setPerformanceVisible).toHaveBeenLastCalledWith(false);
+    const next=structuredClone(settings);next.preferences.performanceOverlay=true;
+    settingsListener!({payload:next});
+    expect(controller.setPerformanceVisible).toHaveBeenLastCalledWith(true);
+    settingsListener!({payload:structuredClone(settings)});
+    expect(controller.setPerformanceVisible).toHaveBeenLastCalledWith(false);
+    expect(native.mountModel).toHaveBeenCalledOnce();expect(native.connection).toHaveBeenCalledOnce();
+  });
   it("resynchronizes a paused portrait and static question region after DPI resize without remounting",async()=>{
     vi.stubGlobal("innerWidth",576);vi.stubGlobal("innerHeight",720);
     let report:Parameters<WidgetController["observeInteractionMask"]>[0];

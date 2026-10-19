@@ -22,7 +22,7 @@ interface SettingsWrite {
   waiters: Array<{ resolve: (settings: DesktopSettings) => void; reject: (reason: unknown) => void }>;
 }
 const PREFERENCE_FIELDS = {
-  fps:"fps", dpr:"maxDevicePixelRatio", scale:"scale", privacy:"privacyMode", "bubble-mode":"bubbleMode",
+  fps:"fps", dpr:"maxDevicePixelRatio", scale:"scale", privacy:"privacyMode", "bubble-mode":"bubbleMode", "performance-overlay":"performanceOverlay",
 } as const;
 
 export async function startSettings(): Promise<void> {
@@ -317,14 +317,15 @@ function populatePreferences(preferences: DesktopPreferences): void {
   requiredElement<HTMLInputElement>("scale").value = String(preferences.scale);
   requiredElement<HTMLInputElement>("privacy").checked = preferences.privacyMode;
   requiredElement<HTMLSelectElement>("bubble-mode").value = preferences.bubbleMode;
+  requiredElement<HTMLInputElement>("performance-overlay").checked = preferences.performanceOverlay;
 }
 
 function readPreferences(): DesktopPreferences {
-  const {fps, maxDevicePixelRatio, scale, privacyMode, bubbleMode} = readUncheckedPreferences();
+  const {fps, maxDevicePixelRatio, scale, privacyMode, bubbleMode, performanceOverlay} = readUncheckedPreferences();
   if (fps !== 30 && fps !== 60) throw new Error("帧率只能是 30 或 60。");
   if (!Number.isFinite(maxDevicePixelRatio) || maxDevicePixelRatio < 1 || maxDevicePixelRatio > 1.5) throw new Error("DPR 上限必须在 1 到 1.5 之间。");
   if (!Number.isFinite(scale) || scale < 0.25 || scale > 3) throw new Error("模型缩放必须在 0.25 到 3 之间。");
-  return {fps,maxDevicePixelRatio,scale,privacyMode,bubbleMode};
+  return {fps,maxDevicePixelRatio,scale,privacyMode,bubbleMode,performanceOverlay};
 }
 
 function readUncheckedPreferences(): DesktopPreferences {
@@ -334,6 +335,7 @@ function readUncheckedPreferences(): DesktopPreferences {
     scale:Number(requiredElement<HTMLInputElement>("scale").value),
     privacyMode:requiredElement<HTMLInputElement>("privacy").checked,
     bubbleMode:requiredElement<HTMLSelectElement>("bubble-mode").value === "detailed" ? "detailed" : "compact",
+    performanceOverlay:requiredElement<HTMLInputElement>("performance-overlay").checked,
   };
 }
 

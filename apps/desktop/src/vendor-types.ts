@@ -37,6 +37,7 @@ export interface WidgetController {
   observeInteractionMask(listener?: (mask: ModelHitMask | undefined) => void): void;
   setPointerPosition(clientX: number, clientY: number): void;
   setHostPosition?(x: number, y: number): void;
+  setPerformanceVisible?(visible: boolean): void;
   destroy(): void;
 }
 

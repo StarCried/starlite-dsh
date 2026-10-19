@@ -6,7 +6,7 @@ import type {PetInteraction,PetSnapshot} from "@starcried/starlite-dsh-protocol"
 const ref="123e4567-e89b-42d3-a456-426614174000",id="123e4567-e89b-42d3-a456-426614174001";
 const request:PetInteraction={interactionVersion:1,requestId:id,sessionRef:ref,questions:[{id:"single",question:"<img>单选",options:[{label:"A"},{label:"B"}],multiSelect:false},{id:"multi",question:"多选",options:[{label:"X"},{label:"Y"}],multiSelect:true},{id:"text",question:"文字",options:[],multiSelect:false}]};
 const snapshot:PetSnapshot={protocolVersion:1,sequence:1,emittedAt:1,state:"approval",session:{ref,title:"当前会话"},activity:"waiting",inputRequest:id};
-const preferences={fps:60 as const,maxDevicePixelRatio:1.5,scale:1,privacyMode:false,bubbleMode:"compact" as const};
+const preferences={fps:60 as const,maxDevicePixelRatio:1.5,scale:1,privacyMode:false,bubbleMode:"compact" as const,performanceOverlay:false};
 describe("ordinary question bubble",()=>{
   it("requires explicit complete answers, handles single/custom and multi/custom, and submits once",async()=>{
     let resolve:()=>void=()=>{};const submit=vi.fn(()=>new Promise<void>(done=>{resolve=done}));const form=createQuestionForm(request,submit);

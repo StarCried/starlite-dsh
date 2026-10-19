@@ -6,7 +6,7 @@ import {WorkBubble} from "../src/work-bubble.js";
 const requestId="123e4567-e89b-42d3-a456-426614174001",sessionRef="123e4567-e89b-42d3-a456-426614174000";
 const request:PetInteraction={interactionVersion:1,requestId,sessionRef,questions:[{id:"q",question:"Choose",options:[{label:"A"}],multiSelect:false}]};
 const snapshot:PetSnapshot={protocolVersion:1,sequence:1,emittedAt:1,state:"approval",session:{ref:sessionRef,title:"Current"},activity:"waiting",inputRequest:requestId};
-const preferences={fps:60 as const,maxDevicePixelRatio:1.5,scale:1,privacyMode:false,bubbleMode:"compact" as const};
+const preferences={fps:60 as const,maxDevicePixelRatio:1.5,scale:1,privacyMode:false,bubbleMode:"compact" as const,performanceOverlay:false};
 const settle=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
 function fixture(read:()=>Promise<PetInteraction>){
   const element=document.createElement("output"),actions={read,answer:vi.fn(async()=>{}),open:vi.fn(async()=>{}),changed:vi.fn()};

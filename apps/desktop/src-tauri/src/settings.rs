@@ -91,6 +91,8 @@ pub struct DesktopPreferences {
     pub privacy_mode: bool,
     #[serde(default)]
     pub bubble_mode: BubbleMode,
+    #[serde(default)]
+    pub performance_overlay: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -109,6 +111,7 @@ impl Default for DesktopPreferences {
             scale: 1.0,
             privacy_mode: false,
             bubble_mode: BubbleMode::Compact,
+            performance_overlay: false,
         }
     }
 }
@@ -635,6 +638,31 @@ mod tests {
             ..DesktopPreferences::default()
         };
         assert!(validate_preferences(&invalid).is_err());
+    }
+
+    #[test]
+    fn performance_overlay_defaults_off_and_round_trips_without_resetting_preferences() {
+        let mut value = serde_json::to_value(DesktopSettings::default()).unwrap();
+        value["preferences"]
+            .as_object_mut()
+            .unwrap()
+            .remove("performanceOverlay");
+        value["preferences"]["fps"] = 60.into();
+        value["preferences"]["scale"] = 0.8.into();
+        let decoded = decode_settings(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(!decoded.preferences.performance_overlay);
+        assert_eq!(decoded.preferences.fps, 60);
+        assert_eq!(decoded.preferences.scale, 0.8);
+        assert_eq!(decoded.schema_version, SETTINGS_SCHEMA_VERSION);
+        value["preferences"]["performanceOverlay"] = true.into();
+        let enabled = decode_settings(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(enabled.preferences.performance_overlay);
+        let round_trip = decode_settings(&serde_json::to_vec(&enabled).unwrap()).unwrap();
+        assert!(round_trip.preferences.performance_overlay);
+        assert_eq!(round_trip.preferences.fps, 60);
+        assert_eq!(round_trip.preferences.scale, 0.8);
+        value["preferences"]["performanceOverlay"] = "true".into();
+        assert!(decode_settings(&serde_json::to_vec(&value).unwrap()).is_err());
     }
 
     #[test]

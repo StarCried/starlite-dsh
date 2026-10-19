@@ -11,7 +11,7 @@ vi.mock("@tauri-apps/api/event",() => ({listen:native.listen}));
 const page=readFileSync(resolve(import.meta.dirname,"../index.html"),"utf8").match(/<main id="settings-view"[\s\S]+?<\/main>/u)![0];
 const path="C:\\Downloads\\character.vrm";
 const terms={title:"测试角色",text:"# 模型许可\n\n仅供本地使用。<img src=x>"};
-const preferences:DesktopPreferences={fps:60,maxDevicePixelRatio:1.2,scale:0.67,privacyMode:true,bubbleMode:"detailed"};
+const preferences:DesktopPreferences={fps:60,maxDevicePixelRatio:1.2,scale:0.67,privacyMode:true,bubbleMode:"detailed",performanceOverlay:false};
 const model:LibraryModel={id:"weiguang-default",title:"微光",backend:"vrm",modelPath:"C:\\models\\model.vrm",sourceSha256:"b".repeat(64),
  animations:[{name:"RelaxedBreath",durationMs:4000},{name:"Typing",durationMs:2000},{name:"HighWave",durationMs:3000}],
  mappings:{idle:"RelaxedBreath",working:"Typing",completed:null,error:null,blocked:null,approval:null,click:["HighWave"],ambient:[]},vrm:{animations:[]}};
@@ -55,6 +55,17 @@ function edit(id:string,value:string) {
 }
 
 describe("settings model library",() => {
+ it("saves the performance overlay independently and reflects changes from another window",async () => {
+  await launch();
+  const field=document.getElementById("performance-overlay") as HTMLInputElement;
+  expect(field.checked).toBe(false);
+  field.checked=true;field.dispatchEvent(new Event("change",{bubbles:true}));
+  await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledWith("update_preferences",{preferences:{...preferences,performanceOverlay:true}}));
+  expect(current.preferences.scale).toBe(preferences.scale);
+  const callback=(native.listen.mock.calls[0] as unknown as [string,(event:{payload:DesktopSettings})=>void])[1];
+  callback({payload:{...structuredClone(current),preferences:{...current.preferences,performanceOverlay:false}}});
+  expect(field.checked).toBe(false);
+ });
  it("shows every model, switches by card and keeps add model last",async () => {
   await launch({...installed,models:[model,custom]});
   expect([...document.querySelectorAll(".model-choice[data-model-id] strong")].map(item => item.textContent)).toEqual(["微光","自定义角色"]);

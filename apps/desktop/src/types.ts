@@ -32,6 +32,7 @@ export interface DesktopPreferences {
   scale: number;
   privacyMode: boolean;
   bubbleMode: "compact" | "detailed";
+  performanceOverlay: boolean;
 }
 
 export interface DesktopSettings {

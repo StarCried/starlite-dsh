@@ -199,6 +199,7 @@ export async function startPet(): Promise<void> {
       await viewport.ready();
       if(generation!==mountGeneration)return;
       controller = mounted;
+      mounted.setPerformanceVisible?.(settings.preferences.performanceOverlay);
       void hostPosition.sync().catch(()=>{});
       mounted.observeInteractionMask(mask => {
         // A frame drawn before the native resize still describes the old
@@ -229,6 +230,9 @@ export async function startPet(): Promise<void> {
     syncInputAvailable();
     if (preparing) return;
     if (renderingIdentity(previous) === renderingIdentity(settings)) {
+      if (previous.preferences.performanceOverlay !== settings.preferences.performanceOverlay) {
+        controller?.setPerformanceVisible?.(settings.preferences.performanceOverlay);
+      }
       const model = selectedModel(settings);
       if (controller && model && JSON.stringify(selectedModel(previous)?.mappings) !== JSON.stringify(model.mappings)) {
         animator?.disconnected();

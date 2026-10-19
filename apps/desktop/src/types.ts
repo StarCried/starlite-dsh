@@ -62,6 +62,12 @@ export interface ModelInspection {
   defaultMappings: AnimationMappings;
   compatibilitySupported: boolean;
   issues: Array<{ code: string; severity: "error" | "warning"; message: string }>;
+  capabilities?: {
+    humanoid: {requiredBones: string[]; optionalBones: string[]};
+    blink: {automatic: boolean; combined: boolean; left: boolean; right: boolean};
+    lookAt: {mode: "bone" | "expression" | "none"; head: boolean; eyes: boolean; horizontal: boolean; vertical: boolean};
+  };
+  metrics?: {fileBytes: number; nodeCount: number; meshCount: number; primitiveCount: number; materialCount: number; textureCount: number; imageCount: number; vertexCount: number; triangleCount: number; morphTargetCount: number; decodedAccessorBytes: number};
 }
 
 export interface ModelInstallRequest {

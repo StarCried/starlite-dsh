@@ -55,6 +55,21 @@ function edit(id:string,value:string) {
 }
 
 describe("settings model library",() => {
+ it("opens a model's capability report with its exact source files without selecting it",async () => {
+  const other:LibraryModel={...custom,modelPath:"C:/models/other.vrm",vrm:{animations:[{name:"Wave",path:"C:/models/wave.vrma"}],profilePath:"C:/models/other-profile.json"}};
+  await launch({...installed,models:[model,other]});
+  native.invoke.mockResolvedValueOnce({backend:"vrm",sourceSha256:"a".repeat(64),sourceBytes:1048576,modelName:"<img src=x>",animations:[{name:"StarLiteIdle",durationMs:4000}],defaultMappings:model.mappings,compatibilitySupported:true,issues:[],capabilities:{humanoid:{requiredBones:["hips","head"],optionalBones:[]},blink:{automatic:false,combined:false,left:false,right:false},lookAt:{mode:"none",head:true,eyes:false,horizontal:false,vertical:false}}});
+  document.querySelector<HTMLButtonElement>('[aria-label="自定义角色的模型信息"]')!.click();
+  await vi.waitFor(()=>expect(document.querySelector(".model-license-dialog[open]")).not.toBeNull());
+  expect(native.invoke).toHaveBeenCalledWith("inspect_model",{path:other.modelPath,animationSources:other.vrm!.animations,profilePath:other.vrm!.profilePath});
+  const dialog=document.querySelector<HTMLDialogElement>("dialog")!;
+  expect(dialog.textContent).toContain("自动眨眼：不可用");expect(dialog.textContent).toContain("1.00 MiB");
+  expect(dialog.querySelector("img")).toBeNull();expect(dialog.textContent).toContain("<img src=x>");
+  expect(current.activeModelId).toBe(model.id);
+  expect(native.invoke.mock.calls.some(([command])=>command==="select_model"||command==="install_model")).toBe(false);
+  dialog.querySelector<HTMLButtonElement>("button")!.click();
+  expect(document.querySelector("dialog")).toBeNull();
+ });
  it("saves the performance overlay independently and reflects changes from another window",async () => {
   await launch();
   const field=document.getElementById("performance-overlay") as HTMLInputElement;

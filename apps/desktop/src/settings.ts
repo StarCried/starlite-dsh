@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { showModelLicense } from "./model-license-dialog.js";
 import { showModelImportHelp } from "./model-import-dialog.js";
+import { showModelInspection } from "./model-inspection-dialog.js";
 import type { AnimationMappings, AnimationState, DesktopPreferences, DesktopSettings, LibraryModel, ModelInspection, ModelInstallRequest, ModelRemoval } from "./types.js";
 
 const STATES: ReadonlyArray<{ key: AnimationState; label: string; required: boolean }> = [
@@ -55,7 +56,7 @@ export async function startSettings(): Promise<void> {
     const signature = JSON.stringify([settings.activeModelId, settings.models.map(({ id, title, backend, animations }) => ({ id, title, backend, count: animations.length }))]);
     if (signature !== displayedLibrary) {
       displayedLibrary = signature;
-      renderLibrary(library, settings.models, settings.activeModelId, selectModel, viewLicense, removeModel, openImport);
+      renderLibrary(library, settings.models, settings.activeModelId, selectModel, viewLicense, viewInfo, removeModel, openImport);
     }
     // Saving a preference or mapping must not replace the focused field.
     const mappingSignature = JSON.stringify([model?.id, model?.animations]);
@@ -120,6 +121,12 @@ export async function startSettings(): Promise<void> {
       if (!license) throw new Error("模型未提供许可信息，请向模型作者确认使用范围。");
       showModelLicense(license);
     } catch (reason) { reportFailure(reason); }
+  }
+  async function viewInfo(modelId: string): Promise<void> {
+    const model = settings.models.find(item => item.id === modelId);
+    if (!model) return;
+    try { showModelInspection(await invoke<ModelInspection>("inspect_model", {path:model.modelPath, animationSources:model.vrm?.animations ?? [], profilePath:model.vrm?.profilePath})); }
+    catch (reason) { reportFailure(reason); }
   }
   async function removeModel(modelId: string, title: string): Promise<void> {
     if (removing.has(modelId)) return;
@@ -205,7 +212,7 @@ export async function startSettings(): Promise<void> {
   } catch (reason) { saveStatus.textContent = "默认模型尚未就绪"; reportFailure(reason); }
 }
 
-function renderLibrary(host: HTMLElement, models: LibraryModel[], activeModelId: string | null, select: (id: string | null) => void, viewLicense: (id: string) => Promise<void>, remove: (id: string, title: string) => Promise<void>, add: () => void): void {
+function renderLibrary(host: HTMLElement, models: LibraryModel[], activeModelId: string | null, select: (id: string | null) => void, viewLicense: (id: string) => Promise<void>, viewInfo: (id: string) => Promise<void>, remove: (id: string, title: string) => Promise<void>, add: () => void): void {
   host.replaceChildren();
   for (const model of models) {
     const card = document.createElement("article");
@@ -220,7 +227,10 @@ function renderLibrary(host: HTMLElement, models: LibraryModel[], activeModelId:
     license.type = "button"; license.className = "model-license"; license.textContent = "查看许可"; license.setAttribute("aria-label", model.title + "的许可");
     license.addEventListener("click", () => { void viewLicense(model.id); });
     const actions = document.createElement("div"); actions.className = "model-card-actions";
-    actions.append(license, removalButton(model.id, model.title, remove));
+    const info = document.createElement("button"); info.type = "button"; info.className = "model-license";
+    info.textContent = "模型信息"; info.setAttribute("aria-label", model.title + "的模型信息");
+    info.addEventListener("click", () => { void viewInfo(model.id); });
+    actions.append(info, license, removalButton(model.id, model.title, remove));
     card.append(button, actions); host.append(card);
   }
   if (activeModelId === "weiguang-default" && !models.some(model => model.id === "weiguang-default")) {

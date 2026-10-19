@@ -105,6 +105,24 @@ describe("exact companion navigation",()=>{
     await expect(openDshSession({get:()=>({host:"evil.invalid",port:4194})},{id:"target"},open)).rejects.toThrow();
     expect(open).toHaveBeenCalledOnce();
   });
+  it("rejects an unbound listener, then opens the same service once its port is ready",async()=>{
+    const open=vi.fn(async(_url:string)=>undefined);
+    const authenticate=vi.fn((url:string)=>url);
+    const web:{host:string;port:number|undefined}={host:"127.0.0.1",port:undefined};
+    const context={get:(name:string)=>name==="webServer"?web:{authenticatedUrl:authenticate}};
+    await expect(openDshSession(context,undefined,open)).rejects.toThrow("DSH Web UI unavailable");
+    expect(authenticate).not.toHaveBeenCalled();expect(open).not.toHaveBeenCalled();
+    web.port=4194;
+    await openDshSession(context,undefined,open);
+    expect(open).toHaveBeenCalledExactlyOnceWith("http://127.0.0.1:4194/");
+  });
+  it.each([0,-1,65536,4194.5,"4194",null,NaN])("never opens an invalid listener port (%s)",async port=>{
+    const open=vi.fn(async(_url:string)=>undefined);
+    const authenticate=vi.fn((url:string)=>url);
+    const context={get:(name:string)=>name==="webServer"?{host:"127.0.0.1",port}:{authenticatedUrl:authenticate}};
+    await expect(openDshSession(context,undefined,open)).rejects.toThrow("DSH Web UI unavailable");
+    expect(authenticate).not.toHaveBeenCalled();expect(open).not.toHaveBeenCalled();
+  });
   it("waits for the listed target, selects once and removes only its hint",async()=>{
     let list={ids:[] as string[],phase:"pending"};let changed:()=>void=()=>undefined;
     const sessions:Sessions={list:{getSnapshot:()=>list,subscribe:fn=>{changed=fn;return vi.fn()}},open:vi.fn(()=>changed()),openSubagent:vi.fn(),refresh:async()=>undefined,refreshSubagents:async()=>undefined};

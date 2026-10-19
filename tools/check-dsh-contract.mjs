@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { navigationContract } from "./dsh-navigation-contract.mjs";
 import { desktopNavigationContract } from "./dsh-desktop-contract.mjs";
 import { questionLifecycleContract } from "./dsh-questions-contract.mjs";
+import { webServerContract } from "./dsh-webserver-contract.mjs";
 
 const dshRoot = resolve(
   process.argv[2]
@@ -66,8 +67,6 @@ const requirements = [
   ["question choices and multiple selection", questions, /options\?: AskUserQuestionOption\[\];[\s\S]{0,200}multiSelect\?: boolean;/u],
   ["question answer shape", questions, /selected: string\[\];[\s\S]{0,160}custom\?: string;/u],
   ["session title read", titles, /get\(session: Session\): SessionTitleSnapshot \| undefined;/u],
-  ["loopback web server port", webServer, /get port\(\): number;/u],
-  ["loopback web server host", webServer, /get host\(\): Config\['host'\];/u],
   ["browser authentication URL", connection, /authenticatedUrl\(baseUrl: string\): string;/u],
   ["agent/status payload", agent, /'agent\/status'[\s\S]{0,500}payload:\s*\{[\s\S]{0,180}agent:\s*Agent;[\s\S]{0,180}status:\s*AgentStatus;/u],
   ["agent/error payload", agent, /'agent\/error'[\s\S]{0,500}payload:\s*\{[\s\S]{0,180}agent:\s*Agent;[\s\S]{0,300}error:\s*unknown;/u],
@@ -96,7 +95,7 @@ const requirements = [
 
 const missing = requirements
   .filter(([, contents, pattern]) => !pattern.test(contents))
-  .map(([name]) => name).concat(navigation.missing,questionLifecycle.missing);
+  .map(([name]) => name).concat(navigation.missing,questionLifecycle.missing,webServerContract(webServer));
 
 if (missing.length > 0) {
   throw new Error(

@@ -7,11 +7,18 @@ import {basename, dirname, join, resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 import {runInNewContext} from "node:vm";
 import {build} from "esbuild";
+import {browserClientEntry} from "./dsh-browser-entry.mjs";
 
 if (!process.argv[2]) throw Error("Usage: node tools/qualify-dsh-navigation.mjs <DSH package directory>");
 const packageRoot = resolve(process.argv[2]);
 const requireOfficial = createRequire(join(packageRoot, "package.json"));
 const official = async name => import(pathToFileURL(requireOfficial.resolve(name)).href);
+const browserSource = async specifier => {
+  assert(specifier.endsWith("/client"));
+  const metadataFile = requireOfficial.resolve(`${specifier.slice(0, -"/client".length)}/package.json`);
+  const metadata = JSON.parse(await readFile(metadataFile, "utf8"));
+  return readFile(resolve(dirname(metadataFile), browserClientEntry(metadata.exports)), "utf8");
+};
 const {Context} = await official("@deepseek-ai/cordis");
 const connectionPackage = await official("@deepseek-ai/dsh-client-connection");
 const {default: WebServer} = await official("@deepseek-ai/dsh-host-webserver");
@@ -49,6 +56,9 @@ try {
     webServerFiber = await host.plugin(WebServer, {host: "127.0.0.1", port: 0, compression: "none"});
     await settle();
     const server = host.get("webServer");
+    assert.equal(server.host, "127.0.0.1");
+    assert(Number.isInteger(server.port) && server.port > 0 && server.port <= 65535,
+      "the official listener must expose its actual bound port after activation");
     server.registerFallback((request, response) => {
       // Same observable outcome as the official static frontend: an unclaimed
       // POST must be 405, making a silently missing RPC route fail this test.
@@ -63,7 +73,7 @@ try {
   };
   await mountWebServer();
   let factory;
-  runInNewContext(await readFile(requireOfficial.resolve("@deepseek-ai/dsh-client-connection/client"), "utf8"), {
+  runInNewContext(await browserSource("@deepseek-ai/dsh-client-connection/client"), {
     window: {__ModuleLoader__: {load(row) {factory = row.factory;}}},
     crypto: globalThis.crypto, AbortController, Headers, Response, Request, URL,
     setTimeout, clearTimeout, console,
@@ -170,7 +180,7 @@ async function qualifyWebClient() {
   const browserModule = async specifier => {
     let factory;
     window.__ModuleLoader__.load = row => {factory = row.factory;};
-    runInNewContext(await readFile(requireOfficial.resolve(specifier), "utf8"), sandbox);
+    runInNewContext(await browserSource(specifier), sandbox);
     const exported = factory(name => {
       const dependency = modules.get(name.replace(/\/client$/u, ""));
       if (!dependency) throw Error(`unexpected official ClientSessions external: ${name}`);

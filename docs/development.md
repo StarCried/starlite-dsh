@@ -102,6 +102,8 @@ git diff --check
 
 每日 `DSH latest compatibility` 在 Ubuntu 与 Windows 上安装 **npm 已发布 latest**，强制检查 Desktop 声明契约、真实官方认证 RPC 与服务冷启动，以及实际 tarball 的隔离安装／启动／fail-open／销毁；不把 GitHub main 的新 API 当成已发布客户端，也不发布任何产物。Windows 检查原生 Host 桥接，普通 Ubuntu 检查不支持的 Host 会禁用桌宠但不妨碍 DSH。平台不支持时明确提示需要 Windows 11 x64 或其上的 WSL2 x64；所需 DSH API 不可用、状态桥启动失败和 Windows 程序启动失败分别提示，不打印原始错误、凭据或会话内容。
 
+DSH `0.2.1-rc.2` 将未绑定时的公开端口声明为 `number | undefined`；契约门同时接受旧的 `number`，实际打开仍要求 `127.0.0.1` 上有效的整数端口，就绪前不会生成认证 URL。真实浏览器资格检查按包公开 `./client` 的 `browser`／`default` 条件加载，避免误用同一包新增的 Node ESM 入口。此兼容不扩大到远程 Host 或 HTTPS 导航。
+
 本机可对明确的官方 DSH 包目录和最终插件 tarball 运行同一检查：
 
 ```sh

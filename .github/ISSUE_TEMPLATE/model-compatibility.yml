@@ -1,0 +1,35 @@
+name: 模型兼容性
+description: VRM 导入、待机、眨眼、视线或动作映射问题
+title: "[Model]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        当前 DSH 只启用标准人形 VRM；不要求提交模型文件或 Blender 工程。
+        请勿公开上传私有或无再分发许可的素材；若自愿提供下载地址，必须先确认许可允许。
+  - type: input
+    id: versions
+    attributes:
+      label: StarLite、DSH 版本与 Host 形态
+      description: 说明 npm 公开版本或本地候选，以及官方桌面版／Windows CLI/Web／WSL2 CLI/Web。
+    validations:
+      required: true
+  - type: input
+    id: model-format
+    attributes:
+      label: 模型格式和导出工具
+      description: VRM0 或 VRM1、导出器名称与版本；不知道的部分可以写未知。
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 检查提示、复现步骤与预期效果
+      description: 说明是否包含动作、blink 和 lookAt 配置，以及原软件中的表现。只复制去敏后的错误文本，不附本机路径或原始日志。
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: 可公开的最小示例（可选）
+      description: 合成示例、已去敏截图，或许可允许的公开模型链接及许可链接；也可以留空。

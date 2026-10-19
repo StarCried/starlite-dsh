@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 安装与升级
+    url: https://github.com/StarCried/starlite-dsh/blob/main/docs/upgrade.md
+    about: 支持范围、升级步骤和用户数据保留
+  - name: 安全问题
+    url: https://github.com/StarCried/starlite-dsh/blob/main/SECURITY.md
+    about: 先阅读安全政策；公开内容不要包含秘密或漏洞利用细节

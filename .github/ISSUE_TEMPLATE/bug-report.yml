@@ -1,0 +1,47 @@
+name: 使用问题
+description: 安装、连接、互动或性能问题
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先查看安装与升级说明。不要上传 API Key、临时连接链接、凭据文件、真实会话内容或完整原始日志。
+        安全漏洞请按 SECURITY.md 先请求私下联系方式，不要在这里提供利用步骤。
+  - type: input
+    id: starlite-version
+    attributes:
+      label: StarLite 版本与安装来源
+      description: 写明实际版本，以及 npm alpha、固定版本或本地候选；不要只写 latest。
+    validations:
+      required: true
+  - type: dropdown
+    id: host
+    attributes:
+      label: DSH 形态
+      options:
+        - 官方 Windows 桌面版
+        - Windows 原生 CLI/Web
+        - Windows 上的 WSL2 CLI/Web
+    validations:
+      required: true
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH 实际版本
+      description: 桌面版和独立 npm CLI 的版本可能不同，填写遇到问题的那个。
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 运行环境
+      description: Windows 版本、WebView2；性能或窗口问题另写显卡、缩放、刷新率、帧率与 DPR 设置。不需要电脑名称或用户名。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤、预期与实际表现
+      description: 给出最小步骤；说明每次出现还是偶发。截图或短视频须去除会话内容及本机敏感信息。
+    validations:
+      required: true

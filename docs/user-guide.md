@@ -2,7 +2,7 @@
 
 需要 Windows 11 x64、WebView2，以及以下任一种 DSH：官方 Windows 桌面版、Windows 原生 CLI/Web、WSL2 CLI/Web。只安装一个 `dsh-starlite` 插件：桌宠由插件准备和启动，不需要安装器、管理员权限或手动设置 EXE 路径。
 
-本文对应 `0.1.0-alpha.1`。安装使用 alpha 渠道 `dsh-starlite@alpha`；需要固定版本时可换为 `dsh-starlite@0.1.0-alpha.1`。[版本变化](../CHANGELOG.md) · [兼容性与验收](dsh-compatibility.md)
+本文对应 `0.1.0-alpha.1`。安装使用 alpha 渠道 `dsh-starlite@alpha`；需要固定版本时可换为 `dsh-starlite@0.1.0-alpha.1`。[版本变化](../CHANGELOG.md) · [兼容性与验收](dsh-compatibility.md) · [升级与排错](upgrade.md)
 
 ## 安装
 

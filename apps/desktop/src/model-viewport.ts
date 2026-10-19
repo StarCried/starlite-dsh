@@ -31,6 +31,7 @@ const FIXED: ModelViewport = {
 export class ModelViewportBridge {
   #vrm = false;
   #scale = 1;
+  #menuScale: number | undefined;
   #viewport = BASE;
   #screenSpace: number | undefined;
   readonly #bubbleResize: ResizeObserver;
@@ -61,11 +62,27 @@ export class ModelViewportBridge {
     if (vrm === this.#vrm && (!vrm || scale === this.#scale)) return this.#tail;
     this.#vrm = vrm;
     this.#scale = scale;
-    const baseWidth = Math.round(BASE.width * scale), baseHeight = Math.round(BASE.height * scale);
-    this.#apply(vrm ? {...FIXED, baseWidth, baseHeight,
-      width:baseWidth + VRM_VIEWPORT_PADDING.left + VRM_VIEWPORT_PADDING.right,
-      height:baseHeight + VRM_VIEWPORT_PADDING.top + VRM_VIEWPORT_PADDING.bottom + RESERVE} : null);
+    this.#updateViewport();
     return this.#tail;
+  }
+
+  /** Keep the native surface large enough for the entire slider range until
+   * the menu closes. Shrinking the window beneath a captured slider moves or
+   * clips that control even when its own CSS position is fixed. */
+  reserveMenuSpace(open: boolean): Promise<void> {
+    const next = open ? Math.max(1.5, this.#menuScale ?? this.#scale) : undefined;
+    if (next === this.#menuScale) return this.#tail;
+    this.#menuScale = next;
+    if (this.#vrm) this.#updateViewport();
+    return this.#tail;
+  }
+
+  #updateViewport(): void {
+    const baseWidth = Math.round(BASE.width * this.#scale), baseHeight = Math.round(BASE.height * this.#scale);
+    const envelope = Math.max(this.#scale, this.#menuScale ?? this.#scale);
+    this.#apply(this.#vrm ? {...FIXED, baseWidth, baseHeight,
+      width:Math.round(BASE.width * envelope) + VRM_VIEWPORT_PADDING.left + VRM_VIEWPORT_PADDING.right,
+      height:Math.round(BASE.height * envelope) + VRM_VIEWPORT_PADDING.top + VRM_VIEWPORT_PADDING.bottom + RESERVE} : null);
   }
 
   hostPosition(position: {x:number;y:number}, scale: number): {x:number;y:number} {

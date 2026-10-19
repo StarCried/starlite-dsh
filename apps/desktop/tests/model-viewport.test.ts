@@ -63,6 +63,25 @@ it("changes the real display area only for an explicit size change and keeps tex
   expect(send).toHaveBeenCalledTimes(2);await bridge.destroy();
 });
 
+it("reserves a stable menu surface before opening and does not shrink it during a slider drag",async()=>{
+  const send=vi.fn<(value:ModelViewport|null)=>Promise<void>>(async()=>{}),bridge=new ModelViewportBridge(host,anchor,send,vi.fn(),vi.fn(),vi.fn(),bubble);
+  await bridge.configure(true,.67);
+  const origin=bridge.hostPosition({x:200,y:-120},1.5);
+  await bridge.reserveMenuSpace(true);
+  for(const scale of [1.5,1.25,.8,.5,.75,1.35]){
+    await bridge.configure(true,scale);
+    const value=send.mock.calls.at(-1)![0] as ModelViewport;
+    expect(value.width).toBe(736);expect(value.height).toBe(1444);
+    expect(value.baseWidth).toBe(Math.round(320*scale));expect(value.baseHeight).toBe(Math.round(480*scale));
+    expect(bridge.hostPosition({x:200,y:-120},1.5)).toEqual(origin);
+  }
+  const count=send.mock.calls.length;
+  await bridge.reserveMenuSpace(true);expect(send).toHaveBeenCalledTimes(count);
+  await bridge.reserveMenuSpace(false);
+  expect(send).toHaveBeenLastCalledWith({left:-128,top:-532,width:688,height:1372,baseWidth:432,baseHeight:648});
+  await bridge.destroy();
+});
+
 it("waits for the one native resize and ignores renderer events while it is pending",async()=>{
   let finish!:()=>void;const applied=vi.fn();
   const send=vi.fn(()=>new Promise<void>(done=>{finish=done;}));

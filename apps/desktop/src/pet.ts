@@ -62,6 +62,7 @@ export async function startPet(): Promise<void> {
   let pausedByTray = false;
   let ui:PetUiState={paused:false,visible:true,clickThrough:false};
   let quickMenu:PetQuickMenu|undefined;
+  let menuOpenGeneration=0;
   let connected = false;
   let connection: StatusConnection | undefined;
   let cancelClick=()=>{};
@@ -149,8 +150,12 @@ export async function startPet(): Promise<void> {
     assign("maxWidth",`${Math.max(0,right-left)}px`);
     assign("maxHeight",`${Math.max(0,bottom-top)}px`);
     const next=quickMenu.element.getBoundingClientRect();
-    assign("left",`${Math.max(left,Math.min(next.left,right-next.width))}px`);
-    assign("top",`${Math.max(top,Math.min(next.top,bottom-next.height))}px`);
+    const x=Math.max(left,Math.min(next.left,right-next.width)),y=Math.max(top,Math.min(next.top,bottom-next.height));
+    assign("left",`${x}px`);
+    assign("top",`${y}px`);
+    // Expanded tabs/dropdowns scroll inside the space below this fixed anchor.
+    assign("maxWidth",`${Math.max(0,right-x)}px`);
+    assign("maxHeight",`${Math.max(0,bottom-y)}px`);
     updateMenuRegion();
   };
   const hostPosition=new HostPositionBridge(
@@ -180,7 +185,7 @@ export async function startPet(): Promise<void> {
     if (closing) return;
     if (modelAvailable()) interaction.resizeFixedViewport(innerWidth,innerHeight);
     updateRegion();
-    void fitQuickMenu().catch(()=>{});updateMenuRegion();
+    updateMenuRegion();
     void hostPosition.sync().catch(()=>{});
   };
   globalThis.addEventListener("resize",syncWindowGeometry);
@@ -260,9 +265,15 @@ export async function startPet(): Promise<void> {
       empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
     }
   };
-  const menuResize=new ResizeObserver(()=>{updateMenuRegion();void fitQuickMenu().catch(()=>{});});
-  const menuMutation=new MutationObserver(()=>{updateMenuRegion();void fitQuickMenu().catch(()=>{});});
-  const closeQuickMenu=()=>{quickMenu?.close();updateMenuRegion();};
+  const menuResize=new ResizeObserver(updateMenuRegion);
+  const menuMutation=new MutationObserver(updateMenuRegion);
+  const syncMenuSurface=()=>{
+    const open=quickMenu?.isOpen===true;
+    if(!open)++menuOpenGeneration;
+    void viewport.reserveMenuSpace(open).then(()=>{controller?.refreshInteractionMask?.();updateMenuRegion();}).catch(()=>{});
+    updateMenuRegion();
+  };
+  const closeQuickMenu=()=>{++menuOpenGeneration;quickMenu?.close();syncMenuSurface();};
   globalThis.addEventListener("blur",closeQuickMenu);
   globalThis.addEventListener("pagehide", () => { closing=true; if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
@@ -397,7 +408,7 @@ export async function startPet(): Promise<void> {
     openDsh:async()=>{if(connection&&connected)await openDisplayedDsh(connection,latestSnapshot?.session?.ref);},
     selectModel:async modelId=>{await invoke("select_model",{modelId});},
   });
-  quickMenu.element.addEventListener("starlite-menu-change",updateMenuRegion);
+  quickMenu.element.addEventListener("starlite-menu-change",syncMenuSurface);
   menuResize.observe(quickMenu.element);
   menuMutation.observe(quickMenu.element,{attributes:true,childList:true,subtree:true});
   cancelClick=installPointerBehavior(host, {
@@ -407,7 +418,15 @@ export async function startPet(): Promise<void> {
       try{return await invoke("end_model_drag");}
       finally{void hostPosition.sync().catch(()=>{});}
     },
-  }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), (x,y) => { quickMenu?.open(x,y);void fitQuickMenu().catch(()=>{});updateMenuRegion(); },()=>{
+  }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), (x,y) => {
+    const generation=++menuOpenGeneration;
+    void viewport.reserveMenuSpace(true).then(async()=>{
+      if(closing||generation!==menuOpenGeneration)return;
+      quickMenu?.open(x,y);
+      await fitQuickMenu();
+      controller?.refreshInteractionMask?.();updateMenuRegion();
+    }).catch(()=>{});
+  },()=>{
     const ref=latestSnapshot?.session?.ref;
     if(!connected||!connection)return;
     void openDisplayedDsh(connection,ref).catch(()=>{

@@ -134,9 +134,7 @@ export async function startPet(): Promise<void> {
     const [position,monitors]=await Promise.all([window.outerPosition(),availableMonitors()]);
     return {x:position.x,y:position.y,monitors:monitors as Monitor[],scale:devicePixelRatio||1};
   };
-  const fitQuickMenu=async(pointer:{x:number;y:number})=>{
-    if(!quickMenu?.isOpen)return;
-    const position=await readPosition();
+  const fitQuickMenu=(pointer:{x:number;y:number},position:Awaited<ReturnType<typeof readPosition>>)=>{
     if(!quickMenu?.isOpen)return;
     const bounds=menuWorkArea(position,position.scale,{width:innerWidth,height:innerHeight},pointer,position.monitors);
     if(!bounds){quickMenu.close();return;}
@@ -420,9 +418,11 @@ export async function startPet(): Promise<void> {
       // Native set_size acknowledges before WebView layout necessarily catches
       // up. Complete that layout before the one-time placement measurement.
       await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+      const position=await readPosition();
       if(closing||generation!==menuOpenGeneration)return;
       quickMenu?.open(x,y);
-      await fitQuickMenu({x,y});
+      // Finish placement in the same task as open, before the first paint.
+      fitQuickMenu({x,y},position);
       controller?.refreshInteractionMask?.();updateMenuRegion();
     }).catch(()=>{});
   },()=>{

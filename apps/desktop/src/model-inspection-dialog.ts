@@ -14,7 +14,7 @@ export function showModelInspection(report: ModelInspection): void {
   if (caps) {
     line(`人形映射：${caps.humanoid.requiredBones.length} 个必需骨骼，${caps.humanoid.optionalBones.length} 个可选骨骼。`);
     line(caps.blink.automatic ? "自动眨眼：可用。" : "自动眨眼：不可用。请在导出器中绑定标准 Blink，或完整的左右 Blink；仅修改形态键名称无效。其他功能可继续使用。");
-    line(caps.lookAt.eyes ? "眼球跟随：可用；头部跟随有角度限制。" : "眼球跟随：未检测到完整配置。请配置 VRM lookAt 和眼骨或视线表达；仍可使用限角头部跟随。");
+    line(caps.lookAt.eyes ? `眼球跟随：水平${caps.lookAt.horizontal ? "可用" : "未配置"}、垂直${caps.lookAt.vertical ? "可用" : "未配置"}；头部跟随有角度限制。` : "眼球跟随：未检测到完整配置。请配置 VRM lookAt 和眼骨或视线表达；仍可使用限角头部跟随。");
   }
   line(`可用动作：${report.animations.length} 个（含程序默认 Idle）。其他事件动作需由模型提供并在动作映射中选择。`);
   const metrics = report.metrics;

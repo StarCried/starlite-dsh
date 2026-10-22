@@ -3,11 +3,11 @@ import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {startSettings} from "../src/settings.js";
-import type {AnimationMappings, DesktopPreferences, DesktopSettings, LibraryModel} from "../src/types.js";
-const native=vi.hoisted(() => ({invoke:vi.fn(),open:vi.fn(),listen:vi.fn(async () => () => {})}));
+import type {AnimationMappings, DesktopPreferences, DesktopSettings, LibraryModel, ModelAdjustments} from "../src/types.js";
+const native=vi.hoisted(() => ({invoke:vi.fn(),open:vi.fn(),listen:vi.fn(async () => () => {}),emitTo:vi.fn(async () => undefined)}));
 vi.mock("@tauri-apps/api/core",() => ({invoke:native.invoke}));
 vi.mock("@tauri-apps/plugin-dialog",() => ({open:native.open}));
-vi.mock("@tauri-apps/api/event",() => ({listen:native.listen}));
+vi.mock("@tauri-apps/api/event",() => ({listen:native.listen,emitTo:native.emitTo}));
 const page=readFileSync(resolve(import.meta.dirname,"../index.html"),"utf8").match(/<main id="settings-view"[\s\S]+?<\/main>/u)![0];
 const path="C:\\Downloads\\character.vrm";
 const terms={title:"测试角色",text:"# 模型许可\n\n仅供本地使用。<img src=x>"};
@@ -21,13 +21,13 @@ const custom:LibraryModel={...model,id:"custom",title:"自定义角色"};
 const button=() => document.querySelector<HTMLButtonElement>("#add-model")!;
 const activeIdle=() => document.querySelector<HTMLSelectElement>('#animation-mappings select[data-state="idle"]')!;
 const tick=() => new Promise(resolve => setTimeout(resolve,0));
-type NativeArgs={patch?:Partial<DesktopPreferences>;modelId?:string|null;mappings?:AnimationMappings};
+type NativeArgs={patch?:Partial<DesktopPreferences>;modelId?:string|null;mappings?:AnimationMappings;adjustments?:ModelAdjustments};
 let current:DesktopSettings;
 
 beforeEach(() => {
  document.body.innerHTML=page;
  vi.stubGlobal("Option",function Option(text:string,value:string){const option=document.createElement("option");option.textContent=text;option.value=value;return option;});
- native.invoke.mockReset();native.open.mockReset().mockResolvedValue(path);native.listen.mockClear();
+ native.invoke.mockReset();native.open.mockReset().mockResolvedValue(path);native.listen.mockClear();native.emitTo.mockClear();
 });
 afterEach(() => {vi.unstubAllGlobals();vi.restoreAllMocks();});
 
@@ -44,6 +44,8 @@ async function launch(initial:DesktopSettings=installed,prepared:DesktopSettings
   }
   else if(command==="patch_preferences")current={...current,preferences:{...current.preferences,...args!.patch!}};
   else if(command==="update_model_mappings")current={...current,models:current.models.map(item => item.id===args!.modelId?{...item,mappings:args!.mappings!}:item)};
+  else if(command==="update_model_adjustments")current={...current,models:current.models.map(item => item.id===args!.modelId?{...item,adjustments:args!.adjustments!}:item)};
+  else if(command==="inspect_model")return {capabilities:{humanoid:{requiredBones:["head"],optionalBones:[]},lookAt:{head:true,eyes:false,horizontal:false,vertical:false,mode:"none"}}};
   else throw new Error("unexpected command: "+command);
   return structuredClone(current);
  });
@@ -334,5 +336,18 @@ it("restores an invalid Idle instead of leaving an unsaved blank field",async ()
  expect(activeIdle().value).toBe("RelaxedBreath");
  expect(native.invoke.mock.calls.some(([command])=>command==="update_model_mappings")).toBe(false);
  expect(document.getElementById("settings-error")!.textContent).toContain("待机动画必须选择");
+});
+
+it("keeps a focused calibration field and saves it for the correct model",async () => {
+ const imported={...structuredClone(custom),mappings:{...custom.mappings,idle:"StarLiteIdle"}};
+ await launch({...installed,models:[model,imported],activeModelId:imported.id});
+ const details=document.getElementById("model-adjustments") as HTMLDetailsElement;details.open=true;details.dispatchEvent(new Event("toggle"));
+ const input=document.getElementById("adjust-armLiftDegrees") as HTMLInputElement;
+ await vi.waitFor(()=>expect(input.disabled).toBe(false));input.focus();input.value="13";input.dispatchEvent(new Event("input"));
+ expect(native.emitTo).toHaveBeenLastCalledWith("main","model-adjustments-preview",{modelId:"custom",adjustments:{idle:{armLiftDegrees:13}}});
+ input.dispatchEvent(new Event("change"));
+ await vi.waitFor(()=>expect(current.models.find(item=>item.id==="custom")!.adjustments).toEqual({idle:{armLiftDegrees:13}}));
+ expect(current.models.find(item=>item.id===model.id)!.adjustments).toBeUndefined();
+ expect(document.getElementById("adjust-armLiftDegrees")).toBe(input);expect(document.activeElement).toBe(input);
 });
 

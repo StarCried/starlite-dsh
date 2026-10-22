@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DesktopSettings } from "../src/types.js";
+import type { DesktopSettings, ModelAdjustments } from "../src/types.js";
 import type { WidgetController } from "../src/vendor-types.js";
 import type {PetUiState} from "../src/quick-settings.js";
 import { startPet } from "../src/pet.js";
@@ -40,6 +40,7 @@ let finishDeepLinks: (() => void) | undefined;
 let finishTraySubscription: (() => void) | undefined;
 let trayListener: ((event: {payload: string}) => void) | undefined;
 let settingsListener: ((event: {payload: DesktopSettings}) => void) | undefined;
+let adjustmentListener: ((event: {payload: {modelId: string; adjustments: ModelAdjustments}}) => void) | undefined;
 let uiListener: ((event:{payload:PetUiState})=>void)|undefined;
 let deepLinkListener: ((urls:string[])=>void) | undefined;
 const INITIAL_URL = `dsh-inochi2d-pet://connect?port=41234&token=${"a".repeat(43)}&instance=12345678-1234-4234-8234-123456789abc`;
@@ -60,7 +61,7 @@ beforeEach(() => {
     pause: vi.fn(() => {running = false;}), resume: vi.fn(() => {running = true;}),
     getAnimations: () => [{name: "Idle", durationMs: 1_000}],
     playAnimation: vi.fn(async () => "stopped" as const), stopAnimation: vi.fn(), resetCamera: vi.fn(),
-    observeInteractionMask: vi.fn(), setPointerPosition: vi.fn(), setPerformanceVisible: vi.fn(),setFrameRate:vi.fn(),setDisplaySize:vi.fn(),setPointerEnabled:vi.fn(),refreshInteractionMask:vi.fn(), destroy: vi.fn(),
+    observeInteractionMask: vi.fn(), setPointerPosition: vi.fn(), setPerformanceVisible: vi.fn(),setFrameRate:vi.fn(),setDisplaySize:vi.fn(),setPointerEnabled:vi.fn(),setModelAdjustments:vi.fn(),refreshInteractionMask:vi.fn(), destroy: vi.fn(),
   };
   const monitor = {position: {x: 0, y: 0}, size: {width: 1920, height: 1080}, workArea: {position: {x: 0, y: 0}}};
   native.availableMonitors.mockResolvedValue([monitor]); native.primaryMonitor.mockResolvedValue(monitor);
@@ -78,6 +79,7 @@ beforeEach(() => {
       await new Promise<void>(resolve => {finishTraySubscription = resolve;});
     }
     if (event === "settings-changed") settingsListener = listener;
+    if (event === "model-adjustments-preview") adjustmentListener = listener;
     if (event === "pet-ui-state") uiListener = listener;
     return () => undefined;
   });
@@ -354,6 +356,23 @@ describe("desktop hidden-window startup", () => {
     settingsListener!({payload:next});
     await vi.waitFor(() => expect(native.connection.mock.results[0]!.value.setInputAvailable).toHaveBeenLastCalledWith(false));
     expect(native.mountModel).toHaveBeenCalledTimes(1);
+  });
+
+  it("previews only the active model and saves calibration without recreating its renderer", async () => {
+    const ready = startPet();
+    await vi.waitFor(() => expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(() => expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    vi.mocked(controller.setModelAdjustments!).mockClear();
+    adjustmentListener!({payload:{modelId:"other",adjustments:{idle:{armLiftDegrees:25}}}});
+    expect(controller.setModelAdjustments).not.toHaveBeenCalled();
+    adjustmentListener!({payload:{modelId:"fixture",adjustments:{idle:{armLiftDegrees:12}}}});
+    expect(controller.setModelAdjustments).toHaveBeenLastCalledWith({idle:{armLiftDegrees:12}});
+    const next=structuredClone(settings);next.models[0]!.adjustments={idle:{armLiftDegrees:12},gaze:{headStrength:.7}};
+    settingsListener!({payload:next});
+    expect(controller.setModelAdjustments).toHaveBeenLastCalledWith(next.models[0]!.adjustments);
+    const reset=structuredClone(next);reset.models[0]!.adjustments={};settingsListener!({payload:reset});
+    expect(controller.setModelAdjustments).toHaveBeenLastCalledWith({});
+    expect(native.mountModel).toHaveBeenCalledTimes(1);expect(native.connection).toHaveBeenCalledTimes(1);
   });
 
   it("resumes a mounted model when a fast DSH connection shows the window while native subscriptions are still pending", async () => {

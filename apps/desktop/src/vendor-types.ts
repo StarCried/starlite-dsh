@@ -23,6 +23,12 @@ export interface ModelHitMask {
   viewportWidth: number; viewportHeight: number; bits: Uint8Array;
 }
 
+/** VRM-only calibration, matching the staged StarLite VRM controller contract. */
+export interface ModelAdjustments {
+  idle?: { armLiftDegrees?: number; palmTwistDegrees?: number; handCurl?: number; elbowBendDegrees?: number };
+  gaze?: { headStrength?: number; eyeStrength?: number; smoothingMs?: number };
+}
+
 export interface WidgetController {
   readonly status: "disabled" | "loading" | "running" | "paused" | "fallback" | "destroyed";
   pause(): void;
@@ -42,6 +48,7 @@ export interface WidgetController {
   setFrameRate?(fps: number | "display"): void;
   setPointerEnabled?(enabled: boolean): void;
   setBubblesVisible?(visible: boolean): void;
+  setModelAdjustments?(adjustments: ModelAdjustments): void;
   refreshInteractionMask?(): void;
   destroy(): void;
 }

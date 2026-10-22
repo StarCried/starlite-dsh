@@ -12,7 +12,7 @@ import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { message } from "@tauri-apps/plugin-dialog";
 import {parsePetConnectionUrl} from "@starcried/starlite-dsh-protocol";
 import type { PetSnapshot, WidgetController } from "./vendor-types.js";
-import type { DesktopSettings } from "./types.js";
+import type { DesktopSettings, ModelAdjustments } from "./types.js";
 import { StatusConnection } from "./connection.js";
 import { createModelSlot, createQuickMenu, mountModel } from "./renderer.js";
 import {createPetQuickMenu, type PetUiState, type PetQuickMenu} from "./quick-settings.js";
@@ -241,6 +241,7 @@ export async function startPet(): Promise<void> {
       controller = mounted;
       mounted.setPerformanceVisible?.(settings.preferences.performanceOverlay);
       mounted.setPointerEnabled?.(settings.preferences.pointerEnabled!==false);
+      mounted.setModelAdjustments?.(selectedModel(settings)?.adjustments ?? {});
       mounted.setBubblesVisible?.(false);
       void hostPosition.sync().catch(()=>{});
       mounted.observeInteractionMask(mask => {
@@ -272,6 +273,11 @@ export async function startPet(): Promise<void> {
   globalThis.addEventListener("pagehide", () => { closing=true; if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
   let preparing = true;
+  await listen<{modelId: string; adjustments: ModelAdjustments}>("model-adjustments-preview", ({payload}) => {
+    if (payload?.modelId !== settings.activeModelId || !controller) return;
+    // The VRM controller validates values before changing its live state.
+    try { controller.setModelAdjustments?.(payload.adjustments); } catch { /* Reject an invalid transient editor event. */ }
+  });
   await listen<DesktopSettings>("settings-changed", ({ payload }) => {
     ++settingsRevision;
     const previous=settings;
@@ -285,6 +291,9 @@ export async function startPet(): Promise<void> {
     if (renderingIdentity(previous) === renderingIdentity(settings)) {
       controller?.setFrameRate?.(settings.preferences.fps);
       controller?.setPointerEnabled?.(settings.preferences.pointerEnabled!==false);
+      if (JSON.stringify(selectedModel(previous)?.adjustments) !== JSON.stringify(selectedModel(settings)?.adjustments)) {
+        controller?.setModelAdjustments?.(selectedModel(settings)?.adjustments ?? {});
+      }
       if(previous.preferences.scale!==settings.preferences.scale){
         const scale=settings.preferences.scale;
         void viewport.configure(modelAvailable(),scale).then(()=>{

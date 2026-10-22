@@ -1,9 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emitTo, listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { showModelLicense } from "./model-license-dialog.js";
 import { showModelImportHelp } from "./model-import-dialog.js";
 import { showModelInspection } from "./model-inspection-dialog.js";
+import { ModelAdjustmentsPanel } from "./model-adjustments.js";
 import type { AnimationMappings, AnimationState, DesktopPreferences, DesktopSettings, LibraryModel, ModelInspection, ModelInstallRequest, ModelRemoval } from "./types.js";
 
 const STATES: ReadonlyArray<{ key: AnimationState; label: string; required: boolean }> = [
@@ -53,6 +54,7 @@ export async function startSettings(): Promise<void> {
 
   const render = () => {
     const model = activeModel();
+    adjustmentsPanel.update(model);
     const signature = JSON.stringify([settings.activeModelId, settings.models.map(({ id, title, backend, animations }) => ({ id, title, backend, count: animations.length }))]);
     if (signature !== displayedLibrary) {
       displayedLibrary = signature;
@@ -111,6 +113,12 @@ export async function startSettings(): Promise<void> {
     return result;
   };
   const reportFailure = (reason: unknown) => { error.textContent = safeError(reason); };
+  const adjustmentsPanel = new ModelAdjustmentsPanel(requiredElement("model-adjustments-section"),
+    model => invoke<ModelInspection>("inspect_model", {path:model.modelPath, animationSources:model.vrm?.animations.filter(animation => animation.name !== "StarLiteIdle") ?? [], profilePath:model.vrm?.profilePath}),
+    (modelId, adjustments) => { void emitTo("main", "model-adjustments-preview", {modelId, adjustments}).catch(reportFailure); },
+    (modelId, adjustments) => enqueueWrite("adjustments:" + modelId, () => invoke<DesktopSettings>("update_model_adjustments", {modelId, adjustments})).catch(reason => { reportFailure(reason); throw reason; }));
+  const flushAdjustments = () => adjustmentsPanel.flush();
+  globalThis.addEventListener("blur", flushAdjustments);
 
   function selectModel(modelId: string | null): void {
     void enqueueWrite("selection", () => invoke<DesktopSettings>("select_model", {modelId})).catch(reportFailure);
@@ -209,7 +217,7 @@ export async function startSettings(): Promise<void> {
 
   render();
   const unlisten = await listen<DesktopSettings>("settings-changed", ({payload}) => { settingsRevision++; adoptSettings(payload); });
-  globalThis.addEventListener("pagehide", unlisten, {once:true});
+  globalThis.addEventListener("pagehide", () => { adjustmentsPanel.destroy(); globalThis.removeEventListener("blur", flushAdjustments); unlisten(); }, {once:true});
   try {
     await enqueueWrite("prepare", () => invoke<DesktopSettings>("prepare_model"));
     if (!preferenceRevision && !failedWrites.size) saveStatus.textContent = settings.activeModelId === "weiguang-default" && !activeModel() ? "重启 DSH 后自动下载微光资源。" : "更改自动保存";

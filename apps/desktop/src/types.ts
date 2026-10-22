@@ -1,4 +1,5 @@
-import type { AnimationClip, ModelBackend } from "./vendor-types.js";
+import type { AnimationClip, ModelBackend, ModelAdjustments } from "./vendor-types.js";
+export type { ModelAdjustments } from "./vendor-types.js";
 
 export type AnimationState = keyof AnimationMappings;
 
@@ -47,6 +48,7 @@ export interface DesktopSettings {
 export interface LibraryModel extends InstalledModel {
   id: string;
   title: string;
+  adjustments?: ModelAdjustments;
 }
 
 export interface ModelRemoval {

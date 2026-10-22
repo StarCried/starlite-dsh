@@ -186,6 +186,8 @@ pub struct IdleAdjustments {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub palm_twist_degrees: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub wrist_lift_degrees: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hand_curl: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub elbow_bend_degrees: Option<f64>,
@@ -207,6 +209,7 @@ impl ModelAdjustments {
         self.idle.as_ref().is_none_or(|idle| {
             idle.arm_lift_degrees.is_none()
                 && idle.palm_twist_degrees.is_none()
+                && idle.wrist_lift_degrees.is_none()
                 && idle.hand_curl.is_none()
                 && idle.elbow_bend_degrees.is_none()
         }) && self.gaze.as_ref().is_none_or(|gaze| {
@@ -222,6 +225,7 @@ impl ModelAdjustments {
         for (name, value, min, max) in [
             ("armLiftDegrees", idle.arm_lift_degrees, -30.0, 45.0),
             ("palmTwistDegrees", idle.palm_twist_degrees, -45.0, 45.0),
+            ("wristLiftDegrees", idle.wrist_lift_degrees, -45.0, 45.0),
             ("handCurl", idle.hand_curl, 0.0, 1.0),
             ("elbowBendDegrees", idle.elbow_bend_degrees, -20.0, 45.0),
             ("headStrength", gaze.head_strength, 0.0, 2.0),
@@ -1162,6 +1166,8 @@ mod tests {
         for value in [
             serde_json::json!({"idle":{"armLiftDegrees":46}}),
             serde_json::json!({"idle":{"palmTwistDegrees":-46}}),
+            serde_json::json!({"idle":{"wristLiftDegrees":-45.01}}),
+            serde_json::json!({"idle":{"wristLiftDegrees":45.01}}),
             serde_json::json!({"idle":{"elbowBendDegrees":-21}}),
             serde_json::json!({"idle":{"handCurl":1.01}}),
             serde_json::json!({"gaze":{"headStrength":2.1}}),
@@ -1181,6 +1187,30 @@ mod tests {
             serde_json::json!({"gaze":{"other":1}}),
         ] {
             assert!(serde_json::from_value::<ModelAdjustments>(value).is_err());
+        }
+    }
+
+    #[test]
+    fn wrist_lift_alone_round_trips_zero_and_limits_without_becoming_empty() {
+        let mut current = DesktopSettings::default();
+        current.add_model(test_model("wrist")).unwrap();
+        for value in [-45.0, 0.0, 45.0] {
+            let adjustments: ModelAdjustments =
+                serde_json::from_value(serde_json::json!({"idle":{"wristLiftDegrees":value}}))
+                    .unwrap();
+            current.set_model_adjustments("wrist", adjustments).unwrap();
+            let restored = decode_settings(&settings_bytes(&current).unwrap()).unwrap();
+            assert_eq!(
+                restored.models[0]
+                    .adjustments
+                    .as_ref()
+                    .unwrap()
+                    .idle
+                    .as_ref()
+                    .unwrap()
+                    .wrist_lift_degrees,
+                Some(value)
+            );
         }
     }
 }

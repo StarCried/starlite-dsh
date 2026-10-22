@@ -168,6 +168,74 @@ pub struct ModelLicense {
     pub text: String,
 }
 
+/// Per-character calibration; omitted fields preserve the authored baseline.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModelAdjustments {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idle: Option<IdleAdjustments>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gaze: Option<GazeAdjustments>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct IdleAdjustments {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arm_lift_degrees: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub palm_twist_degrees: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hand_curl: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elbow_bend_degrees: Option<f64>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GazeAdjustments {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub head_strength: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eye_strength: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub smoothing_ms: Option<f64>,
+}
+
+impl ModelAdjustments {
+    fn is_empty(&self) -> bool {
+        self.idle.as_ref().is_none_or(|idle| {
+            idle.arm_lift_degrees.is_none()
+                && idle.palm_twist_degrees.is_none()
+                && idle.hand_curl.is_none()
+                && idle.elbow_bend_degrees.is_none()
+        }) && self.gaze.as_ref().is_none_or(|gaze| {
+            gaze.head_strength.is_none()
+                && gaze.eye_strength.is_none()
+                && gaze.smoothing_ms.is_none()
+        })
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        let idle = self.idle.clone().unwrap_or_default();
+        let gaze = self.gaze.clone().unwrap_or_default();
+        for (name, value, min, max) in [
+            ("armLiftDegrees", idle.arm_lift_degrees, -30.0, 45.0),
+            ("palmTwistDegrees", idle.palm_twist_degrees, -45.0, 45.0),
+            ("handCurl", idle.hand_curl, 0.0, 1.0),
+            ("elbowBendDegrees", idle.elbow_bend_degrees, -20.0, 45.0),
+            ("headStrength", gaze.head_strength, 0.0, 2.0),
+            ("eyeStrength", gaze.eye_strength, 0.0, 2.0),
+            ("smoothingMs", gaze.smoothing_ms, 20.0, 1000.0),
+        ] {
+            if value.is_some_and(|value| !value.is_finite() || !(min..=max).contains(&value)) {
+                return Err(format!("invalid model adjustment: {name}"));
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstalledModel {
@@ -189,6 +257,8 @@ pub struct InstalledModel {
 pub struct LibraryModel {
     pub id: String,
     pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjustments: Option<ModelAdjustments>,
     #[serde(flatten)]
     pub data: InstalledModel,
 }
@@ -244,6 +314,24 @@ impl DesktopSettings {
             self.active_model_id = previous;
             return Err(error);
         }
+        Ok(())
+    }
+
+    pub fn set_model_adjustments(
+        &mut self,
+        id: &str,
+        adjustments: ModelAdjustments,
+    ) -> Result<(), String> {
+        adjustments.validate()?;
+        let model = self
+            .models
+            .iter_mut()
+            .find(|model| model.id == id)
+            .ok_or("没有找到该模型，请重新打开设置。")?;
+        if model.data.backend != ModelBackend::Vrm {
+            return Err("本版本仅支持调整 VRM 模型。".into());
+        }
+        model.adjustments = (!adjustments.is_empty()).then_some(adjustments);
         Ok(())
     }
 
@@ -517,6 +605,9 @@ fn validate_settings(settings: &DesktopSettings) -> Result<(), String> {
             return Err("invalid model library metadata".into());
         }
         validate_model(&model.data)?;
+        if let Some(adjustments) = &model.adjustments {
+            adjustments.validate()?;
+        }
     }
     if let Some(id) = &settings.active_model_id {
         match settings.models.iter().find(|model| &model.id == id) {
@@ -756,6 +847,7 @@ mod tests {
         LibraryModel {
             id: id.into(),
             title: format!("Character {id}"),
+            adjustments: None,
             data: InstalledModel {
                 backend: ModelBackend::Vrm,
                 model_path: format!("{id}/model.vrm"),
@@ -1015,6 +1107,80 @@ mod tests {
         ] {
             let patch: PreferencesPatch = serde_json::from_value(value).unwrap();
             assert!(patch.apply(&DesktopPreferences::default()).is_err());
+        }
+    }
+
+    #[test]
+    fn model_adjustments_are_optional_model_local_and_resettable() {
+        let mut current = DesktopSettings::default();
+        current.add_model(test_model("first")).unwrap();
+        current.add_model(test_model("second")).unwrap();
+        let original = serde_json::to_value(&current).unwrap();
+        let adjustments: ModelAdjustments = serde_json::from_value(serde_json::json!({
+            "idle":{"armLiftDegrees":12,"handCurl":0.25},
+            "gaze":{"headStrength":0.8,"eyeStrength":1.2,"smoothingMs":150}
+        }))
+        .unwrap();
+        current.set_model_adjustments("first", adjustments).unwrap();
+        let restored = decode_settings(&settings_bytes(&current).unwrap()).unwrap();
+        assert_eq!(
+            restored.models[0]
+                .adjustments
+                .as_ref()
+                .unwrap()
+                .idle
+                .as_ref()
+                .unwrap()
+                .hand_curl,
+            Some(0.25)
+        );
+        assert!(restored.models[1].adjustments.is_none());
+        assert_eq!(restored.active_model_id.as_deref(), Some("second"));
+        assert_eq!(
+            serde_json::to_value(&restored.models[0].data).unwrap(),
+            serde_json::to_value(&current.models[0].data).unwrap()
+        );
+        current
+            .set_model_adjustments("first", ModelAdjustments::default())
+            .unwrap();
+        assert_eq!(serde_json::to_value(&current).unwrap(), original);
+        assert!(current
+            .set_model_adjustments("missing", ModelAdjustments::default())
+            .is_err());
+        assert!(decode_settings(&serde_json::to_vec(&original).unwrap())
+            .unwrap()
+            .models[0]
+            .adjustments
+            .is_none());
+    }
+
+    #[test]
+    fn rejects_invalid_adjustments_without_changing_a_model() {
+        let mut current = DesktopSettings::default();
+        current.add_model(test_model("first")).unwrap();
+        let original = serde_json::to_value(&current).unwrap();
+        for value in [
+            serde_json::json!({"idle":{"armLiftDegrees":46}}),
+            serde_json::json!({"idle":{"palmTwistDegrees":-46}}),
+            serde_json::json!({"idle":{"elbowBendDegrees":-21}}),
+            serde_json::json!({"idle":{"handCurl":1.01}}),
+            serde_json::json!({"gaze":{"headStrength":2.1}}),
+            serde_json::json!({"gaze":{"eyeStrength":-0.1}}),
+            serde_json::json!({"gaze":{"smoothingMs":0}}),
+        ] {
+            let adjustments: ModelAdjustments = serde_json::from_value(value.clone()).unwrap();
+            assert!(current.set_model_adjustments("first", adjustments).is_err());
+            assert_eq!(serde_json::to_value(&current).unwrap(), original);
+            let mut invalid = original.clone();
+            invalid["models"][0]["adjustments"] = value;
+            assert!(decode_settings(&serde_json::to_vec(&invalid).unwrap()).is_err());
+        }
+        for value in [
+            serde_json::json!({"other":1}),
+            serde_json::json!({"idle":{"handCurl":"open"}}),
+            serde_json::json!({"gaze":{"other":1}}),
+        ] {
+            assert!(serde_json::from_value::<ModelAdjustments>(value).is_err());
         }
     }
 }

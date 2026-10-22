@@ -131,6 +131,21 @@ async fn update_model_mappings(
 }
 
 #[tauri::command]
+async fn update_model_adjustments(
+    app: AppHandle,
+    model_id: String,
+    adjustments: settings::ModelAdjustments,
+) -> Result<settings::DesktopSettings, String> {
+    mutate_model_settings(app, move |app| {
+        let mut next = settings::load(app);
+        next.set_model_adjustments(&model_id, adjustments)?;
+        settings::store(app, &next)?;
+        Ok(next)
+    })
+    .await
+}
+
+#[tauri::command]
 fn set_connection_state(app: AppHandle, connected: bool) {
     app.state::<tray::UiState>().set_connected(connected);
 }
@@ -190,6 +205,7 @@ pub fn run() {
             get_model_license,
             install_model,
             update_model_mappings,
+            update_model_adjustments,
             set_connection_state,
             get_initial_connection,
             open_settings,

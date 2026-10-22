@@ -289,6 +289,7 @@ pub fn install_prepared_character(
             .take(128)
             .collect::<String>();
         let model = LibraryModel {
+            adjustments: None,
             id: id.unwrap_or_else(|| format!("model-{}", Uuid::new_v4())),
             title: if title.trim().is_empty() {
                 "VRM 模型".into()

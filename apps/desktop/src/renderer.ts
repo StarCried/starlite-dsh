@@ -28,8 +28,9 @@ export function modelConfig(settings: DesktopSettings): Record<string, unknown> 
     mobile: { show: true }, interactions: { pointer: settings.preferences.pointerEnabled !== false, click: false, drag: false },
     embeddedAnimations: model.vrm.embeddedAnimations ?? [],
     // Native import reserves this name and always installs the program Idle.
-    // Let the VRM runtime load its own adjustable built-in copy instead.
-    animations: model.vrm.animations.filter(({name}) => name !== "StarLiteIdle").map(({name,path}) => ({name,url:convertFileSrc(path)})),
+    // When it is the base, load the runtime's adjustable built-in copy. Keep
+    // it as an event clip when an authored Idle is the selected base instead.
+    animations: model.vrm.animations.filter(({name}) => name !== "StarLiteIdle" || model.mappings.idle !== "StarLiteIdle").map(({name,path}) => ({name,url:convertFileSrc(path)})),
     adjustments: model.adjustments,
     ...(model.vrm.profilePath ? {profile:convertFileSrc(model.vrm.profilePath)} : {}),
     ambient: {animations:[model.mappings.idle]},

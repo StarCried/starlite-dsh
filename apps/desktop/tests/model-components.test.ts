@@ -35,6 +35,7 @@ it("maps both embedded and external actions without a resource package", () => {
   expect(modelConfig({...installed,preferences:{...preferences,performanceOverlay:true}}).performance).toEqual({show:true});
   expect(modelConfig(installed)).toMatchObject({backend:"vrm",model:"asset:m.vrm",embeddedAnimations:[],animations:[],profile:"asset:p.json",ambient:{animations:["StarLiteIdle"]},render:{viewportPadding:{left:128,top:64,right:128,bottom:192}},camera:{pitchDegrees:5,targetHeight:.54}});
   expect(modelConfig({...installed,models:[{...model,adjustments:{idle:{armLiftDegrees:8}},vrm:{animations:[...model.vrm!.animations,{name:"Wave",path:"wave.vrma"}]}}]})).toMatchObject({adjustments:{idle:{armLiftDegrees:8}},animations:[{name:"Wave",url:"asset:wave.vrma"}]});
+  expect(modelConfig({...installed,models:[{...model,mappings:{...mappings,idle:"AuthoredIdle",click:["StarLiteIdle"]},vrm:{animations:[...model.vrm!.animations,{name:"AuthoredIdle",path:"authored.vrma"}]}}]}).animations).toEqual([{name:"StarLiteIdle",url:"asset:a.vrma"},{name:"AuthoredIdle",url:"asset:authored.vrma"}]);
   expect(modelConfig({...installed,models:[{...model,vrm:{...model.vrm!,embeddedAnimations:["Wave"]}}]}).embeddedAnimations).toEqual(["Wave"]);
   expect(modelConfig(installed).neutralAnimation).toBe("StarLiteIdle");
   expect(() => modelConfig({...installed,activeModelId:null})).toThrow();

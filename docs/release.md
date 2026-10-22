@@ -1,6 +1,6 @@
 # StarLite for DSH alpha 发布检查
 
-本次版本为 `0.1.0-alpha.2`，包含动作过渡修复、性能参数和模型信息界面；见 [版本变化](../CHANGELOG.md)。使用下列流程重建匹配版本的所有产物。版本准备不代表外部发布已完成，最终来源与公开下载校验结果按实际执行补记到 [发布验收](dsh-compatibility.md)。
+本次版本为 `0.1.0-alpha.2`，包含右键快捷菜单、按模型保存的姿态与跟随调节、动作过渡修复、性能参数、模型信息界面及 Vite／Vitest 安全补丁；见 [版本变化](../CHANGELOG.md)。使用下列流程重建匹配版本的所有产物。版本准备不代表外部发布已完成，最终来源与公开下载校验结果按实际执行补记到 [发布验收](dsh-compatibility.md)。
 
 ## 上次公开发行 alpha.1
 
@@ -79,6 +79,8 @@ npm publish packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.2.tgz --tag alpha
 安装见 [用户指南](user-guide.md)，模型约定见 [模型导入](model-import.md)。发布检查失败不得阻止 DSH 本身运行。
 
 ## 依赖审计记录
+
+2026-10-22 已更新 Vite 8.2.4 和 Vitest 4.1.12，修复新披露的开发服务器公告。完整在线审计未报告 JavaScript 或 Rust 漏洞；既有 Rust 维护与非 Windows 警告保留到期复核规则，并重新核对 Windows 依赖树。精确数据库 revision、范围和例外见[依赖维护](dependency-audit.md)。以下日期记录只代表各次扫描，不替代每次发行前的最新检查。
 
 2026-10-14 已修复可用的构建依赖补丁，并将撤回的 `chacha20 0.10.1` 更新为 `0.10.2`。DSH 的 npm 完整／生产依赖审计均无已知漏洞；共享包的浏览器运行时和插件自身不携带 Hexo 主程序，私有 Hexo 7 示例及使用者的 Hexo 依赖仍有 9 条上游审计记录，不能称整个 Hexo 生态已无告警。
 

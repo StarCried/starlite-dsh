@@ -1,8 +1,29 @@
 # DSH 兼容性与发布验收
 
-`0.1.0-alpha.2` 的维护、模型诊断、性能与安装依据见 [本地稳定化验收](stabilization.md)。本页公开版本与早期设备手验保留各自的源码、哈希和范围；版本准备不代表 npm、GitHub Release 或云端检查已经完成。
+`0.1.0-alpha.2` 已于 2026-10-22 发布到 npm alpha 渠道及 GitHub 预发行。维护、模型诊断、性能与安装依据见 [本地稳定化验收](stabilization.md)。本页公开下载与早期设备手验保留各自的源码、哈希和范围。
 
-## 未发布：模型姿态与跟随（2026-10-22）
+## 公开发行 0.1.0-alpha.2（2026-10-22）
+
+[`dsh-starlite@0.1.0-alpha.2`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.2) 与 [Release `v0.1.0-alpha.2`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.2) 已公开。发行 tag 和 `SOURCE_REVISION` 均指向 [`80f9220`](https://github.com/StarCried/starlite-dsh/commit/80f92200393b58f617864af5b2fb910171b8347a)，共享运行时固定为 [`f83a4ec`](https://github.com/StarCried/starlite/commit/f83a4ec0f795a14f36d6724465e3a89f9c1e8529)，provenance 为 `dirty: false`。文档后续更新不移动发行 tag 或替换产物。
+
+- 此次包含右键快捷菜单、按模型保存的姿态与跟随调节、掌心对称及独立抬腕、点击过渡修复、性能显示、模型信息与导入诊断，并修复 Vite／Vitest 开发依赖公告；详见[版本变化](../CHANGELOG.md)。微光及其他动作仍独立授权、独立下载，程序不新增角色资源。
+- 精确发行提交的[主 CI #39753442237](https://github.com/StarCried/starlite-dsh/actions/runs/39753442237)、[依赖审计 #39753442269](https://github.com/StarCried/starlite-dsh/actions/runs/39753442269) 和 [DSH latest 兼容检查 #39753656026](https://github.com/StarCried/starlite-dsh/actions/runs/39753656026) 均成功。主 CI 包括 Windows 构建及隔离安装器生命周期；本地干净 checkout 也通过 546 项 JavaScript 测试、14 项审计测试、Rust 74 项通过／1 项私有模型测试忽略、fmt、debug／release 严格 Clippy，以及正式发布门。依赖审计保留已说明的有期限上游警告，范围见[依赖维护](dependency-audit.md)。
+- 匿名从公开 npm registry 全新下载 tarball，得到 **4,040,458 字节**，SHA-256 `51641fd8539568f9d305c985ba35d89ca52734639b30003925ba55973f171bc7`，与最终本地发行包完全一致；11 文件白名单、Windows GUI PE 和固定 HTTPS 模型来源均通过。SHA-512 与 registry SRI 一致：`sha512-ixaUwdyIK4hVaja8FsN+gooKpvIJVOTf5LQUIkgz+E96HLcfuPICJSpbhII3c6ikdXTgjU3exl2brbUknqVC8w==`。
+- 对上述真正公开下载的 tarball，Windows 官方 DSH `0.2.1-rc.2`／Node 24.15.0 与 WSL2 官方 DSH `0.2.0-rc.2`／Node 22.22.1 均通过实际隔离安装、认证首页、fail-open 和退出回收。两处 DSH 版本不同，结果仅覆盖各自记录；测试没有启动桌宠、调用付费 API 或修改日常 profile，也不作为新原生界面与长期性能的人工复验。
+- npm `alpha` 指向 alpha.2，`latest` 仍保留 alpha.0，安装明确使用 `dsh-starlite@alpha`。公开 registry 证据位于本机忽略目录 `release-output/public-dsh-alpha2-20261022/`。
+- GitHub Release 于 `2026-10-22T09:40:36Z` 公开，标记为预发行而非 Draft。七个公开附件均在不发送 Authorization 的情况下重新下载，长度及 SHA-256 与最终上传文件逐项相同；`SHA256SUMS` 的六个文件名全部平铺且逐项匹配，公开 tag 与 `SOURCE_REVISION` 对应上述源码。证明保存在本机忽略目录 `release-output/public-gh-dsh-alpha2-20261022/`；Release 元数据使用只读认证 API，资产下载本身为匿名请求。
+
+| 公开程序附件 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| `dsh-starlite-0.1.0-alpha.2.tgz` | 4,040,458 | `51641fd8539568f9d305c985ba35d89ca52734639b30003925ba55973f171bc7` |
+| `StarLite-for-DSH_0.1.0-alpha.2_x64-setup.exe` | 2,740,787 | `c481b4762692fadc21210ba9d7ece99d8d58e9710949315f9f557bd1b425a41c` |
+| `StarLite-for-DSH_0.1.0-alpha.2_x64-portable.zip` | 3,950,559 | `e8b2fe2dd9cb0d5dfe32c2752cd0631b68f7c493bf77fd884eb786472b7a3d63` |
+
+其他附件为 `SHA256SUMS`、`SOURCE_REVISION`、`sbom.cdx.json` 和 `THIRD_PARTY_LICENSES.txt`。模型不在这七项程序交付中。此前掌心／抬腕的浏览器人工验收及原生基础面板的操作结果保持下节的实际身份；新增抬腕控件未另行记为原生 GUI 手验，旧长测也未改记为本版运行时实测。
+
+## 模型姿态与跟随的发布前验收（2026-10-22）
+
+以下记录发生于 alpha.2 发布前，保留各次候选的源码与人工验收范围；对应功能现已随上节版本发行。
 
 源码候选新增按模型保存的姿态与跟随调节，操作及范围见[升级说明](upgrade.md#模型姿态与跟随alpha2-起)。内置 Idle 可调双臂、掌心、手腕、手部张合和肘部；自带动作保持原样。头眼强度独立且保留限角；缺少可选手指或眼球能力时给出原因。滑条即时预览、防抖自动保存，修改不会重新挂载模型，旧设置缺省保持原有表现。
 
@@ -10,11 +31,11 @@
 - 候选同步干净共享源码 `c467b7e1d6451dc3085e39e20e3bc97c28709543`；运行时 SHA-256 为 `c8717a325d5162d04b403327fc6624d14f47e72e4c2a704735782853f03de13e`。正常与隔离候选均已构建，未安装到日常配置，也未发布；精确 EXE 哈希和本地检查保留在忽略目录 `release-output/model-adjustments-20261022/`。
 - 用户在独立浏览器调校页 `http://127.0.0.1:4196/adjust` 检查 Wolfman／微光后确认「功能通过」，包含掌心左右对称与独立抬腕。此结果作为共享模型表现的人工验收；不记为新增手腕控件的 DSH 原生 GUI 手验。此前隔离原生基础面板的导入、即时调整、自动保存、零值和还原检查保留各自实际范围。
 
-本轮仅更新源码和文档，不更新模型资产、版本号、npm 或安装包，也不将旧长测改记为新运行时的性能测试。
+该阶段仅更新源码和文档，没有更新模型资产、版本号、npm 或安装包，也不将旧长测改记为新运行时的性能测试。
 
 ## 0.1.0-alpha.2 发行准备（2026-10-19）
 
-本版包含点击动作过渡修复、可选性能显示、模型能力与资源数字卡、导入诊断和维护说明，见 [版本变化](../CHANGELOG.md)。程序与微光模型仍分开授权，模型来源与文件保持不变。最终源码、共享运行时 pin、构建文件及公开下载校验结果在实际完成后补记；下方 alpha.1 的云端、npm 与设备结果不冒充本版复验。
+该阶段准备点击动作过渡修复、可选性能显示、模型能力与资源数字卡、导入诊断和维护说明；后续新增功能见 [版本变化](../CHANGELOG.md)。程序与微光模型仍分开授权，模型来源与文件保持不变。最终源码、共享运行时 pin、构建文件及公开下载校验结果见上节；下方 alpha.1 的云端、npm 与设备结果不冒充本版复验。
 
 ## 公开发行 0.1.0-alpha.1（2026-10-15）
 

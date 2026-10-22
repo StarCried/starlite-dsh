@@ -1,6 +1,14 @@
 # StarLite for DSH alpha 发布检查
 
-本次版本为 `0.1.0-alpha.2`，包含右键快捷菜单、按模型保存的姿态与跟随调节、动作过渡修复、性能参数、模型信息界面及 Vite／Vitest 安全补丁；见 [版本变化](../CHANGELOG.md)。使用下列流程重建匹配版本的所有产物。版本准备不代表外部发布已完成，最终来源与公开下载校验结果按实际执行补记到 [发布验收](dsh-compatibility.md)。
+`0.1.0-alpha.2` 已于 2026-10-22 公开，包含右键快捷菜单、按模型保存的姿态与跟随调节、动作过渡修复、性能参数、模型信息界面及 Vite／Vitest 安全补丁；见 [版本变化](../CHANGELOG.md)。本页保留构建与发布流程，公开来源和精确下载校验结果见 [发布验收](dsh-compatibility.md#公开发行-010-alpha22026-10-22)。
+
+## 本次公开发行 alpha.2
+
+安装使用 [`dsh-starlite@alpha`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.2)，`alpha` 为 alpha.2，`latest` 保留 alpha.0。发行源码为 [`80f9220`](https://github.com/StarCried/starlite-dsh/commit/80f92200393b58f617864af5b2fb910171b8347a)，共享运行时为 [`f83a4ec`](https://github.com/StarCried/starlite/commit/f83a4ec0f795a14f36d6724465e3a89f9c1e8529)。该精确源码的[主 CI](https://github.com/StarCried/starlite-dsh/actions/runs/39753442237)、[依赖审计](https://github.com/StarCried/starlite-dsh/actions/runs/39753442269) 与 [DSH latest 兼容检查](https://github.com/StarCried/starlite-dsh/actions/runs/39753656026) 全部成功。
+
+匿名公开 npm tarball 为 4,040,458 字节，SHA-256 `51641fd8539568f9d305c985ba35d89ca52734639b30003925ba55973f171bc7`，SHA-512/SRI 也与 registry 一致。这个真正公开下载的包已在 Windows DSH `0.2.1-rc.2`／Node 24.15.0 和 WSL2 DSH `0.2.0-rc.2`／Node 22.22.1 通过隔离安装、认证首页、fail-open 与退出回收；没有调用付费 API、启动桌宠或修改日常 profile。
+
+[GitHub 预发行 `v0.1.0-alpha.2`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.2) 的七个公开附件已匿名重新下载，逐项校验字节、哈希、平铺校验和及源码 tag；包括插件 tarball、未签名 Windows 安装器、免安装 ZIP、SHA256SUMS、SOURCE_REVISION、SBOM 和依赖许可。微光模型仍作为独立资产分发。完整 SRI、公开附件哈希与人工验收边界见[发布验收](dsh-compatibility.md#公开发行-010-alpha22026-10-22)，不将旧长测或新增手腕控件的浏览器验收改记为原生 GUI 全面通过。
 
 ## 上次公开发行 alpha.1
 

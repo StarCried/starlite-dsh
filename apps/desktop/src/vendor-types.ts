@@ -25,7 +25,7 @@ export interface ModelHitMask {
 
 /** VRM-only calibration, matching the staged StarLite VRM controller contract. */
 export interface ModelAdjustments {
-  idle?: { armLiftDegrees?: number; palmTwistDegrees?: number; handCurl?: number; elbowBendDegrees?: number };
+  idle?: { armLiftDegrees?: number; palmTwistDegrees?: number; wristLiftDegrees?: number; handCurl?: number; elbowBendDegrees?: number };
   gaze?: { headStrength?: number; eyeStrength?: number; smoothingMs?: number };
 }
 

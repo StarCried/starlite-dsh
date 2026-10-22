@@ -8,6 +8,7 @@ interface AdjustmentField {
 const FIELDS: readonly AdjustmentField[] = [
   {group:"idle",key:"armLiftDegrees",label:"双臂抬高",min:-30,max:45,step:1,initial:0,capability:"idle",unit:"angle"},
   {group:"idle",key:"palmTwistDegrees",label:"掌心朝向",min:-45,max:45,step:1,initial:0,capability:"idle",unit:"angle"},
+  {group:"idle",key:"wristLiftDegrees",label:"手腕抬高",min:-45,max:45,step:1,initial:0,capability:"idle",unit:"angle"},
   {group:"idle",key:"handCurl",label:"手部张合",min:0,max:1,step:.01,initial:.25,capability:"fingers",unit:"percent"},
   {group:"gaze",key:"headStrength",label:"转头灵敏度",min:0,max:2,step:.05,initial:1,capability:"head",unit:"percent"},
   {group:"gaze",key:"eyeStrength",label:"眼球灵敏度",min:0,max:2,step:.05,initial:1,capability:"eyes",unit:"percent"},

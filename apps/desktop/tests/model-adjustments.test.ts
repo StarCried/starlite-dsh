@@ -41,6 +41,18 @@ it("previews each input immediately, debounces writes and flushes the final chan
   await vi.advanceTimersByTimeAsync(250);expect(persist).toHaveBeenCalledTimes(2);
 });
 
+it("keeps wrist lift independent from arm lift and palm twist, including zero and reset", async () => {
+  panel.update({...structuredClone(model),adjustments:{idle:{armLiftDegrees:10,palmTwistDegrees:8}}});await open();
+  expect(field("wristLiftDegrees").disabled).toBe(false);
+  edit("wristLiftDegrees",-45,"change");
+  expect(persist).toHaveBeenLastCalledWith("first",{idle:{armLiftDegrees:10,palmTwistDegrees:8,wristLiftDegrees:-45}});
+  edit("wristLiftDegrees",0,"change");
+  expect(preview).toHaveBeenLastCalledWith("first",{idle:{armLiftDegrees:10,palmTwistDegrees:8,wristLiftDegrees:0}});
+  host.querySelector<HTMLButtonElement>('[aria-label="还原手腕抬高"]')!.click();
+  expect(persist).toHaveBeenLastCalledWith("first",{idle:{armLiftDegrees:10,palmTwistDegrees:8}});
+  expect(field("wristLiftDegrees").value).toBe("0");
+});
+
 it("flushes the outgoing model before switching and never shares its values", async () => {
   await open();edit("armLiftDegrees",15);
   panel.update({...structuredClone(model),id:"second",title:"Second",adjustments:{gaze:{headStrength:.5}}});
@@ -54,6 +66,7 @@ it("preserves authored Idle poses and disables unmapped fingers", async () => {
   inspect.mockResolvedValue({...structuredClone(report),capabilities:{...report.capabilities!,humanoid:{requiredBones:["head"],optionalBones:[]}}});
   panel.update({...structuredClone(model),mappings:{...model.mappings,idle:"AuthoredIdle"}});await open();
   expect(field("armLiftDegrees").disabled).toBe(true);expect(field("palmTwistDegrees").disabled).toBe(true);expect(field("handCurl").disabled).toBe(true);
+  expect(field("wristLiftDegrees").disabled).toBe(true);
   expect(field("headStrength").disabled).toBe(false);expect(host.textContent).toContain("保留原有姿态");
 });
 

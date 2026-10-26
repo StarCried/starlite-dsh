@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { shouldAcquireDefaultModel } from "../src/launcher.js";
+import { selectedDefaultModel } from "../src/launcher.js";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -19,10 +19,10 @@ async function fixture() {
 
 it("honors the persisted opt-out while enabling fresh and legacy companion settings", async () => {
   const path = await fixture();
-  expect(await shouldAcquireDefaultModel(path)).toBe(true);
+  expect(await selectedDefaultModel(path)).toBe("weiguang-default");
   for (const preferences of [{fps:60}, {modelEnabled:true}, {modelEnabled:false}]) {
     await writeFile(path, JSON.stringify({schemaVersion:3,preferences,privateValue:"never returned"}));
-    expect(await shouldAcquireDefaultModel(path)).toBe(preferences.modelEnabled !== false);
+    expect(await selectedDefaultModel(path)).toBe(preferences.modelEnabled !== false ? "weiguang-default" : null);
   }
 });
 
@@ -30,33 +30,33 @@ it("does not fetch a character based on malformed, oversized or non-file setting
   const path = await fixture();
   for (const contents of ["invalid json", "[]", "null", Buffer.alloc(4 * 1024 * 1024 + 1, 65)]) {
     await writeFile(path, contents);
-    expect(await shouldAcquireDefaultModel(path)).toBe(false);
+    expect(await selectedDefaultModel(path)).toBe(null);
   }
   await rm(path);
   await mkdir(path);
-  expect(await shouldAcquireDefaultModel(path)).toBe(false);
+  expect(await selectedDefaultModel(path)).toBe(null);
 });
 
 it("does not interpret malformed model flags as permission to download the character", async () => {
   const path = await fixture();
   for (const modelEnabled of ["false", null, 0, {}]) {
     await writeFile(path, JSON.stringify({preferences:{modelEnabled}}));
-    expect(await shouldAcquireDefaultModel(path)).toBe(false);
+    expect(await selectedDefaultModel(path)).toBe(null);
   }
 });
 
 it("only acquires the starter when selected, preserving removal and custom model selection", async () => {
   const path = await fixture();
-  for (const activeModelId of ["weiguang-default"]) {
+  for (const activeModelId of ["weiguang-default", "bluefish-default"]) {
     await writeFile(path, JSON.stringify({schemaVersion:4,activeModelId,models:[]}));
-    expect(await shouldAcquireDefaultModel(path)).toBe(true);
+    expect(await selectedDefaultModel(path)).toBe(activeModelId);
   }
   for (const activeModelId of [null, "custom-model", "", false, {}, "a".repeat(129), "unsafe\nvalue"]) {
     await writeFile(path, JSON.stringify({schemaVersion:4,activeModelId,preferences:{modelEnabled:true}}));
-    expect(await shouldAcquireDefaultModel(path)).toBe(false);
+    expect(await selectedDefaultModel(path)).toBe(null);
   }
   for (const value of [{schemaVersion:4}, {schemaVersion:99,activeModelId:"weiguang-default"}]) {
     await writeFile(path, JSON.stringify(value));
-    expect(await shouldAcquireDefaultModel(path)).toBe(false);
+    expect(await selectedDefaultModel(path)).toBe(null);
   }
 });

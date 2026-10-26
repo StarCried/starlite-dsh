@@ -5,7 +5,7 @@ import { execFile, spawn } from "node:child_process";
 import { lstat, open, readFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { prepareEmbeddedCompanion } from "./bootstrap.js";
+import { isDefaultModelId, prepareEmbeddedCompanion, type DefaultModelId } from "./bootstrap.js";
 
 export interface PetConnection {
   readonly port: number;
@@ -67,7 +67,7 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
     const localCache = host === "windows" ? windowsCache : (await execFileText("wslpath", ["-u", windowsCache], options.signal)).trim();
     const roaming = host === "windows" ? windowsDirectories[1]! : (await execFileText("wslpath", ["-u", windowsDirectories[1]!], options.signal)).trim();
     if (host === "wsl" && (!validPosixDirectory(localCache) || !validPosixDirectory(roaming))) throw new Error("invalid Windows application directories");
-    const acquireDefaultModel = await shouldAcquireDefaultModel(paths.join(roaming, "com.starcried.dsh-inochi2d-pet", "settings.json"));
+    const defaultModelId = await selectedDefaultModel(paths.join(roaming, "com.starcried.dsh-inochi2d-pet", "settings.json"));
     const metadata: unknown = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
     if (typeof metadata !== "object" || metadata === null || !("version" in metadata) || typeof metadata.version !== "string") {
       throw new Error("invalid StarLite plugin package version");
@@ -76,11 +76,11 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
       assetDirectory: fileURLToPath(new URL("../assets/windows-x64/", import.meta.url)),
       cacheDirectory: paths.join(localCache, "StarCried", "StarLite", "companions"),
       expectedVersion: metadata.version,
-      acquireDefaultModel,
+      defaultModelId,
       ...(options.signal ? {signal: options.signal} : {}),
     });
     executable = prepared.executable;
-    if (acquireDefaultModel && !prepared.defaultModelReady) options.onDefaultModelFailure?.();
+    if (defaultModelId && !prepared.defaultModelReady) options.onDefaultModelFailure?.();
   }
   if ((host === "windows" && validateExecutableOverride(executable) !== executable)
     || (host === "wsl" && (!validPosixDirectory(executable) || posix.basename(executable).toLowerCase() !== "dsh-inochi2d-pet.exe"))) {
@@ -121,31 +121,31 @@ function validPosixDirectory(path: string): boolean {
 }
 
 /** Read only the selected-model policy; never transfer or log companion settings. */
-export async function shouldAcquireDefaultModel(path: string): Promise<boolean> {
+export async function selectedDefaultModel(path: string): Promise<DefaultModelId | null> {
   const maximum = 4 * 1024 * 1024;
   try {
     const info = await lstat(path);
-    if (!info.isFile() || info.isSymbolicLink() || info.size < 1 || info.size > maximum) return false;
+    if (!info.isFile() || info.isSymbolicLink() || info.size < 1 || info.size > maximum) return null;
     const file = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
     try {
       const opened = await file.stat();
-      if (!opened.isFile() || opened.size !== info.size) return false;
+      if (!opened.isFile() || opened.size !== info.size) return null;
       const bytes = Buffer.alloc(info.size + 1);
       const result = await file.read(bytes, 0, bytes.length, 0);
-      if (result.bytesRead !== info.size) return false;
+      if (result.bytesRead !== info.size) return null;
       const value: unknown = JSON.parse(bytes.subarray(0, result.bytesRead).toString("utf8"));
-      if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-      if (!("schemaVersion" in value)) return false;
+      if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+      if (!("schemaVersion" in value)) return null;
       if (value.schemaVersion === 4) {
-        return "activeModelId" in value && value.activeModelId === "weiguang-default";
+        return "activeModelId" in value && isDefaultModelId(value.activeModelId) ? value.activeModelId : null;
       }
-      if (![1, 2, 3].includes(value.schemaVersion as number)) return false;
+      if (![1, 2, 3].includes(value.schemaVersion as number)) return null;
       const preferences = "preferences" in value ? value.preferences : undefined;
-      if (typeof preferences === "object" && preferences !== null && "modelEnabled" in preferences) return preferences.modelEnabled === true;
-      return true;
+      if (typeof preferences === "object" && preferences !== null && "modelEnabled" in preferences) return preferences.modelEnabled === true ? "weiguang-default" : null;
+      return "weiguang-default";
     } finally { await file.close(); }
   } catch (error) {
-    return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+    return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT" ? "weiguang-default" : null;
   }
 }
 

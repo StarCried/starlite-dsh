@@ -39,16 +39,73 @@ async function fixture() {
     options: {assetDirectory: assets, cacheDirectory: cache, expectedVersion: VERSION, fetch: request as typeof fetch}};
 }
 
+async function catalogFixture() {
+  const f = await fixture();
+  const fish = Buffer.from("second generated VRM, no character artwork");
+  const {defaultModel, ...program} = f.manifest;
+  const manifest = {...program, schemaVersion:3, defaultModels:[
+    {...defaultModel, id:"weiguang-default", license:{title:"微光",text:"Independent Weiguang terms"}},
+    {id:"bluefish-default",title:"蓝色大肥鱼",url:"https://example.test/bluefish.vrm",sha256:sha(fish),bytes:fish.length,license:{title:"蓝色大肥鱼",text:"模型制作：水原镜（Mzkagami）。Independent fish terms"}},
+  ]};
+  await writeFile(join(f.assets,"manifest.json"),JSON.stringify(manifest));
+  f.request.mockImplementation(async input => new Response(String(input).includes("bluefish") ? fish : f.archive));
+  return {...f, manifest, fish};
+}
+
+describe("independent default VRM catalog", () => {
+  it("stages both licenses without model downloads and acquires only the selected example", async () => {
+    const f = await catalogFixture();
+    const staged = await prepareEmbeddedCompanion({...f.options,defaultModelId:null});
+    const directory = join(staged.executable,"..");
+    const descriptor = JSON.parse(await readFile(join(directory,"default-model.json"),"utf8"));
+    expect(descriptor.models.map((item:{license:{text:string}})=>item.license.text)).toEqual(f.manifest.defaultModels.map(item=>item.license.text));
+    expect(JSON.stringify(descriptor)).not.toContain("https://");
+    expect(f.request).not.toHaveBeenCalled();
+    const fish = await prepareEmbeddedCompanion({...f.options,defaultModelId:"bluefish-default"});
+    expect(fish.defaultModelReady).toBe(true);
+    expect(await readFile(join(directory,"bluefish-default.vrm"))).toEqual(f.fish);
+    expect(await readdir(directory)).not.toContain("weiguang-default.vrm");
+    expect(f.request).toHaveBeenCalledOnce();
+    await prepareEmbeddedCompanion({...f.options,defaultModelId:"bluefish-default"});
+    expect(f.request).toHaveBeenCalledOnce();
+    const fresh = await prepareEmbeddedCompanion(f.options);
+    expect(fresh.executable).toBe(staged.executable);
+    expect(f.request).toHaveBeenCalledTimes(2);
+    expect(await readFile(join(directory,"weiguang-default.vrm"))).toEqual(f.archive);
+  });
+
+  it("does not silently download Weiguang when a selected catalog entry is unavailable", async () => {
+    const f = await fixture();
+    expect((await prepareEmbeddedCompanion({...f.options,defaultModelId:"bluefish-default"})).defaultModelReady).toBe(false);
+    expect(f.request).not.toHaveBeenCalled();
+  });
+
+  it("retains readable terms on failed download and rejects malformed or duplicate catalog entries", async () => {
+    const f = await catalogFixture();
+    f.request.mockRejectedValueOnce(new Error("offline"));
+    const failed = await prepareEmbeddedCompanion({...f.options,defaultModelId:"bluefish-default"});
+    expect(failed.defaultModelReady).toBe(false);
+    expect(await readdir(join(failed.executable,".."))).not.toContain("bluefish-default.vrm");
+    for (const entries of [
+      [], [f.manifest.defaultModels[1]],
+      [f.manifest.defaultModels[0], f.manifest.defaultModels[0]],
+      [{...f.manifest.defaultModels[0],id:"../outside"}],
+      [{...f.manifest.defaultModels[0],license:{title:"Terms",text:""}}],
+      [{...f.manifest.defaultModels[0],license:{title:"Terms",text:"x".repeat(100*1024+1)}}],
+    ]) expect(()=>parseCompanionManifest(Buffer.from(JSON.stringify({...f.manifest,defaultModels:entries})),VERSION)).toThrow();
+  });
+});
+
 describe("embedded Windows companion and separate character bootstrap", () => {
   it("prepares the program without requesting character assets while the model is disabled", async () => {
     const f = await fixture();
-    const disabled = await prepareEmbeddedCompanion({...f.options,acquireDefaultModel:false});
+    const disabled = await prepareEmbeddedCompanion({...f.options,defaultModelId:null});
     expect(disabled.defaultModelReady).toBe(false);
     expect(f.request).not.toHaveBeenCalled();
     expect(await readdir(join(disabled.executable, ".."))).not.toContain("default-model.vrm");
     expect((await prepareEmbeddedCompanion(f.options)).defaultModelReady).toBe(true);
     expect(f.request).toHaveBeenCalledOnce();
-    expect((await prepareEmbeddedCompanion({...f.options,acquireDefaultModel:false})).defaultModelReady).toBe(false);
+    expect((await prepareEmbeddedCompanion({...f.options,defaultModelId:null})).defaultModelReady).toBe(false);
     expect(f.request).toHaveBeenCalledOnce();
   });
   it("atomically stages the program, downloads a hash-pinned VRM and reuses both on restart", async () => {

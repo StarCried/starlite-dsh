@@ -9,20 +9,31 @@ const EXECUTABLE = "dsh-inochi2d-pet.exe";
 const NOTICES = ["LICENSE", "THIRD_PARTY_LICENSES.txt"] as const;
 const RELEASE_REDIRECT_LIMIT = 3;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const MANIFEST_LIMIT = 256 * 1024;
+export type DefaultModelId = "weiguang-default" | "bluefish-default";
+export const isDefaultModelId = (value: unknown): value is DefaultModelId => value === "weiguang-default" || value === "bluefish-default";
 
-export interface CompanionManifest {
-  readonly schemaVersion: 2;
+export interface DefaultModelSource {
+  readonly title: string;
+  readonly url: string;
+  readonly sha256: string;
+  readonly bytes: number;
+  readonly localTest?: true;
+}
+export interface CatalogModel extends DefaultModelSource {
+  readonly id: DefaultModelId;
+  readonly license: {readonly title: string; readonly text: string};
+}
+
+interface CompanionProgram {
   readonly version: string;
   readonly platform: "windows-x64";
   readonly executable: {readonly file: typeof EXECUTABLE; readonly sha256: string; readonly bytes: number};
-  readonly defaultModel: {
-    readonly title: string;
-    readonly url: string;
-    readonly sha256: string;
-    readonly bytes: number;
-    readonly localTest?: true;
-  };
 }
+export type CompanionManifest = CompanionProgram & (
+  {readonly schemaVersion: 2; readonly defaultModel: DefaultModelSource} |
+  {readonly schemaVersion: 3; readonly defaultModels: readonly CatalogModel[]}
+);
 
 export interface PrepareCompanionOptions {
   readonly assetDirectory: string;
@@ -30,7 +41,8 @@ export interface PrepareCompanionOptions {
   readonly expectedVersion: string;
   readonly signal?: AbortSignal;
   readonly fetch?: typeof fetch;
-  readonly acquireDefaultModel?: boolean;
+  /** Omit for fresh-install Weiguang; null never acquires a model. */
+  readonly defaultModelId?: DefaultModelId | null;
 }
 
 export interface PreparedCompanion {
@@ -42,22 +54,28 @@ export interface PreparedCompanion {
 export async function prepareEmbeddedCompanion(options: PrepareCompanionOptions): Promise<PreparedCompanion> {
   options.signal?.throwIfAborted();
   const assets = await realpath(options.assetDirectory);
-  const manifest = parseCompanionManifest(await ordinaryFile(assets, "manifest.json", 16_384), options.expectedVersion);
+  const manifest = parseCompanionManifest(await ordinaryFile(assets, "manifest.json", MANIFEST_LIMIT), options.expectedVersion);
   const executable = await ordinaryFile(assets, EXECUTABLE, LIMIT);
   assertDigest(executable, manifest.executable);
   assertWindowsGuiExecutable(executable);
   const notices = await Promise.all(NOTICES.map(name => ordinaryFile(assets, name, NOTICE_LIMIT)));
   options.signal?.throwIfAborted();
   await ensureSafeDirectory(options.cacheDirectory);
-  const cacheKey = createHash("sha256").update(`${manifest.executable.sha256}:${manifest.defaultModel.sha256}`).digest("hex");
-  const directory = join(options.cacheDirectory, `${manifest.version}-${cacheKey}`);
-  const descriptor = Buffer.from(JSON.stringify({
+  const models = manifest.schemaVersion === 2
+    ? [{...manifest.defaultModel, id: "weiguang-default" as const, file: "default-model.vrm"}]
+    : manifest.defaultModels.map(model => ({...model, file: `${model.id}.vrm`}));
+  const descriptor = Buffer.from(JSON.stringify(manifest.schemaVersion === 2 ? {
     schemaVersion: 2,
     title: manifest.defaultModel.title,
     sha256: manifest.defaultModel.sha256,
     bytes: manifest.defaultModel.bytes,
     file: "default-model.vrm",
-  }));
+  } : {schemaVersion: 3, models: models.map(({id, title, sha256, bytes, file, ...source}) => ({
+    id, title, sha256, bytes, file, license: "license" in source ? source.license : undefined,
+  }))}));
+  const cacheIdentity = manifest.schemaVersion === 2 ? manifest.defaultModel.sha256 : createHash("sha256").update(descriptor).digest("hex");
+  const cacheKey = createHash("sha256").update(`${manifest.executable.sha256}:${cacheIdentity}`).digest("hex");
+  const directory = join(options.cacheDirectory, `${manifest.version}-${cacheKey}`);
   if (!await exists(directory)) {
     const temporary = await mkdtemp(join(options.cacheDirectory, ".stage-"));
     try {
@@ -75,18 +93,20 @@ export async function prepareEmbeddedCompanion(options: PrepareCompanionOptions)
   await assertSafeDirectory(directory);
   assertEqual(await ordinaryFile(directory, EXECUTABLE, LIMIT), executable);
   for (const [index, name] of NOTICES.entries()) assertEqual(await ordinaryFile(directory, name, NOTICE_LIMIT), notices[index]!);
-  assertEqual(await ordinaryFile(directory, "default-model.json", 16_384), descriptor);
+  assertEqual(await ordinaryFile(directory, "default-model.json", MANIFEST_LIMIT), descriptor);
   options.signal?.throwIfAborted();
-  if (options.acquireDefaultModel === false) return {executable: join(directory, EXECUTABLE), defaultModelReady: false};
+  const selectedId = options.defaultModelId === undefined ? "weiguang-default" : options.defaultModelId;
+  const selected = models.find(model => model.id === selectedId);
+  if (!selected) return {executable: join(directory, EXECUTABLE), defaultModelReady: false};
   let defaultModelReady = false;
   try {
-    const modelFile = join(directory, "default-model.vrm");
+    const modelFile = join(directory, selected.file);
     if (await exists(modelFile)) {
-      const cached = await ordinaryFile(directory, "default-model.vrm", LIMIT);
-      try { assertDigest(cached, manifest.defaultModel); defaultModelReady = true; }
+      const cached = await ordinaryFile(directory, selected.file, LIMIT);
+      try { assertDigest(cached, selected); defaultModelReady = true; }
       catch { /* Only a bounded ordinary cache file may be repaired from the pinned source. */ }
     }
-    if (!defaultModelReady) await downloadCharacter(manifest.defaultModel, directory, options.fetch ?? fetch, options.signal);
+    if (!defaultModelReady) await downloadCharacter(selected, directory, selected.file, options.fetch ?? fetch, options.signal);
     defaultModelReady = true;
   } catch {
     options.signal?.throwIfAborted();
@@ -97,28 +117,49 @@ export async function prepareEmbeddedCompanion(options: PrepareCompanionOptions)
 }
 
 export function parseCompanionManifest(bytes: Uint8Array, expectedVersion: string): CompanionManifest {
+  if (bytes.byteLength > MANIFEST_LIMIT) throw new Error("embedded companion manifest exceeds size limit");
   const value: unknown = JSON.parse(Buffer.from(bytes).toString("utf8"));
-  if (!record(value) || !keys(value, ["schemaVersion", "version", "platform", "executable", "defaultModel"])
-    || value.schemaVersion !== 2 || value.platform !== "windows-x64"
+  if (!record(value) || ![2, 3].includes(value.schemaVersion as number)
+    || !keys(value, ["schemaVersion", "version", "platform", "executable", value.schemaVersion === 2 ? "defaultModel" : "defaultModels"])
+    || value.platform !== "windows-x64"
     || typeof value.version !== "string" || value.version.length > 64 || !/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/u.test(value.version)
     || value.version !== expectedVersion || !record(value.executable) || !keys(value.executable, ["file", "sha256", "bytes"])
-    || value.executable.file !== EXECUTABLE || !digest(value.executable)
-    || !record(value.defaultModel) || !keys(value.defaultModel, ["title", "url", "sha256", "bytes"], ["localTest"])
-    || typeof value.defaultModel.title !== "string" || value.defaultModel.title.length < 1 || value.defaultModel.title.length > 128
-    || /[\p{Cc}]/u.test(value.defaultModel.title) || !digest(value.defaultModel)
-    || (value.defaultModel.localTest !== undefined && value.defaultModel.localTest !== true)
-    || typeof value.defaultModel.url !== "string" || value.defaultModel.url.length > 2_048
-    || /[\p{Cc}\\]/u.test(value.defaultModel.url)) {
+    || value.executable.file !== EXECUTABLE || !digest(value.executable)) {
     throw new Error("invalid embedded companion manifest");
   }
-  const url = new URL(value.defaultModel.url);
-  if (!url.pathname.toLowerCase().endsWith(".vrm") || url.username || url.password || url.hash || (url.protocol !== "https:"
-    && !(value.defaultModel.localTest === true && url.protocol === "http:" && url.hostname === "127.0.0.1"
-      && /^http:\/\/127\.0\.0\.1(?::\d+)?\//u.test(value.defaultModel.url)))) {
-    throw new Error("invalid starter character download source");
+  const models = value.schemaVersion === 2 ? [value.defaultModel] : value.defaultModels;
+  if (!Array.isArray(models) || models.length < 1 || models.length > 2) throw new Error("invalid default model catalog");
+  const ids = new Set<string>();
+  for (const model of models) {
+    validateDefaultSource(model, value.schemaVersion === 3);
+    if (value.schemaVersion === 3) {
+      const entry = model as CatalogModel;
+      if (ids.has(entry.id)) throw new Error("duplicate default model identifier");
+      ids.add(entry.id);
+    }
   }
+  if (value.schemaVersion === 3 && !ids.has("weiguang-default")) throw new Error("default catalog must retain Weiguang");
   return value as unknown as CompanionManifest;
 }
+
+function validateDefaultSource(value: unknown, catalog: boolean): void {
+  if (!record(value) || !keys(value, ["title", "url", "sha256", "bytes", ...(catalog ? ["id", "license"] : [])], ["localTest"])
+    || !validTitle(value.title) || !digest(value)
+    || (value.localTest !== undefined && value.localTest !== true)
+    || typeof value.url !== "string" || value.url.length > 2_048 || /[\p{Cc}\\]/u.test(value.url)) {
+    throw new Error("invalid starter character metadata");
+  }
+  if (catalog && (!isDefaultModelId(value.id) || !record(value.license) || !keys(value.license, ["title", "text"])
+    || !validTitle(value.license.title) || typeof value.license.text !== "string" || !value.license.text.trim()
+    || Buffer.byteLength(value.license.text) > 100 * 1024 || value.license.text.includes("\0"))) throw new Error("invalid starter character license");
+  const url = new URL(value.url);
+  if (!url.pathname.toLowerCase().endsWith(".vrm") || url.username || url.password || url.hash || (url.protocol !== "https:"
+    && !(value.localTest === true && url.protocol === "http:" && url.hostname === "127.0.0.1"
+      && /^http:\/\/127\.0\.0\.1(?::\d+)?\//u.test(value.url)))) {
+    throw new Error("invalid starter character download source");
+  }
+}
+function validTitle(value: unknown): value is string { return typeof value === "string" && Boolean(value.trim()) && value.length <= 128 && !/[\p{Cc}]/u.test(value); }
 
 export function assertWindowsGuiExecutable(bytes: Buffer): void {
   if (bytes.length < 64 || bytes.readUInt16LE(0) !== 0x5a4d) throw new Error("invalid embedded Windows executable");
@@ -129,7 +170,7 @@ export function assertWindowsGuiExecutable(bytes: Buffer): void {
     || bytes.readUInt16LE(pe + 24 + 68) !== 2) throw new Error("embedded executable must be Windows x64 GUI PE32+");
 }
 
-async function downloadCharacter(source: CompanionManifest["defaultModel"], directory: string, request: typeof fetch, signal?: AbortSignal): Promise<void> {
+async function downloadCharacter(source: DefaultModelSource, directory: string, filename: string, request: typeof fetch, signal?: AbortSignal): Promise<void> {
   const timeout = AbortSignal.timeout(30_000);
   const downloadSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   const response = await characterResponse(source.url, request, downloadSignal);
@@ -162,9 +203,9 @@ async function downloadCharacter(source: CompanionManifest["defaultModel"], dire
     await file.sync();
     await file.close(); file = undefined;
     downloadSignal.throwIfAborted();
-    const modelFile = join(directory, "default-model.vrm");
+    const modelFile = join(directory, filename);
     if (await exists(modelFile)) {
-      const cached = await ordinaryFile(directory, "default-model.vrm", LIMIT);
+      const cached = await ordinaryFile(directory, filename, LIMIT);
       try { assertDigest(cached, source); return; }
       catch { /* Replace only this validated ordinary cache file, after the replacement has passed its digest. */ }
     }

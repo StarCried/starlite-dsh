@@ -132,7 +132,7 @@ describe("Windows launcher contract", () => {
     const child=Object.assign(new EventEmitter(),{unref:vi.fn()});spawnMock.mockReturnValueOnce(child);
     const started=launchWindowsPet({port:43123,token:"a".repeat(43)},{host});
     await vi.waitFor(()=>expect(spawnMock).toHaveBeenCalledOnce());child.emit("spawn");await started;
-    expect(prepareMock).toHaveBeenCalledWith(expect.objectContaining({cacheDirectory:host==="windows"?"C:\\StarLite-fixture\\Local\\StarCried\\StarLite\\companions":"/mnt/c/StarLite-fixture/Local/StarCried/StarLite/companions",acquireDefaultModel:true}));
+    expect(prepareMock).toHaveBeenCalledWith(expect.objectContaining({cacheDirectory:host==="windows"?"C:\\StarLite-fixture\\Local\\StarCried\\StarLite\\companions":"/mnt/c/StarLite-fixture/Local/StarCried/StarLite/companions",defaultModelId:"weiguang-default"}));
     expect(execFileMock).toHaveBeenCalledTimes(host==="windows"?1:3);
     expect(spawnMock.mock.calls[0]![0]).toBe(executable);
     expect(spawnMock.mock.calls[0]![2].detached).toBe(host === "windows");

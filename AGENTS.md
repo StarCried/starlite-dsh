@@ -61,6 +61,11 @@
 - Run narrow package tests first, then `pnpm check` and Rust checks.
 - Test the packed bundle in an isolated DSH profile and verify fail-open DSH
   behavior when the adapter is incompatible.
+- Native GUI acceptance uses `tauri build --no-bundle`; plain `cargo build
+  --release` can retain the development URL instead of embedded frontend assets.
+  For isolated native acceptance, override the Tauri identifier in a local-only
+  build config; changing APPDATA/USERPROFILE is not a reliable Windows Known
+  Folder or single-instance boundary. Never replace the daily companion instance.
 - Preserve exact-name animation validation. Disabled mappings stay neutral.
   Model-only onboarding directly imports standard humanoid VRM 0/1 files.
   Blink and eye tracking are optional capabilities; missing bindings disable

@@ -169,7 +169,11 @@ fn has_model(current: &DesktopSettings, id: &str) -> bool {
 
 fn adopt_default_identity(current: &mut DesktopSettings, descriptor: &DefaultDescriptor) -> bool {
     let Some(model) = current.models.iter_mut().find(|model| {
-        model.data.backend == ModelBackend::Vrm && model.data.source_sha256 == descriptor.sha256
+        // Only adopt an ordinary import. A misconfigured catalog with identical
+        // bytes must never rename another default or replace its license.
+        !settings::is_default_model_id(&model.id)
+            && model.data.backend == ModelBackend::Vrm
+            && model.data.source_sha256 == descriptor.sha256
     }) else {
         return false;
     };
@@ -405,5 +409,31 @@ mod tests {
             value["models"][1][key] = bad;
             assert!(decode_descriptors(&serde_json::to_vec(&value).unwrap()).is_err());
         }
+    }
+
+    #[test]
+    fn adopting_an_import_never_renames_another_default_with_the_same_digest() {
+        let mut current = DesktopSettings::default();
+        let original: settings::LibraryModel = serde_json::from_value(serde_json::json!({
+            "id":settings::DEFAULT_MODEL_ID,"title":"Weiguang", "backend":"vrm", "modelPath":"model.vrm",
+            "sourceSha256":"a".repeat(64), "animations":[], "vrm":{"animations":[]},
+            "mappings":{"idle":"Idle","working":null,"completed":null,"error":null,"blocked":null,"approval":null,"click":[],"ambient":[]},
+            "license":{"title":"Weiguang","text":"Original terms"}
+        })).unwrap();
+        current.models.push(original);
+        let fish = decode_descriptors(&serde_json::to_vec(&catalog()).unwrap())
+            .unwrap()
+            .remove(1);
+        assert!(!adopt_default_identity(&mut current, &fish));
+        assert_eq!(current.models[0].id, settings::DEFAULT_MODEL_ID);
+        assert_eq!(
+            current.models[0].data.license.as_ref().unwrap().text,
+            "Original terms"
+        );
+        current.models[0].id = "ordinary-import".into();
+        current.active_model_id = Some("ordinary-import".into());
+        assert!(adopt_default_identity(&mut current, &fish));
+        assert_eq!(current.models[0].id, "bluefish-default");
+        assert_eq!(current.active_model_id.as_deref(), Some("bluefish-default"));
     }
 }

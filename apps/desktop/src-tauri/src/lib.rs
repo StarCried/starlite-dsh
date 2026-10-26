@@ -16,6 +16,13 @@ fn get_settings(app: AppHandle) -> settings::DesktopSettings {
 }
 
 #[tauri::command]
+async fn get_default_models() -> Result<Vec<default_model::DefaultModelSummary>, String> {
+    tauri::async_runtime::spawn_blocking(default_model::available_models)
+        .await
+        .map_err(|_| "无法读取示例模型目录。".to_string())?
+}
+
+#[tauri::command]
 async fn inspect_model(
     path: String,
     animation_sources: Option<Vec<settings::AnimationSource>>,
@@ -196,6 +203,7 @@ pub fn run() {
         .manage(settings::SettingsWriteState::default())
         .invoke_handler(tauri::generate_handler![
             get_settings,
+            get_default_models,
             inspect_model,
             prepare_model,
             select_model,

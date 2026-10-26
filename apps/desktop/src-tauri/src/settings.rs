@@ -11,6 +11,9 @@ use tauri::{AppHandle, Manager};
 
 pub const SETTINGS_SCHEMA_VERSION: u32 = 4;
 pub const DEFAULT_MODEL_ID: &str = "weiguang-default";
+pub fn is_default_model_id(id: &str) -> bool {
+    matches!(id, DEFAULT_MODEL_ID | "bluefish-default")
+}
 const SETTINGS_LIMIT: usize = 4 * 1024 * 1024;
 
 #[derive(Default)]
@@ -299,7 +302,7 @@ impl DesktopSettings {
             let selected = self.models.iter().find(|model| &model.id == id);
             match selected {
                 Some(model) if model.data.backend == ModelBackend::Vrm => {}
-                None if id == DEFAULT_MODEL_ID => {}
+                None if is_default_model_id(id) => {}
                 _ => return Err("请选择已导入的 VRM 模型。".into()),
             }
         }
@@ -342,7 +345,7 @@ impl DesktopSettings {
     pub fn remove_model(&mut self, id: &str) -> Result<Option<LibraryModel>, String> {
         let removed = if let Some(index) = self.models.iter().position(|model| model.id == id) {
             Some(self.models.remove(index))
-        } else if id == DEFAULT_MODEL_ID && self.active_model_id.as_deref() == Some(id) {
+        } else if is_default_model_id(id) && self.active_model_id.as_deref() == Some(id) {
             // A starter download may not yet have created an installed entry.
             None
         } else {
@@ -616,7 +619,7 @@ fn validate_settings(settings: &DesktopSettings) -> Result<(), String> {
     if let Some(id) = &settings.active_model_id {
         match settings.models.iter().find(|model| &model.id == id) {
             Some(model) if model.data.backend == ModelBackend::Vrm => {}
-            None if id == DEFAULT_MODEL_ID => {}
+            None if is_default_model_id(id) => {}
             _ => return Err("invalid active model selection".into()),
         }
     }
@@ -926,6 +929,22 @@ mod tests {
             assert!(restored.models.is_empty());
             assert!(restored.active_model_id.is_none());
         }
+    }
+
+    #[test]
+    fn pending_bluefish_selection_round_trips_and_removal_preserves_weiguang() {
+        let mut current = DesktopSettings::default();
+        current.add_model(test_model(DEFAULT_MODEL_ID)).unwrap();
+        current.select(Some("bluefish-default".into())).unwrap();
+        let restored = decode_settings(&settings_bytes(&current).unwrap()).unwrap();
+        assert_eq!(
+            restored.active_model_id.as_deref(),
+            Some("bluefish-default")
+        );
+        current.remove_model("bluefish-default").unwrap();
+        assert!(current.active_model_id.is_none());
+        assert_eq!(current.models[0].id, DEFAULT_MODEL_ID);
+        assert!(current.select(Some("unknown-default".into())).is_err());
     }
 
     #[test]

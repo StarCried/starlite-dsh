@@ -3,7 +3,7 @@ import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {startSettings} from "../src/settings.js";
-import type {AnimationMappings, DesktopPreferences, DesktopSettings, LibraryModel, ModelAdjustments} from "../src/types.js";
+import type {AnimationMappings, DefaultModelSummary, DesktopPreferences, DesktopSettings, LibraryModel, ModelAdjustments} from "../src/types.js";
 const native=vi.hoisted(() => ({invoke:vi.fn(),open:vi.fn(),listen:vi.fn(async () => () => {}),emitTo:vi.fn(async () => undefined)}));
 vi.mock("@tauri-apps/api/core",() => ({invoke:native.invoke}));
 vi.mock("@tauri-apps/plugin-dialog",() => ({open:native.open}));
@@ -31,10 +31,11 @@ beforeEach(() => {
 });
 afterEach(() => {vi.unstubAllGlobals();vi.restoreAllMocks();});
 
-async function launch(initial:DesktopSettings=installed,prepared:DesktopSettings|Error=initial) {
+async function launch(initial:DesktopSettings=installed,prepared:DesktopSettings|Error=initial,defaults:DefaultModelSummary[]=[{id:"weiguang-default",title:"微光"}]) {
  current=structuredClone(initial);
  native.invoke.mockImplementation(async (command:string,args?:NativeArgs) => {
   if(command==="get_settings")return structuredClone(current);
+  if(command==="get_default_models")return structuredClone(defaults);
   if(command==="prepare_model"){if(prepared instanceof Error)throw prepared;current=structuredClone(prepared);}
   else if(command==="get_model_license")return terms;
   else if(command==="select_model")current={...current,activeModelId:args!.modelId!};
@@ -57,6 +58,26 @@ function edit(id:string,value:string) {
 }
 
 describe("settings model library",() => {
+ it("offers only staged examples and reads Bluefish terms before selecting or downloading it",async()=>{
+  await launch(installed,installed,[{id:"weiguang-default",title:"微光"},{id:"bluefish-default",title:"蓝色大肥鱼"}]);
+  expect([...document.querySelectorAll(".model-choice[data-model-id] strong")].map(item=>item.textContent)).toEqual(["微光","蓝色大肥鱼"]);
+  document.querySelector<HTMLButtonElement>('[aria-label="蓝色大肥鱼的许可"]')!.click();
+  await vi.waitFor(()=>expect(document.querySelector("dialog[open]")).not.toBeNull());
+  expect(native.invoke).toHaveBeenCalledWith("get_model_license",{modelId:"bluefish-default"});
+  expect(current.activeModelId).toBe("weiguang-default");
+  expect(native.invoke.mock.calls.some(([command])=>command==="select_model"||command==="install_model")).toBe(false);
+  document.querySelector<HTMLDialogElement>("dialog")!.close();
+  document.querySelector<HTMLButtonElement>('[data-model-id="bluefish-default"]')!.click();
+  await vi.waitFor(()=>expect(current.activeModelId).toBe("bluefish-default"));
+  expect(document.getElementById("settings-status")!.textContent).toContain("重启 DSH 后自动下载蓝色大肥鱼资源");
+  expect(current.models).toEqual([model]);
+  expect(document.getElementById("mapping-section")!.hidden).toBe(true);
+ });
+ it("never advertises an unreleased example absent from the native catalog",async()=>{
+  await launch(installed,installed,[]);
+  expect(document.querySelector('[data-model-id="bluefish-default"]')).toBeNull();
+  expect(document.querySelector('[data-model-id="weiguang-default"]')).not.toBeNull();
+ });
  it.each([false,true])("rechecks installed motions without passing the program Idle as a user file (custom motion: %s)",async customMotion => {
   const external=customMotion?[{name:"Wave",path:"C:/models/wave.vrma"}]:[];
   const other:LibraryModel={...custom,modelPath:"C:/models/other.vrm",vrm:{animations:[{name:"StarLiteIdle",path:"C:/models/program-idle.vrma"},...external],profilePath:"C:/models/other-profile.json"}};
@@ -116,7 +137,7 @@ describe("settings model library",() => {
   await launch(empty,installed);
   expect(native.open).not.toHaveBeenCalled();expect(document.querySelector(".model-license-dialog")).toBeNull();
   expect(activeIdle().value).toBe("RelaxedBreath");
-  expect(native.invoke.mock.calls.map(([command])=>command)).toEqual(["get_settings","prepare_model"]);
+  expect(native.invoke.mock.calls.map(([command])=>command)).toEqual(["get_settings","get_default_models","prepare_model"]);
   expect(document.body.textContent).not.toContain("（进阶）");
   expect(document.body.textContent).not.toContain("无需额外配置");
  });
@@ -181,9 +202,10 @@ it("honors the last click even when it returns to the already active model",asyn
  await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledWith("select_model",{modelId:"weiguang-default"}));
  expect(current.activeModelId).toBe("weiguang-default");
 });
-it("does not reintroduce an absent starter after removal or opting out",async () => {
+it("offers an uninstalled example without reactivating it after removal or opting out",async () => {
  await launch({...empty,activeModelId:null});
- expect(document.querySelector('[data-model-id="weiguang-default"]')).toBeNull();
+ expect(document.querySelector('[data-model-id="weiguang-default"]')!.textContent).toContain("未安装");
+ expect(current.activeModelId).toBeNull();expect(current.models).toHaveLength(0);
  expect(button().disabled).toBe(false);
 });
 
@@ -198,7 +220,8 @@ it.each(["weiguang-default","custom"])("removes %s with explicit confirmation an
  [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(item=>item.textContent==="移除")!.click();
  await vi.waitFor(()=>expect(current.models).toHaveLength(1));
  expect(current.models[0]!.id).not.toBe(id);expect(current.activeModelId).toBeNull();
- expect(document.querySelector('[data-model-id="'+id+'"]')).toBeNull();
+ if(id==="custom") expect(document.querySelector('[data-model-id="'+id+'"]')).toBeNull();
+ else expect(document.querySelector('[data-model-id="'+id+'"]')!.textContent).toContain("未安装");
  expect(document.getElementById("mapping-section")!.hidden).toBe(true);
  expect(document.getElementById("settings-status")!.textContent).toBe("模型已移除");
 });
@@ -235,7 +258,7 @@ it("reports cleanup failure as saved removal rather than claiming a failed setti
  document.querySelector<HTMLButtonElement>('[aria-label="移除微光"]')!.click();
  document.querySelector<HTMLDialogElement>(".model-remove-dialog")!.close("remove");
  await vi.waitFor(()=>expect(document.getElementById("settings-status")!.textContent).toContain("本机副本清理未完成"));
- expect(document.querySelector('[data-model-id="weiguang-default"]')).toBeNull();
+ expect(document.querySelector('[data-model-id="weiguang-default"]')!.textContent).toContain("未安装");
  expect(document.getElementById("settings-error")!.textContent).toBe("");
  expect(document.getElementById("mapping-section")!.hidden).toBe(true);
 });
@@ -245,7 +268,7 @@ it("allows cancelling a pending starter download without an installed model entr
  document.querySelector<HTMLButtonElement>('[aria-label="移除微光"]')!.click();
  document.querySelector<HTMLDialogElement>(".model-remove-dialog")!.close("remove");
  await vi.waitFor(()=>expect(current.activeModelId).toBeNull());
- expect(current.models).toHaveLength(0);expect(document.querySelector('[data-model-id="weiguang-default"]')).toBeNull();
+ expect(current.models).toHaveLength(0);expect(document.querySelector('[data-model-id="weiguang-default"]')!.textContent).toContain("未安装");
 });
 it("preserves legacy models without advertising disabled Inochi2D as VRM",async () => {
  await launch({...installed,models:[model,{...custom,backend:"inochi2d"}]});
@@ -297,6 +320,7 @@ describe("automatic settings persistence",() => {
   current=structuredClone(empty);
   native.invoke.mockImplementation(async(command:string,args?:NativeArgs) => {
    if(command==="get_settings")return structuredClone(empty);
+   if(command==="get_default_models")return [{id:"weiguang-default",title:"微光"}];
    if(command==="prepare_model")return new Promise<DesktopSettings>(resolve=>{prepared=resolve;});
    if(command==="select_model"){current={...current,activeModelId:args!.modelId!};return structuredClone(current);}
    if(command==="patch_preferences"){current={...current,preferences:{...current.preferences,...args!.patch!}};return structuredClone(current);}

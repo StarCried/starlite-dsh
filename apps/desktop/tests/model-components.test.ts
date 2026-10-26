@@ -71,7 +71,7 @@ it("cancelling the picker performs no inspection or installation", async () => {
 });
 
 it("preserves the current model after invalid VRM inspection", async () => {
-  invoke.mockResolvedValue(installed);await startSettings();
+  invoke.mockImplementation(async (command:string) => command === "get_default_models" ? [] : installed);await startSettings();
   invoke.mockRejectedValueOnce(new Error("invalid model"));open.mockResolvedValue("new.vrm");add().click();
   await vi.waitFor(() => expect(document.getElementById("settings-error")!.textContent).toContain("invalid model"));
   expect(add().disabled).toBe(false);

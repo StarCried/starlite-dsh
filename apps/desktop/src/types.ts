@@ -51,6 +51,9 @@ export interface LibraryModel extends InstalledModel {
   adjustments?: ModelAdjustments;
 }
 
+/** Available only when the launcher staged a validated download descriptor. */
+export interface DefaultModelSummary { id: string; title: string }
+
 export interface ModelRemoval {
   settings: DesktopSettings;
   cleanupWarning?: string;

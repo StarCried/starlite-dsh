@@ -5,7 +5,7 @@ import { showModelLicense } from "./model-license-dialog.js";
 import { showModelImportHelp } from "./model-import-dialog.js";
 import { showModelInspection } from "./model-inspection-dialog.js";
 import { ModelAdjustmentsPanel } from "./model-adjustments.js";
-import type { AnimationMappings, AnimationState, DesktopPreferences, DesktopSettings, LibraryModel, ModelInspection, ModelInstallRequest, ModelRemoval } from "./types.js";
+import type { AnimationMappings, AnimationState, DefaultModelSummary, DesktopPreferences, DesktopSettings, LibraryModel, ModelInspection, ModelInstallRequest, ModelRemoval } from "./types.js";
 
 const STATES: ReadonlyArray<{ key: AnimationState; label: string; required: boolean }> = [
   { key: "idle", label: "待机（必填）", required: true },
@@ -42,9 +42,17 @@ export async function startSettings(): Promise<void> {
   const saveStatus = requiredElement("settings-status");
   const form = requiredElement<HTMLFormElement>("settings-form");
   const mappings = requiredElement("animation-mappings");
+  let defaultModels: DefaultModelSummary[] = [];
+  try { defaultModels = await invoke<DefaultModelSummary[]>("get_default_models"); }
+  catch (reason) { error.textContent = safeError(reason); }
 
   populatePreferences(settings.preferences);
   const activeModel = () => settings.models.find(model => model.id === settings.activeModelId);
+  const pendingDownload = () => !activeModel() ? defaultModels.find(model => model.id === settings.activeModelId) : undefined;
+  const savedStatus = (otherwise: string) => {
+    const pending = pendingDownload();
+    return pending ? `重启 DSH 后自动下载${pending.title}资源。` : otherwise;
+  };
   const mergedPreferences = (): DesktopPreferences => {
     const visible = readPreferences();
     return {...settings.preferences, ...Object.fromEntries([...dirtyPreferences.keys()].map(key => [key, visible[key]]))};
@@ -58,7 +66,7 @@ export async function startSettings(): Promise<void> {
     const signature = JSON.stringify([settings.activeModelId, settings.models.map(({ id, title, backend, animations }) => ({ id, title, backend, count: animations.length }))]);
     if (signature !== displayedLibrary) {
       displayedLibrary = signature;
-      renderLibrary(library, settings.models, settings.activeModelId, selectModel, viewLicense, viewInfo, removeModel, openImport);
+      renderLibrary(library, settings.models, defaultModels, settings.activeModelId, selectModel, viewLicense, viewInfo, removeModel, openImport);
     }
     // Saving a preference or mapping must not replace the focused field.
     const mappingSignature = JSON.stringify([model?.id, model?.animations]);
@@ -91,7 +99,7 @@ export async function startSettings(): Promise<void> {
         if (settingsRevision === revision) adoptSettings(result);
         failedWrites.delete(next.key);
         error.textContent = [...failedWrites.values()].at(-1) ?? "";
-        saveStatus.textContent = failedWrites.size ? "部分更改未保存" : settings.activeModelId === "weiguang-default" && !activeModel() ? "重启 DSH 后自动下载微光资源。" : "已自动保存";
+        saveStatus.textContent = failedWrites.size ? "部分更改未保存" : savedStatus("已自动保存");
         for (const waiter of next.waiters) waiter.resolve(result);
       } catch (reason) {
         failedWrites.set(next.key, safeError(reason));
@@ -220,11 +228,11 @@ export async function startSettings(): Promise<void> {
   globalThis.addEventListener("pagehide", () => { adjustmentsPanel.destroy(); globalThis.removeEventListener("blur", flushAdjustments); unlisten(); }, {once:true});
   try {
     await enqueueWrite("prepare", () => invoke<DesktopSettings>("prepare_model"));
-    if (!preferenceRevision && !failedWrites.size) saveStatus.textContent = settings.activeModelId === "weiguang-default" && !activeModel() ? "重启 DSH 后自动下载微光资源。" : "更改自动保存";
+    if (!preferenceRevision && !failedWrites.size) saveStatus.textContent = savedStatus("更改自动保存");
   } catch (reason) { saveStatus.textContent = "默认模型尚未就绪"; reportFailure(reason); }
 }
 
-function renderLibrary(host: HTMLElement, models: LibraryModel[], activeModelId: string | null, select: (id: string | null) => void, viewLicense: (id: string) => Promise<void>, viewInfo: (id: string) => Promise<void>, remove: (id: string, title: string) => Promise<void>, add: () => void): void {
+function renderLibrary(host: HTMLElement, models: LibraryModel[], defaults: DefaultModelSummary[], activeModelId: string | null, select: (id: string | null) => void, viewLicense: (id: string) => Promise<void>, viewInfo: (id: string) => Promise<void>, remove: (id: string, title: string) => Promise<void>, add: () => void): void {
   host.replaceChildren();
   for (const model of models) {
     const card = document.createElement("article");
@@ -245,17 +253,19 @@ function renderLibrary(host: HTMLElement, models: LibraryModel[], activeModelId:
     actions.append(info, license, removalButton(model.id, model.title, remove));
     card.append(button, actions); host.append(card);
   }
-  if (activeModelId === "weiguang-default" && !models.some(model => model.id === "weiguang-default")) {
+  for (const model of defaults.filter(item => !models.some(installed => installed.id === item.id))) {
     const preparing = document.createElement("article"); preparing.className = "model-card";
+    preparing.dataset.active = String(activeModelId === model.id);
     const choose = document.createElement("button"); choose.type = "button"; choose.className = "model-choice";
-    choose.dataset.modelId = "weiguang-default"; choose.setAttribute("aria-pressed", String(activeModelId === "weiguang-default"));
-    const title = document.createElement("strong"); title.textContent = "微光";
-    const hint = document.createElement("span"); hint.textContent = "待下载 · 点击使用";
-    choose.append(title, hint); choose.addEventListener("click", () => select("weiguang-default"));
-    const license = document.createElement("button"); license.type = "button"; license.className = "model-license"; license.textContent = "查看许可"; license.setAttribute("aria-label", "微光的许可");
-    license.addEventListener("click", () => { void viewLicense("weiguang-default"); });
+    choose.dataset.modelId = model.id; choose.setAttribute("aria-pressed", String(activeModelId === model.id));
+    const title = document.createElement("strong"); title.textContent = model.title;
+    const hint = document.createElement("span"); hint.textContent = activeModelId === model.id ? "待下载 · 重启 DSH 获取" : "示例 · 未安装 · 点击使用";
+    choose.append(title, hint); choose.addEventListener("click", () => select(model.id));
+    const license = document.createElement("button"); license.type = "button"; license.className = "model-license"; license.textContent = "查看许可"; license.setAttribute("aria-label", model.title + "的许可");
+    license.addEventListener("click", () => { void viewLicense(model.id); });
     const actions = document.createElement("div"); actions.className = "model-card-actions";
-    actions.append(license, removalButton("weiguang-default", "微光", remove));
+    actions.append(license);
+    if (activeModelId === model.id) actions.append(removalButton(model.id, model.title, remove));
     preparing.append(choose, actions); host.append(preparing);
   }
   const none = document.createElement("button");

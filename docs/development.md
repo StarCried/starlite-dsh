@@ -58,7 +58,17 @@ pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/Star
 node tools/local-character-server.mjs "E:/path/to/Weiguang-StarLite.vrm" "release-output/local-character.json"
 ```
 
-服务只向本机提供该 VRM 的不可变快照，不开放目录或 CORS。描述文件包含 `title`、本机 `url`、文件 `sha256`／`bytes` 和 `localTest: true`。程序 manifest 使用 schema 2 的 `defaultModel` 字段引用这些信息；没有第二个模型摘要或解包步骤。不要把私有模型放进项目目录。
+服务只向本机提供该 VRM 的不可变快照，不开放目录或 CORS。单模型描述文件包含 `title`、本机 `url`、文件 `sha256`／`bytes` 和 `localTest: true`，继续使用 schema 2 的 `defaultModel`，没有解包步骤。不要把私有模型放进项目目录。
+
+本地验收两个示例时，先准备有效微光来源描述（可使用已有公开描述），然后明确传入蓝鱼 VRM 与共用条款：
+
+```powershell
+pnpm serve:character -- --bluefish C:\Models\Bluefish.vrm docs/bluefish-license.md release-output/default-model.json release-output/local-examples.json
+```
+
+保持该服务运行，使用 `pnpm stage:plugin -- release-output/local-examples.json`。输出为 schema 3 的 `defaultModels` 目录，各项包含 `id`、`title`、`url`、`sha256`、`bytes`、`license: { title, text }`，本机项还含 `localTest: true`。许可正文进入程序元数据，模型不进入程序包。仅 `weiguang-default` 与可选 `bluefish-default` 有效；必须保留微光，首次仍选择微光。未发布的蓝鱼不会自动加入原有 schema 2 清单，没有正式来源时不得填写占位哈希或虚构下载地址。
+
+设置展示已配置的示例，下载前可查看各自许可。切到未缓存示例后，重启 DSH 只获取该项；不显示或选择自定义模型不获取任何示例。移除保留一个「未安装」入口，但不会自动恢复。开发 EXE 直接启动时，需要把启动器生成的 `default-model.json` 放在 EXE 同目录；schema 3 本机描述使用 `models` 和固定 `<id>.vrm` 文件名，不含下载 URL，不能把来源清单直接当成本机描述。
 
 回到 **Windows PowerShell**，显式 staging 并打包：
 

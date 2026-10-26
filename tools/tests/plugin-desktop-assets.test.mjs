@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { assertDesktopExecutable, assertDesktopManifest, assertDefaultModel, sha256 } from "../plugin-desktop-assets.mjs";
+import { assertDesktopExecutable, assertDesktopManifest, assertDefaultModel, assertDefaultModelCatalog, sha256 } from "../plugin-desktop-assets.mjs";
 import { stagePluginDesktop } from "../stage-plugin-desktop.mjs";
 
 const temporary = [];
@@ -42,6 +42,22 @@ it("stages only four program files, binds version and hash, and leaves character
   expect(assertDesktopManifest(manifest, { expectedVersion: version })).toBe(manifest);
   expect(() => assertDesktopManifest(manifest, { expectedVersion: "0.2.0" })).toThrow(/version/);
   await stagePluginDesktop(root, join(root, "release-output/character.json"));
+});
+
+it("stages a metadata-only catalog with independent licenses and refuses local sources at the release gate", async () => {
+  const root = await fixture();
+  const catalog = {schemaVersion:3,defaultModels:[
+    {...starter,id:"weiguang-default",license:{title:"Weiguang",text:"Synthetic independent terms"}},
+    {...starter,id:"bluefish-default",title:"Bluefish",url:"http://127.0.0.1:44123/bluefish.vrm",localTest:true,license:{title:"Bluefish",text:"水原镜（Mzkagami）"}},
+  ]};
+  await file(root,"release-output/catalog.json",JSON.stringify(catalog));
+  const manifest = await stagePluginDesktop(root,join(root,"release-output/catalog.json"));
+  expect(manifest.schemaVersion).toBe(3);
+  expect(manifest.defaultModels).toEqual(catalog.defaultModels);
+  expect(()=>assertDesktopManifest(manifest,{allowLocalTest:false})).toThrow(/publicly released/);
+  for(const defaults of [[],[catalog.defaultModels[1]],[catalog.defaultModels[0],catalog.defaultModels[0]],[{...catalog.defaultModels[0],license:{title:"Terms",text:""}}]]) {
+    expect(()=>assertDefaultModelCatalog({schemaVersion:3,defaultModels:defaults})).toThrow();
+  }
 });
 
 it("rejects corrupt or console executables and mismatched hashes", () => {

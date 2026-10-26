@@ -44,7 +44,7 @@ pnpm check:release
 pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.2.tgz "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.2_x64-setup.exe"
 ```
 
-资源描述只包含 `title`、固定 HTTPS `url`、VRM 的 `sha256` 和 `bytes`；程序清单 schema 为 2，使用 `defaultModel` 字段。首次元数据命令提供 staging 所需的依赖通知，打包后再生成最终 SHA256SUMS、CycloneDX SBOM 和第三方许可证。
+旧单模型资源描述包含 `title`、固定 HTTPS `url`、VRM 的 `sha256` 和 `bytes`；程序清单 schema 2 的 `defaultModel` 继续兼容。两个示例使用 schema 3 的 `defaultModels` 数组，每项另有固定 `id` 和完整 `license: { title, text }`，由 staging 原样验证。保留微光为初始默认，只获取当前选择。程序包可包含条款元数据，不包含模型、贴图或角色工程。正式发布门逐项拒绝本机来源；蓝鱼只有取得实际发布文件的地址、字节数和 SHA-256 后才能加入公开目录。本地目录的准备方法见 [开发说明](development.md)。首次元数据命令提供 staging 所需的依赖通知，打包后再生成最终 SHA256SUMS、CycloneDX SBOM 和第三方许可证。
 
 模型地址可使用直接返回 VRM 的固定 HTTPS 来源，或规范的 `https://github.com/{owner}/{repo}/releases/download/{tag}/{file}.vrm` Release 资产地址。只有后者允许手动跟随最多 3 次跳转，且每次目标必须是 `release-assets.githubusercontent.com` 的 HTTPS 地址，无用户信息、非 443 端口或片段；不携带 Cookie、Authorization 等请求头。其他来源仍拒绝重定向，不使用泛用分享链接。所有请求和内容下载共用一次 30 秒超时，最终仍严格校验长度及 SHA-256；临时签名地址不写入缓存或日志。正式打包前在全新缓存中验证实际下载，再验证离线缓存；仅通过 URL 格式检查不代表资源可用。
 

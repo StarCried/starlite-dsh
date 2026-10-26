@@ -3,24 +3,26 @@ import { randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertPortableExecutable } from "./pack-portable.mjs";
-import { assertDesktopManifest, assertDefaultModel, DESKTOP_ASSET_DIRECTORY, DESKTOP_ASSET_FILES, ordinaryBuildFile, sha256 } from "./plugin-desktop-assets.mjs";
+import { assertDesktopManifest, assertDefaultModel, assertDefaultModelCatalog, manifestDefaultModels, MAX_MANIFEST_BYTES, DESKTOP_ASSET_DIRECTORY, DESKTOP_ASSET_FILES, ordinaryBuildFile, sha256 } from "./plugin-desktop-assets.mjs";
 
 /** Explicitly stage a built program and a separately delivered character reference. */
 export async function stagePluginDesktop(rootDirectory, descriptorPath) {
   const root = await realpath(rootDirectory);
   const descriptorInfo = await lstat(descriptorPath).catch(() => undefined);
-  if (!descriptorInfo?.isFile() || descriptorInfo.isSymbolicLink() || descriptorInfo.size < 1 || descriptorInfo.size > 16 * 1024) {
+  if (!descriptorInfo?.isFile() || descriptorInfo.isSymbolicLink() || descriptorInfo.size < 1 || descriptorInfo.size > MAX_MANIFEST_BYTES) {
     throw Error("pass a bounded, ordinary starter character descriptor JSON file");
   }
-  const defaultModel = assertDefaultModel(JSON.parse(await readFile(descriptorPath, "utf8")));
+  const descriptor = JSON.parse(await readFile(descriptorPath, "utf8"));
+  const models = descriptor?.schemaVersion === 3 ? assertDefaultModelCatalog(descriptor)
+    : {schemaVersion:2,defaultModel:assertDefaultModel(descriptor)};
   const packageJson = JSON.parse(await ordinaryBuildFile(root, "packages/dsh-plugin/package.json"));
   const config = JSON.parse(await ordinaryBuildFile(root, "apps/desktop/src-tauri/tauri.conf.json"));
   if (config.version !== packageJson.version || config.productName !== "StarLite for DSH") throw Error("desktop and plugin versions must match");
   const executable = await ordinaryBuildFile(root, "apps/desktop/src-tauri/target/release/dsh-inochi2d-pet.exe");
   assertPortableExecutable(executable);
   const manifest = assertDesktopManifest({
-    schemaVersion: 2, version: packageJson.version, platform: "windows-x64",
-    executable: { file: "dsh-inochi2d-pet.exe", sha256: sha256(executable), bytes: executable.length }, defaultModel,
+    ...models, version: packageJson.version, platform: "windows-x64",
+    executable: { file: "dsh-inochi2d-pet.exe", sha256: sha256(executable), bytes: executable.length },
   });
   const entries = [
     ["dsh-inochi2d-pet.exe", executable],
@@ -52,5 +54,5 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const arguments_ = process.argv.slice(2).filter(argument => argument !== "--");
   if (arguments_.length !== 1) throw Error("usage: pnpm stage:plugin -- /absolute/path/default-model.json");
   const manifest = await stagePluginDesktop(resolve(dirname(fileURLToPath(import.meta.url)), ".."), resolve(arguments_[0]));
-  console.log(`Staged Windows desktop ${manifest.version}; ${manifest.defaultModel.localTest ? "LOCAL TEST ONLY" : "HTTPS character reference"}; no model files included.`);
+  console.log(`Staged Windows desktop ${manifest.version}; ${manifestDefaultModels(manifest).some(model=>model.localTest) ? "LOCAL TEST ONLY" : "HTTPS character references"}; no model files included.`);
 }

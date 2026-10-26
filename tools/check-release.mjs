@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { checkProgramAssets } from "./release-assets.mjs";
 import { checkReleaseInstaller } from "./release-installer.mjs";
 import { checkPluginPackage } from "./check-plugin-package.mjs";
-import { assertDesktopExecutable, assertDesktopManifest, ordinaryBuildFile } from "./plugin-desktop-assets.mjs";
+import { assertDesktopExecutable, assertDesktopManifest, MAX_MANIFEST_BYTES, ordinaryBuildFile } from "./plugin-desktop-assets.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const failures = [];
@@ -55,7 +55,7 @@ failures.push(...await checkProgramAssets(root));
 const version = versions[0]?.[1] ?? "unknown";
 await requiredFile(`packages/dsh-plugin/.pack/dsh-starlite-${version}.tgz`, 1);
 try {
-  const manifest = assertDesktopManifest(JSON.parse(await ordinaryBuildFile(root, "packages/dsh-plugin/assets/windows-x64/manifest.json", 16 * 1024)), { expectedVersion: version, allowLocalTest: localTest });
+  const manifest = assertDesktopManifest(JSON.parse(await ordinaryBuildFile(root, "packages/dsh-plugin/assets/windows-x64/manifest.json", MAX_MANIFEST_BYTES)), { expectedVersion: version, allowLocalTest: localTest });
   const embedded = await ordinaryBuildFile(root, "packages/dsh-plugin/assets/windows-x64/dsh-inochi2d-pet.exe");
   assertDesktopExecutable(embedded, manifest.executable);
   const built = await ordinaryBuildFile(root, "apps/desktop/src-tauri/target/release/dsh-inochi2d-pet.exe");

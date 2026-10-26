@@ -48,6 +48,13 @@
 - Creating a remote repository, pushing, publishing npm, publishing a Windows
   installer, and releasing a model each require separate approval.
 - Alpha Windows installers remain unsigned and must document SmartScreen.
+- Default examples remain separate VRMs. The launcher accepts legacy schema 2
+  Weiguang descriptors and schema 3 metadata catalogs with `weiguang-default`
+  and optional `bluefish-default`; acquire only the selected ID. Never add an
+  unverified URL/hash to make an unavailable example appear in settings.
+  Catalog licenses must be readable without downloading model bytes. The model
+  terms in `docs/` mirror the same documents in the StarLite component repository;
+  keep those texts synchronized without changing the program's BSD license.
 
 ## Validation
 

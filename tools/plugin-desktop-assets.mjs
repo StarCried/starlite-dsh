@@ -6,6 +6,7 @@ import { assertPortableExecutable } from "./pack-portable.mjs";
 export const DESKTOP_ASSET_DIRECTORY = "packages/dsh-plugin/assets/windows-x64";
 export const DESKTOP_ASSET_FILES = ["dsh-inochi2d-pet.exe", "LICENSE", "THIRD_PARTY_LICENSES.txt", "manifest.json"];
 export const MAX_DESKTOP_BYTES = 64 * 1024 * 1024;
+export const MAX_MANIFEST_BYTES = 256 * 1024;
 const HASH = /^[0-9a-f]{64}$/u;
 const VERSION = /^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/u;
 
@@ -34,14 +35,40 @@ export function assertDefaultModel(value, { allowLocalTest = true } = {}) {
 }
 
 export function assertDesktopManifest(value, { allowLocalTest = true, expectedVersion } = {}) {
-  record(value, ["schemaVersion", "version", "platform", "executable", "defaultModel"]);
+  record(value, ["schemaVersion", "version", "platform", "executable", value?.schemaVersion === 3 ? "defaultModels" : "defaultModel"]);
   record(value.executable, ["file", "sha256", "bytes"]);
-  if (value.schemaVersion !== 2 || value.platform !== "windows-x64" || typeof value.version !== "string" || !VERSION.test(value.version)
+  if (![2,3].includes(value.schemaVersion) || value.platform !== "windows-x64" || typeof value.version !== "string" || !VERSION.test(value.version)
     || (expectedVersion !== undefined && value.version !== expectedVersion)
     || value.executable.file !== "dsh-inochi2d-pet.exe" || typeof value.executable.sha256 !== "string" || !HASH.test(value.executable.sha256)
     || !boundedBytes(value.executable.bytes)) throw Error("invalid desktop executable identity or version");
-  assertDefaultModel(value.defaultModel, { allowLocalTest });
+  if (value.schemaVersion === 2) assertDefaultModel(value.defaultModel, { allowLocalTest });
+  else assertDefaultModelCatalog({schemaVersion:3,defaultModels:value.defaultModels}, {allowLocalTest});
+  if (Buffer.byteLength(JSON.stringify(value)) > MAX_MANIFEST_BYTES) throw Error("desktop manifest exceeds its size limit");
   return value;
+}
+
+/** Catalogs contain metadata only; model bytes stay outside every program artifact. */
+export function assertDefaultModelCatalog(value, {allowLocalTest = true} = {}) {
+  record(value, ["schemaVersion", "defaultModels"]);
+  if (value.schemaVersion !== 3 || !Array.isArray(value.defaultModels) || value.defaultModels.length < 1 || value.defaultModels.length > 2) throw Error("invalid default model catalog");
+  const ids = new Set();
+  for (const model of value.defaultModels) {
+    record(model, ["id","title","url","sha256","bytes","license","localTest"], ["id","title","url","sha256","bytes","license"]);
+    if (!["weiguang-default","bluefish-default"].includes(model.id) || ids.has(model.id)) throw Error("invalid or duplicate default model identifier");
+    ids.add(model.id);
+    const {id: _id, license, ...source} = model;
+    assertDefaultModel(source, {allowLocalTest});
+    record(license, ["title","text"]);
+    if (typeof license.title !== "string" || !license.title.trim() || license.title.length > 128 || /[\p{Cc}]/u.test(license.title)
+      || typeof license.text !== "string" || !license.text.trim() || Buffer.byteLength(license.text) > 100 * 1024 || license.text.includes("\0")) throw Error("invalid default model license");
+  }
+  if (!ids.has("weiguang-default")) throw Error("default model catalog must retain Weiguang");
+  if (Buffer.byteLength(JSON.stringify(value)) > MAX_MANIFEST_BYTES) throw Error("default model catalog exceeds its size limit");
+  return value;
+}
+
+export function manifestDefaultModels(manifest) {
+  return manifest.schemaVersion === 2 ? [manifest.defaultModel] : manifest.defaultModels;
 }
 
 export function assertDesktopExecutable(bytes, expected) {

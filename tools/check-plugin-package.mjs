@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertDesktopExecutable, assertDesktopManifest, DESKTOP_ASSET_DIRECTORY, DESKTOP_ASSET_FILES, ordinaryBuildFile } from "./plugin-desktop-assets.mjs";
+import { assertDesktopExecutable, assertDesktopManifest, manifestDefaultModels, MAX_MANIFEST_BYTES, DESKTOP_ASSET_DIRECTORY, DESKTOP_ASSET_FILES, ordinaryBuildFile } from "./plugin-desktop-assets.mjs";
 
 /** Validate the delivered archive, not only the assets staged for the next pack. */
 export async function checkPluginPackage(root, { allowLocalTest = true } = {}) {
@@ -27,15 +27,15 @@ export async function checkPluginPackage(root, { allowLocalTest = true } = {}) {
     throw new Error(`unexpected npm tarball contents:\n${entries.join("\n")}`);
   }
   const extract = (name, maxBuffer) => execFileSync("tar", ["-xOzf", tarArchive, name], { cwd: root, maxBuffer, windowsHide: true });
-  const manifest = assertDesktopManifest(JSON.parse(extract("package/assets/windows-x64/manifest.json", 16 * 1024).toString("utf8")), { expectedVersion: packageJson.version, allowLocalTest });
+  const manifest = assertDesktopManifest(JSON.parse(extract("package/assets/windows-x64/manifest.json", MAX_MANIFEST_BYTES).toString("utf8")), { expectedVersion: packageJson.version, allowLocalTest });
   assertDesktopExecutable(extract("package/assets/windows-x64/dsh-inochi2d-pet.exe", 64 * 1024 * 1024), manifest.executable);
   for (const name of DESKTOP_ASSET_FILES) {
-    const maximum = name === "manifest.json" ? 16 * 1024 : name.endsWith(".exe") ? 64 * 1024 * 1024 : 8 * 1024 * 1024;
+    const maximum = name === "manifest.json" ? MAX_MANIFEST_BYTES : name.endsWith(".exe") ? 64 * 1024 * 1024 : 8 * 1024 * 1024;
     const packed = extract(`package/assets/windows-x64/${name}`, maximum);
     const staged = await ordinaryBuildFile(root, `${DESKTOP_ASSET_DIRECTORY}/${name}`, maximum);
     if (!packed.equals(staged)) throw Error(`packed desktop asset differs from staging: ${name}`);
   }
-  return { archive, fileCount: entries.length, bytes: info.size, localTest: manifest.defaultModel.localTest === true };
+  return { archive, fileCount: entries.length, bytes: info.size, localTest: manifestDefaultModels(manifest).some(model => model.localTest === true) };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

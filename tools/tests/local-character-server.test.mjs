@@ -51,6 +51,21 @@ it("refuses invalid input and never overwrites an existing descriptor", async ()
   expect(await readFile(options.descriptorPath, "utf8")).toBe("existing");
 });
 
+it("adds an explicitly supplied local Bluefish and its terms without fetching the existing Weiguang source",async()=>{
+  const options = await fixture(), root = dirname(options.modelPath);
+  const licensePath = join(root,"fish-terms.md"), weiguangDescriptorPath = join(root,"weiguang.json");
+  const terms = "# 蓝色大肥鱼\n\n模型制作：水原镜（Mzkagami）。Synthetic test terms.";
+  const weiguang = {title:"Weiguang",url:"https://example.invalid/weiguang.vrm",bytes:1,sha256:"a".repeat(64)};
+  await writeFile(licensePath,terms);await writeFile(weiguangDescriptorPath,JSON.stringify(weiguang));
+  const {server,descriptor}=await serveLocalCharacter({...options,bluefish:{licensePath,weiguangDescriptorPath}});servers.push(server);
+  expect(descriptor.schemaVersion).toBe(3);
+  expect(descriptor.defaultModels[0]).toMatchObject({...weiguang,id:"weiguang-default"});
+  expect(descriptor.defaultModels[1]).toMatchObject({id:"bluefish-default",license:{title:"蓝色大肥鱼",text:terms},localTest:true});
+  const response=await fetch(descriptor.defaultModels[1].url);
+  expect(sha256(Buffer.from(await response.arrayBuffer()))).toBe(descriptor.defaultModels[1].sha256);
+  expect(JSON.stringify(descriptor)).not.toContain(options.modelPath);
+});
+
 it("starts through the documented two-argument CLI and keeps serving the VRM", async () => {
   const options = await fixture();
   const child = spawn(process.execPath, [fileURLToPath(new URL("../local-character-server.mjs", import.meta.url)), options.modelPath, options.descriptorPath], {stdio:["ignore","pipe","pipe"],windowsHide:true});

@@ -185,3 +185,58 @@ it("leaves Inochi2D geometry and bubble layout unchanged",async()=>{
   expect(send).not.toHaveBeenCalled();expect(anchor.style.getPropertyValue("--model-top")).toBe("");
   expect(anchor.style.getPropertyValue("--bubble-top")).toBe("");await bridge.destroy();
 });
+
+it("attaches every bubble kind to the model's stable visible top without moving its surface",async()=>{
+  height=220;
+  const send=vi.fn(async()=>{}),invalidate=vi.fn(),layout=vi.fn();
+  const bridge=new ModelViewportBridge(host,anchor,send,invalidate,vi.fn(),vi.fn(),bubble,layout);
+  await bridge.configure(true);
+  const fixed=bridge.modelRect;
+  for(const top of [20,140]){
+    bridge.setBubbleAnchor({x:150,y:top});
+    for(const kind of ["notice","billing","work","question"]){
+      bubble.dataset.bubbleKind=kind;resized();event(expanded);
+      expect(Number.parseFloat(anchor.style.getPropertyValue("--bubble-top"))+height+24).toBe(fixed.top+top);
+      expect(anchor.style.getPropertyValue("--bubble-left")).toBe("278px");
+      expect(bridge.modelRect).toEqual(fixed);
+    }
+  }
+  const changes=layout.mock.calls.length;
+  bridge.setBubbleAnchor({x:150,y:140});
+  expect(layout).toHaveBeenCalledTimes(changes);
+  expect(send).toHaveBeenCalledOnce();expect(invalidate).toHaveBeenCalledOnce();
+});
+
+it("budgets the visible head offset at screen edges and does not apply DPR twice",async()=>{
+  height=700;
+  const send=vi.fn(async()=>{}),bridge=new ModelViewportBridge(host,anchor,send,vi.fn(),vi.fn(),vi.fn(),bubble);
+  await bridge.configure(true);
+  bridge.setBubbleAnchor({x:160,y:100});bridge.setScreenSpace(356);
+  expect(anchor.style.getPropertyValue("--bubble-max-height")).toBe("420px");
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("188px");
+  for(const dpi of [1,1.25,1.5,2]){
+    const point=bridge.hostPosition({x:Math.round((300-128)*dpi),y:Math.round((356-532)*dpi)},dpi);
+    bridge.setScreenSpace(point.y);
+    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("188px");
+    expect(anchor.style.getPropertyValue("--bubble-max-height")).toBe("420px");
+  }
+  bridge.setScreenSpace(0);
+  expect(anchor.style.getPropertyValue("--bubble-max-height")).toBe("128px");
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("544px");
+  expect(send).toHaveBeenCalledOnce();
+});
+
+it("accepts resized anchors and forgets them on model replacement without extra native geometry",async()=>{
+  height=62;bubble.dataset.bubbleKind="billing";
+  const send=vi.fn(async()=>{}),bridge=new ModelViewportBridge(host,anchor,send,vi.fn(),vi.fn(),vi.fn(),bubble);
+  await bridge.configure(true);bridge.setBubbleAnchor({x:160,y:100});
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("546px");
+  await bridge.configure(true,.5);bridge.setBubbleAnchor({x:80,y:50});
+  expect(anchor.style.getPropertyValue("--bubble-top")).toBe("496px");
+  expect(anchor.style.getPropertyValue("--bubble-left")).toBe("208px");
+  for(const value of [undefined,{x:NaN,y:100},{x:160,y:Infinity}]){
+    bridge.setBubbleAnchor(value);
+    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("486px");
+  }
+  expect(send).toHaveBeenCalledTimes(2);
+});

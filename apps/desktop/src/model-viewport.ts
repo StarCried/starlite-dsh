@@ -1,3 +1,5 @@
+import type {ModelBubbleAnchor} from "./vendor-types.js";
+
 export interface ModelViewport {
   left: number;
   top: number;
@@ -34,6 +36,7 @@ export class ModelViewportBridge {
   #menuScale: number | undefined;
   #viewport = BASE;
   #screenSpace: number | undefined;
+  #bubbleAnchor: ModelBubbleAnchor | undefined;
   readonly #bubbleResize: ResizeObserver;
   readonly #bubbleVisibility: MutationObserver;
   #pending = 0;
@@ -101,6 +104,14 @@ export class ModelViewportBridge {
     this.#layoutBubble();
   }
 
+  /** The renderer projects a cached reference pose, never the current action.
+   * Updating this attachment point must not resize the native window. */
+  setBubbleAnchor(value: ModelBubbleAnchor | undefined): void {
+    this.#bubbleAnchor = value && Number.isFinite(value.x) && Number.isFinite(value.y)
+      ? {x:value.x,y:value.y} : undefined;
+    this.#layoutBubble();
+  }
+
   ready(): Promise<void> { return this.#tail; }
 
   get modelRect(): {left:number;top:number;width:number;height:number} {
@@ -111,28 +122,36 @@ export class ModelViewportBridge {
   destroy(): Promise<void> {
     this.#bubbleResize.disconnect();
     this.#bubbleVisibility.disconnect();
+    this.#bubbleAnchor = undefined;
     return this.configure(false);
   }
 
   #layoutBubble(): void {
     if (!this.#vrm) return;
     const above = this.#screenSpace;
-    const inset = this.bubble.dataset.bubbleKind === "billing" ? BILLING_INSET : 0;
+    // Legacy renderers use empty portrait headroom for billing. A real visible
+    // head anchor already excludes that space, so every card shares its gap.
+    const inset = this.#bubbleAnchor?.y ?? (this.bubble.dataset.bubbleKind === "billing" ? BILLING_INSET : 0);
     const maxHeight = above === undefined ? MAX_BUBBLE_HEIGHT
       : Math.max(MIN_BUBBLE_HEIGHT,Math.min(MAX_BUBBLE_HEIGHT,Math.floor(above+inset-BUBBLE_MARGIN-BUBBLE_GAP)));
     const previousHeight = this.anchor.style.getPropertyValue("--bubble-max-height");
     const previousTop = this.anchor.style.getPropertyValue("--bubble-top");
+    const previousLeft = this.anchor.style.getPropertyValue("--bubble-left");
     this.anchor.style.setProperty("--bubble-max-height",`${maxHeight}px`);
     const height = this.bubble.hidden ? 0 : this.bubble.getBoundingClientRect().height;
     const visibleHeight = Number.isFinite(height) && height > 0 ? Math.min(Math.ceil(height),maxHeight) : 0;
-    // Anchor to the portrait, not the transparent gesture margin above it.
+    // Anchor to the visible model, falling back to the portrait for old runtimes.
     // Measure after setting max-height so a previously clipped question cannot
     // leave a later short balance card stuck at its old position. At the screen
     // edge only the bubble moves; the model keeps its user-chosen screen anchor.
     const workTop = above === undefined ? BUBBLE_MARGIN : PORTRAIT_TOP-above+BUBBLE_MARGIN;
     const top = Math.max(BUBBLE_MARGIN,PORTRAIT_TOP+inset-BUBBLE_GAP-visibleHeight,workTop);
+    const halfWidth = (BASE.width-32)/2;
+    const left = Math.max(BUBBLE_MARGIN+halfWidth,Math.min(this.#viewport.width-BUBBLE_MARGIN-halfWidth,
+      -this.#viewport.left+(this.#bubbleAnchor?.x ?? this.#viewport.baseWidth/2)));
     this.anchor.style.setProperty("--bubble-top",`${top}px`);
-    if(previousHeight!==`${maxHeight}px`||previousTop!==`${top}px`)this.bubbleChanged();
+    this.anchor.style.setProperty("--bubble-left",`${left}px`);
+    if(previousHeight!==`${maxHeight}px`||previousTop!==`${top}px`||previousLeft!==`${left}px`)this.bubbleChanged();
   }
 
   #apply(value: ModelViewport | null): void {

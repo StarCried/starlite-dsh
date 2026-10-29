@@ -344,6 +344,40 @@ describe("desktop hidden-window startup", () => {
     expect(native.connection).toHaveBeenCalledTimes(1);
   });
 
+  it("reprojects the current bubble anchor on resize and clears it while replacing a model", async () => {
+    const anchor=document.querySelector<HTMLElement>("#pet-view")!,host=document.querySelector<HTMLElement>("#model")!;
+    let y=20;
+    controller.getBubbleAnchor=vi.fn(()=>({x:100,y}));
+    const ready=startPet();
+    await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    const nativeResizes=native.invoke.mock.calls.filter(([command])=>command==="set_model_viewport").length;
+    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("528px");
+    y=35;host.dispatchEvent(new CustomEvent("model-viewport-change",{bubbles:true}));
+    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("543px");
+    y=40;globalThis.dispatchEvent(new Event("resize"));
+    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("548px");
+    const resized=structuredClone(settings);resized.preferences.scale=.8;
+    vi.mocked(controller.setDisplaySize!).mockImplementation(()=>{y=50;});
+    settingsListener!({payload:resized});
+    await vi.waitFor(()=>expect(anchor.style.getPropertyValue("--bubble-top")).toBe("558px"));
+    const second={...controller,getBubbleAnchor:vi.fn(()=>({x:125,y:120}))};
+    let finishMount!:(value:WidgetController)=>void;
+    native.mountModel.mockImplementationOnce(()=>new Promise<WidgetController>(resolve=>{finishMount=resolve;}));
+    const next=structuredClone(resized);next.models.push({...structuredClone(next.models[0]!),id:"second",modelPath:"C:\\fixture\\second.vrm"});next.activeModelId="second";
+    settingsListener!({payload:next});
+    await vi.waitFor(()=>expect(native.mountModel).toHaveBeenCalledTimes(2));
+    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("508px");
+    const oldReads=vi.mocked(controller.getBubbleAnchor).mock.calls.length;
+    host.dispatchEvent(new CustomEvent("model-viewport-change",{bubbles:true}));
+    expect(controller.getBubbleAnchor).toHaveBeenCalledTimes(oldReads);
+    finishMount(second);
+    await vi.waitFor(()=>expect(anchor.style.getPropertyValue("--bubble-top")).toBe("628px"));
+    expect(anchor.style.getPropertyValue("--bubble-left")).toBe("253px");
+    expect(native.invoke.mock.calls.filter(([command])=>command==="set_model_viewport")).toHaveLength(nativeResizes+1);
+    expect(native.connection).toHaveBeenCalledTimes(1);
+  });
+
   it("applies mapping and privacy edits without remounting the renderer", async () => {
     const ready = startPet();
     await vi.waitFor(() => expect(show).toHaveBeenCalledOnce());

@@ -17,6 +17,9 @@
   scope change.
 - Model-only alpha hit testing and transparent background passthrough are approved.
   Keep cursor coordinates in memory; do not log or transmit desktop input.
+- Bubble placement uses the runtime's cached reference-pose `getBubbleAnchor()`
+  in host CSS pixels (no DPR or canvas padding). Reproject after resize, clear on
+  model replacement, and never resize the native window from animated bounds.
 
 ## Security and privacy
 

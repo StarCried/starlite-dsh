@@ -169,6 +169,10 @@ export async function startPet(): Promise<void> {
     ()=>{void window.hide();void invoke("open_settings");},
     bubble,updateRegion,
   );
+  const syncBubbleAnchor = () => viewport.setBubbleAnchor(controller?.getBubbleAnchor?.());
+  // The runtime emits this after resize/reprojection. Read the current mounted
+  // controller rather than retaining a callback into a replaced model.
+  host.addEventListener("model-viewport-change",syncBubbleAnchor);
   await listen<{x: number; y: number}>("pet-cursor", ({payload}) => {
     controller?.setPointerPosition(payload.x, payload.y);
   });
@@ -178,6 +182,7 @@ export async function startPet(): Promise<void> {
   const syncWindowGeometry = () => {
     if (closing) return;
     if (modelAvailable()) interaction.resizeFixedViewport(innerWidth,innerHeight);
+    syncBubbleAnchor();
     updateRegion();
     updateMenuRegion();
     void hostPosition.sync().catch(()=>{});
@@ -226,6 +231,7 @@ export async function startPet(): Promise<void> {
     fees.cancel(); cancelClick(); workBubble.clear(); bubble.hidden = true;
     animator?.disconnected(); animator = undefined;
     slot.destroy(); controller = undefined;
+    syncBubbleAnchor();
     interaction.update(undefined);
     if (!enabled) void window.hide();
     await viewport.configure(enabled,next.preferences.scale);
@@ -243,6 +249,7 @@ export async function startPet(): Promise<void> {
       mounted.setPointerEnabled?.(settings.preferences.pointerEnabled!==false);
       mounted.setModelAdjustments?.(selectedModel(settings)?.adjustments ?? {});
       mounted.setBubblesVisible?.(false);
+      syncBubbleAnchor();
       void hostPosition.sync().catch(()=>{});
       mounted.observeInteractionMask(mask => {
         // A frame drawn before the native resize still describes the old
@@ -270,7 +277,7 @@ export async function startPet(): Promise<void> {
   };
   const closeQuickMenu=()=>{++menuOpenGeneration;quickMenu?.close();syncMenuSurface();};
   globalThis.addEventListener("blur",closeQuickMenu);
-  globalThis.addEventListener("pagehide", () => { closing=true; if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { closing=true; if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu);host.removeEventListener("model-viewport-change",syncBubbleAnchor); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
   let preparing = true;
   await listen<{modelId: string; adjustments: ModelAdjustments}>("model-adjustments-preview", ({payload}) => {
@@ -299,6 +306,7 @@ export async function startPet(): Promise<void> {
         void viewport.configure(modelAvailable(),scale).then(()=>{
           if(settings.preferences.scale!==scale)return;
           controller?.setDisplaySize?.(320*scale,480*scale);
+          syncBubbleAnchor();
           controller?.refreshInteractionMask?.();
         }).catch(()=>{});
       }

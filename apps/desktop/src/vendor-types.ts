@@ -17,6 +17,8 @@ export interface AnimationClip {
 }
 
 export type AnimationPlaybackResult = "completed" | "interrupted" | "stopped";
+/** Stable visible-model top in host-relative CSS px, without canvas padding or DPR. */
+export interface ModelBubbleAnchor { x: number; y: number }
 export interface ModelHitMask {
   width: number; height: number; left: number; top: number;
   displayWidth: number; displayHeight: number;
@@ -40,6 +42,7 @@ export interface WidgetController {
   ): Promise<AnimationPlaybackResult>;
   stopAnimation(): void;
   resetCamera(): void;
+  getBubbleAnchor?(): ModelBubbleAnchor | undefined;
   observeInteractionMask(listener?: (mask: ModelHitMask | undefined) => void): void;
   setPointerPosition(clientX: number, clientY: number): void;
   setHostPosition?(x: number, y: number): void;

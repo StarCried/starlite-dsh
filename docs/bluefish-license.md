@@ -8,6 +8,8 @@
 
 模型来源：<https://booth.pm/en/items/8777527>
 
+作者视频：[蓝色大肥鱼 · Warudo 模型配布与演示](https://www.bilibili.com/video/BV1WNt86bEyu/)
+
 条款版本：2026-10-26
 
 本条款仅适用于蓝色大肥鱼模型及其附带素材。StarLite 程序代码继续使用 BSD-2-Clause；程序许可证不授予本模型的再分发、商业使用或其他权利。本角色为社区创作，不是 DeepSeek 官方模型。

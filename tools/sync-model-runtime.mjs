@@ -38,7 +38,7 @@ for(const [name,source]of sources){
  if(isAbsolute(part)||part.startsWith(".."))throw new Error("runtime destination leaves workspace");
  const packageRoot=dirname(source),pkg=JSON.parse(await readFile(resolve(packageRoot,"package.json"),"utf8"));
  if(pkg.name!==RUNTIME_PACKAGES[name])throw new Error(`unexpected runtime package: ${pkg.name}`);
- const notices=name==="core"?["LICENSE"]:["LICENSE","THIRD_PARTY_NOTICES.md","THIRD_PARTY_LICENSES.txt"];
+ const notices=name==="core"?["LICENSE"]:["LICENSE","THIRD_PARTY_NOTICES.md","THIRD_PARTY_LICENSES.txt","BUNDLED_MOTIONS.md","BUNDLED_MOTIONS.json"];
  for(const notice of notices)if(!(await stat(resolve(packageRoot,notice))).isFile())throw new Error("missing runtime license");
  await mkdir(output,{recursive:true});
  const files={};

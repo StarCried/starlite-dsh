@@ -4,6 +4,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 export const RUNTIMES=["core","vrm"];
 export const RUNTIME_PACKAGES={core:"@starcried/starlite-core",vrm:"@starcried/starlite-vrm"};
 const REQUIRED={core:["index.js","index.d.ts","dialogue.js","dialogue.d.ts","bubble.js","bubble.d.ts"],vrm:["index.js","widget.css"]};
+const NOTICES={core:["LICENSE"],vrm:["LICENSE","THIRD_PARTY_NOTICES.md","THIRD_PARTY_LICENSES.txt","BUNDLED_MOTIONS.md","BUNDLED_MOTIONS.json"]};
 export async function assertRuntimeLayout(directory){
  const info=await lstat(directory);
  if(!info.isDirectory()||info.isSymbolicLink())throw new Error("runtime staging directory must be an ordinary directory");
@@ -16,7 +17,7 @@ export async function assertRuntime(name,directory,provenance=true){
  if(!provenance)return;
  const metadata=JSON.parse(await readFile(resolve(directory,"runtime-provenance.json"),"utf8"));
  if(metadata.schemaVersion!==2||metadata.package!==RUNTIME_PACKAGES[name]||!metadata.files||!Object.keys(metadata.files).length)throw new Error(`invalid ${name} provenance`);
- for(const file of REQUIRED[name])if(!metadata.files[file])throw new Error(`unhashed ${name} artifact`);
+ for(const file of [...REQUIRED[name],...NOTICES[name]])if(!metadata.files[file])throw new Error(`unhashed ${name} artifact: ${file}`);
  for(const [file,expected]of Object.entries(metadata.files)){
   const path=resolve(directory,file),part=relative(directory,path);
   if(isAbsolute(part)||part.startsWith("..")||isAbsolute(file)||file.includes("\\")||!/^([a-f0-9]{64})$/u.test(expected))throw new Error("invalid provenance path or hash");

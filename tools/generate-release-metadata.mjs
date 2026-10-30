@@ -70,7 +70,7 @@ await writeFile(resolve(output, "sbom.cdx.json"), `${JSON.stringify(sbom, null, 
 const licenses = await collectLicenseTexts(nodeLicenses, cargoMetadata.packages);
 const runtimeLicenses = (await Promise.all(RUNTIMES.map(async name => {
   const directory = resolve(root, "apps/desktop/public/runtime", name);
-  return `${name} embedded runtime\n${await readFile(resolve(directory, "LICENSE"), "utf8")}\n${name === "core" ? "" : await readFile(resolve(directory, "THIRD_PARTY_LICENSES.txt"), "utf8")}`;
+  return `${name} embedded runtime\n${await readFile(resolve(directory, "LICENSE"), "utf8")}\n${name === "core" ? "" : await readFile(resolve(directory, "THIRD_PARTY_LICENSES.txt"), "utf8") + "\n" + await readFile(resolve(directory, "BUNDLED_MOTIONS.md"), "utf8")}`;
 }))).join("\n");
 await writeFile(
   resolve(output, "THIRD_PARTY_LICENSES.txt"),

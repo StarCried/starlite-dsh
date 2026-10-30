@@ -24,7 +24,10 @@ pub fn with_write<T>(
     operation: impl FnOnce() -> Result<T, String>,
 ) -> Result<T, String> {
     let state = app.state::<SettingsWriteState>();
-    let _guard = state.0.lock().map_err(|_| "模型设置忙，请重试。")?;
+    let _guard = state
+        .0
+        .lock()
+        .map_err(|_| crate::locale::message("模型设置忙，请重试。"))?;
     operation()
 }
 
@@ -303,7 +306,7 @@ impl DesktopSettings {
             match selected {
                 Some(model) if model.data.backend == ModelBackend::Vrm => {}
                 None if is_default_model_id(id) => {}
-                _ => return Err("请选择已导入的 VRM 模型。".into()),
+                _ => return Err(crate::locale::message("请选择已导入的 VRM 模型。").into()),
             }
         }
         self.active_model_id = id;
@@ -334,9 +337,9 @@ impl DesktopSettings {
             .models
             .iter_mut()
             .find(|model| model.id == id)
-            .ok_or("没有找到该模型，请重新打开设置。")?;
+            .ok_or(crate::locale::message("没有找到该模型，请重新打开设置。"))?;
         if model.data.backend != ModelBackend::Vrm {
-            return Err("本版本仅支持调整 VRM 模型。".into());
+            return Err(crate::locale::message("本版本仅支持调整 VRM 模型。").into());
         }
         model.adjustments = (!adjustments.is_empty()).then_some(adjustments);
         Ok(())
@@ -349,7 +352,7 @@ impl DesktopSettings {
             // A starter download may not yet have created an installed entry.
             None
         } else {
-            return Err("没有找到该模型，请重新打开设置。".into());
+            return Err(crate::locale::message("没有找到该模型，请重新打开设置。").into());
         };
         if self.active_model_id.as_deref() == Some(id) {
             self.active_model_id = None;
@@ -492,13 +495,30 @@ fn validate_model(model: &InstalledModel) -> Result<(), String> {
             }
         }
         (ModelBackend::Vrm, None, Some(data)) => {
-            let resource_names: HashSet<_> = data
+            let mut resource_names: HashSet<_> = data
                 .animations
                 .iter()
                 .map(|item| item.name.as_str())
                 .chain(data.embedded_animations.iter().map(String::as_str))
                 .collect();
-            if data.animations.len() + data.embedded_animations.len() != names.len()
+            let unique_sources =
+                data.animations.len() + data.embedded_animations.len() == resource_names.len();
+            // Built-ins have no per-model file. All other entries must still
+            // match declared resources exactly; never accept invented clips.
+            for (name, duration) in crate::vrm::BUILTIN_GESTURES {
+                if names.contains(name) {
+                    let entry = model
+                        .animations
+                        .iter()
+                        .find(|item| item["name"] == name)
+                        .unwrap();
+                    if entry["durationMs"].as_f64() != Some(duration) {
+                        return Err("built-in animation duration mismatch".into());
+                    }
+                    resource_names.insert(name);
+                }
+            }
+            if !unique_sources
                 || resource_names != names
                 || data
                     .animations
@@ -564,9 +584,9 @@ pub fn decode_settings(bytes: &[u8]) -> Result<DesktopSettings, String> {
                 .map(str::to_owned)
                 .unwrap_or_else(|| {
                     if model["backend"] == "inochi2d" {
-                        "Inochi2D 模型".into()
+                        crate::locale::message("Inochi2D 模型").into()
                     } else {
-                        "VRM 模型".into()
+                        crate::locale::message("VRM 模型").into()
                     }
                 });
             if enabled && model["backend"] == "vrm" {
@@ -582,8 +602,24 @@ pub fn decode_settings(bytes: &[u8]) -> Result<DesktopSettings, String> {
         value["activeModelId"] = active.map(Value::String).unwrap_or(Value::Null);
         value["schemaVersion"] = SETTINGS_SCHEMA_VERSION.into();
     }
-    let settings: DesktopSettings =
+    let mut settings: DesktopSettings =
         serde_json::from_value(value).map_err(|error| error.to_string())?;
+    // Existing imports gain gestures without reimporting, downloading, or
+    // changing the user's state/click/ambient mappings.
+    for model in &mut settings.models {
+        if model.data.backend == ModelBackend::Vrm {
+            for clip in crate::vrm::builtin_gesture_catalog() {
+                if !model
+                    .data
+                    .animations
+                    .iter()
+                    .any(|item| item["name"] == clip["name"])
+                {
+                    model.data.animations.push(clip);
+                }
+            }
+        }
+    }
     validate_settings(&settings)?;
     Ok(settings)
 }
@@ -645,7 +681,9 @@ fn settings_bytes(settings: &DesktopSettings) -> Result<Vec<u8>, String> {
     validate_settings(settings)?;
     let bytes = serde_json::to_vec_pretty(settings).map_err(|error| error.to_string())?;
     if bytes.len() > SETTINGS_LIMIT {
-        return Err("模型库设置已达到容量上限，请使用更精简的许可信息。".into());
+        return Err(
+            crate::locale::message("模型库设置已达到容量上限，请使用更精简的许可信息。").into(),
+        );
     }
     Ok(bytes)
 }
@@ -1159,9 +1197,13 @@ mod tests {
         );
         assert!(restored.models[1].adjustments.is_none());
         assert_eq!(restored.active_model_id.as_deref(), Some("second"));
+        let mut expected = current.models[0].data.clone();
+        expected
+            .animations
+            .extend(crate::vrm::builtin_gesture_catalog());
         assert_eq!(
             serde_json::to_value(&restored.models[0].data).unwrap(),
-            serde_json::to_value(&current.models[0].data).unwrap()
+            serde_json::to_value(expected).unwrap()
         );
         current
             .set_model_adjustments("first", ModelAdjustments::default())
@@ -1175,6 +1217,41 @@ mod tests {
             .models[0]
             .adjustments
             .is_none());
+    }
+
+    #[test]
+    fn existing_vrm_imports_gain_gestures_once_without_changing_mappings_or_preferences() {
+        let mut original = DesktopSettings::default();
+        original.add_model(test_model("custom")).unwrap();
+        original.preferences.scale = 0.75;
+        let restored = decode_settings(&settings_bytes(&original).unwrap()).unwrap();
+        assert_eq!(restored.preferences.scale, 0.75);
+        assert_eq!(
+            serde_json::to_value(&restored.models[0].data.mappings).unwrap(),
+            serde_json::to_value(&original.models[0].data.mappings).unwrap()
+        );
+        assert_eq!(
+            restored.models[0]
+                .data
+                .vrm
+                .as_ref()
+                .unwrap()
+                .animations
+                .len(),
+            1
+        );
+        assert_eq!(restored.models[0].data.animations.len(), 4);
+        let again = decode_settings(&settings_bytes(&restored).unwrap()).unwrap();
+        assert_eq!(
+            serde_json::to_value(&again).unwrap(),
+            serde_json::to_value(&restored).unwrap()
+        );
+        let mut selected = restored;
+        selected.models[0].data.mappings.click = vec!["StarLiteHappyWave".into()];
+        selected.models[0].data.mappings.ambient = vec!["StarLiteSleepyStartle".into()];
+        assert!(settings_bytes(&selected).is_ok());
+        selected.models[0].data.animations[1]["durationMs"] = 1.into();
+        assert!(settings_bytes(&selected).is_err());
     }
 
     #[test]

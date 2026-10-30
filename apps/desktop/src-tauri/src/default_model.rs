@@ -67,7 +67,10 @@ pub fn prepare_model(app: &AppHandle) -> Result<DesktopSettings, String> {
     if !needs_default(&current) {
         return Ok(current);
     }
-    let id = current.active_model_id.clone().ok_or(DEFAULT_ERROR)?;
+    let id = current
+        .active_model_id
+        .clone()
+        .ok_or(crate::locale::message(DEFAULT_ERROR))?;
     prepare_default(app, current, &id)
 }
 
@@ -127,7 +130,10 @@ pub fn select_model(app: &AppHandle, model_id: Option<String>) -> Result<Desktop
             .iter()
             .any(|model| model.id == id)
         {
-            return Err("此示例尚未配置下载来源，请使用当前模型或导入 VRM。".into());
+            return Err(crate::locale::message(
+                "此示例尚未配置下载来源，请使用当前模型或导入 VRM。",
+            )
+            .into());
         }
         current = prepare_default(app, current, id)?;
         // A missing local cache is acquired by the plugin on the next DSH
@@ -151,7 +157,7 @@ pub fn model_license(app: &AppHandle, model_id: String) -> Result<Option<ModelLi
             .map(|model| model.license);
     }
     if !settings::is_default_model_id(&model_id) {
-        return Err("没有找到该模型，请重新打开设置。".into());
+        return Err(crate::locale::message("没有找到该模型，请重新打开设置。").into());
     }
     let parent = default_parent()?;
     let Some(descriptor) = read_descriptors(&parent)?
@@ -187,14 +193,17 @@ fn adopt_default_identity(current: &mut DesktopSettings, descriptor: &DefaultDes
 }
 
 fn default_parent() -> Result<PathBuf, String> {
-    let executable = std::env::current_exe().map_err(|_| DEFAULT_ERROR)?;
-    Ok(executable.parent().ok_or(DEFAULT_ERROR)?.to_owned())
+    let executable = std::env::current_exe().map_err(|_| crate::locale::message(DEFAULT_ERROR))?;
+    Ok(executable
+        .parent()
+        .ok_or(crate::locale::message(DEFAULT_ERROR))?
+        .to_owned())
 }
 
 fn model_missing(parent: &Path, descriptor: &DefaultDescriptor) -> Result<bool, String> {
     match fs::symlink_metadata(parent.join(&descriptor.file)) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(true),
-        Err(_) => Err(DEFAULT_ERROR.into()),
+        Err(_) => Err(crate::locale::message(DEFAULT_ERROR).into()),
         Ok(_) => Ok(false),
     }
 }
@@ -203,24 +212,28 @@ fn read_descriptors(parent: &Path) -> Result<Vec<DefaultDescriptor>, String> {
     let path = parent.join("default-model.json");
     match fs::symlink_metadata(&path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
-        Err(_) => return Err(DEFAULT_ERROR.into()),
+        Err(_) => return Err(crate::locale::message(DEFAULT_ERROR).into()),
         Ok(_) => (),
     }
-    let parent_metadata = fs::symlink_metadata(parent).map_err(|_| DEFAULT_ERROR)?;
+    let parent_metadata =
+        fs::symlink_metadata(parent).map_err(|_| crate::locale::message(DEFAULT_ERROR))?;
     if !parent_metadata.is_dir() || linked(&parent_metadata) {
-        return Err(DEFAULT_ERROR.into());
+        return Err(crate::locale::message(DEFAULT_ERROR).into());
     }
-    let bytes = read_regular(&path, 256 * 1024).map_err(|_| DEFAULT_ERROR)?;
+    let bytes =
+        read_regular(&path, 256 * 1024).map_err(|_| crate::locale::message(DEFAULT_ERROR))?;
     decode_descriptors(&bytes)
 }
 
 fn decode_descriptors(bytes: &[u8]) -> Result<Vec<DefaultDescriptor>, String> {
-    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| DEFAULT_ERROR)?;
+    let value: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|_| crate::locale::message(DEFAULT_ERROR))?;
     let legacy = value["schemaVersion"] == 2;
     let models = if legacy {
-        let old: LegacyDescriptor = serde_json::from_value(value).map_err(|_| DEFAULT_ERROR)?;
+        let old: LegacyDescriptor =
+            serde_json::from_value(value).map_err(|_| crate::locale::message(DEFAULT_ERROR))?;
         if old.schema_version != 2 || old.file != "default-model.vrm" {
-            return Err(DEFAULT_ERROR.into());
+            return Err(crate::locale::message(DEFAULT_ERROR).into());
         }
         vec![DefaultDescriptor {
             id: settings::DEFAULT_MODEL_ID.into(),
@@ -235,9 +248,9 @@ fn decode_descriptors(bytes: &[u8]) -> Result<Vec<DefaultDescriptor>, String> {
         }]
     } else {
         let catalog: CatalogDescriptor =
-            serde_json::from_value(value).map_err(|_| DEFAULT_ERROR)?;
+            serde_json::from_value(value).map_err(|_| crate::locale::message(DEFAULT_ERROR))?;
         if catalog.schema_version != 3 {
-            return Err(DEFAULT_ERROR.into());
+            return Err(crate::locale::message(DEFAULT_ERROR).into());
         }
         catalog.models
     };
@@ -247,7 +260,7 @@ fn decode_descriptors(bytes: &[u8]) -> Result<Vec<DefaultDescriptor>, String> {
             .iter()
             .any(|model| model.id == settings::DEFAULT_MODEL_ID)
     {
-        return Err(DEFAULT_ERROR.into());
+        return Err(crate::locale::message(DEFAULT_ERROR).into());
     }
     let mut ids = std::collections::HashSet::new();
     for descriptor in &models {
@@ -270,7 +283,7 @@ fn decode_descriptors(bytes: &[u8]) -> Result<Vec<DefaultDescriptor>, String> {
             || descriptor.license.text.len() > 100 * 1024
             || descriptor.license.text.contains('\0')
         {
-            return Err(DEFAULT_ERROR.into());
+            return Err(crate::locale::message(DEFAULT_ERROR).into());
         }
     }
     Ok(models)
@@ -278,13 +291,15 @@ fn decode_descriptors(bytes: &[u8]) -> Result<Vec<DefaultDescriptor>, String> {
 
 fn checked_model(parent: &Path, descriptor: &DefaultDescriptor) -> Result<vrm::Prepared, String> {
     let path = parent.join(&descriptor.file);
-    let metadata = fs::symlink_metadata(&path).map_err(|_| DEFAULT_ERROR)?;
+    let metadata =
+        fs::symlink_metadata(&path).map_err(|_| crate::locale::message(DEFAULT_ERROR))?;
     if !metadata.is_file() || linked(&metadata) || metadata.len() != descriptor.bytes {
-        return Err(DEFAULT_ERROR.into());
+        return Err(crate::locale::message(DEFAULT_ERROR).into());
     }
-    let prepared = vrm::inspect(&path, &[], None).map_err(|_| DEFAULT_ERROR)?;
+    let prepared =
+        vrm::inspect(&path, &[], None).map_err(|_| crate::locale::message(DEFAULT_ERROR))?;
     if prepared.source_sha256 != descriptor.sha256 || prepared.source_bytes != descriptor.bytes {
-        return Err(DEFAULT_ERROR.into());
+        return Err(crate::locale::message(DEFAULT_ERROR).into());
     }
     Ok(prepared)
 }

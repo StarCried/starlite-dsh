@@ -47,11 +47,15 @@
 
 - Never commit Aka, private StarCried art, Creator projects, or unlicensed
   puppets. Tests use generated artwork-free fixtures.
-- Program releases include only the approved default humanoid Idle motion.
+- Program releases include the approved default humanoid Idle and three optional
+  generic gestures (CuriousPeek, HappyWave, SleepyStartle).
   Preserve its recorded provenance; its breathing layer comes from Warudo,
   so do not describe the motion as wholly original. Weiguang uses its own
   license and stays in a separately delivered, self-contained VRM, never in
-  program artifacts. Other model artwork and motions stay out of the program.
+  program artifacts. Other model artwork and unapproved motions stay out of the program.
+  The gestures live in the shared runtime; native catalogs add them to existing
+  imports without altering mappings or creating per-model motion files. Preserve
+  the recorded Warudo upper-body source for HappyWave.
 - Creating a remote repository, pushing, publishing npm, publishing a Windows
   installer, and releasing a model each require separate approval.
 - Alpha Windows installers remain unsigned and must document SmartScreen.
@@ -79,7 +83,8 @@
   the corresponding behavior without rejecting an otherwise valid model.
   Declared bindings must still reference valid resources. The bundled StarLiteIdle provides baseline
   standing and breathing when the model has no Idle. List embedded standard
-  glTF motions for optional mappings; never invent missing event actions.
+  glTF motions and the three program gestures for optional mappings; never
+  invent missing event actions or automatically replace existing user choices.
   Do not restore the retired custom ZIP resource-pack format or import UI.
 
 ## Commit discipline

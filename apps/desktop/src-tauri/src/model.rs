@@ -59,7 +59,9 @@ fn remove_from_library(
     commit(&current)?;
     let cleanup_warning = cache
         .filter(|cache| cleanup_managed_cache(cache).is_err())
-        .map(|_| "模型已移除，但本机副本清理未完成；原始 VRM 文件未改变。".into());
+        .map(|_| {
+            crate::locale::message("模型已移除，但本机副本清理未完成；原始 VRM 文件未改变。").into()
+        });
     Ok(ModelRemoval {
         settings: current,
         cleanup_warning,
@@ -281,7 +283,7 @@ pub fn install_prepared_character(
                 input
                     .file_stem()
                     .and_then(|name| name.to_str())
-                    .unwrap_or("VRM 模型")
+                    .unwrap_or(crate::locale::message("VRM 模型"))
                     .to_owned()
             })
             .chars()
@@ -292,7 +294,7 @@ pub fn install_prepared_character(
             adjustments: None,
             id: id.unwrap_or_else(|| format!("model-{}", Uuid::new_v4())),
             title: if title.trim().is_empty() {
-                "VRM 模型".into()
+                crate::locale::message("VRM 模型").into()
             } else {
                 title
             },
@@ -352,7 +354,7 @@ pub fn update_mappings(
         .models
         .iter_mut()
         .find(|model| model.id == model_id)
-        .ok_or("没有找到该模型，请重新打开设置。")?;
+        .ok_or(crate::locale::message("没有找到该模型，请重新打开设置。"))?;
     require_supported_backend(model.data.backend)?;
     settings::validate_mappings(&mappings, &model.data.animations)?;
     model.data.mappings = mappings;
@@ -362,7 +364,7 @@ pub fn update_mappings(
 
 fn require_supported_backend(backend: ModelBackend) -> Result<(), String> {
     if backend != ModelBackend::Vrm {
-        return Err("当前版本暂不支持 Inochi2D，请使用 VRM 模型。".into());
+        return Err(crate::locale::message("当前版本暂不支持 Inochi2D，请使用 VRM 模型。").into());
     }
     Ok(())
 }
@@ -374,9 +376,11 @@ fn backend_for_path(path: &std::path::Path) -> Result<ModelBackend, String> {
         .map(str::to_ascii_lowercase)
         .as_deref()
     {
-        Some("inp") => Err("当前版本暂不支持 Inochi2D，请使用 VRM 模型。".into()),
+        Some("inp") => {
+            Err(crate::locale::message("当前版本暂不支持 Inochi2D，请使用 VRM 模型。").into())
+        }
         Some("vrm") => Ok(ModelBackend::Vrm),
-        _ => Err("请选择 VRM .vrm 模型文件。".into()),
+        _ => Err(crate::locale::message("请选择 VRM .vrm 模型文件。").into()),
     }
 }
 

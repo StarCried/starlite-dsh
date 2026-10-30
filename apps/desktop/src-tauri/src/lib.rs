@@ -1,7 +1,9 @@
 mod default_model;
 mod hit_test;
+mod locale;
 mod model;
 mod model_viewport;
+mod native_messages;
 mod settings;
 mod startup;
 mod tray;
@@ -9,6 +11,11 @@ mod vrm;
 
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_window_state::StateFlags;
+
+#[tauri::command]
+fn get_ui_locale() -> &'static str {
+    locale::current()
+}
 
 #[tauri::command]
 fn get_settings(app: AppHandle) -> settings::DesktopSettings {
@@ -19,7 +26,7 @@ fn get_settings(app: AppHandle) -> settings::DesktopSettings {
 async fn get_default_models() -> Result<Vec<default_model::DefaultModelSummary>, String> {
     tauri::async_runtime::spawn_blocking(default_model::available_models)
         .await
-        .map_err(|_| "无法读取示例模型目录。".to_string())?
+        .map_err(|_| crate::locale::message("无法读取示例模型目录。").to_string())?
 }
 
 #[tauri::command]
@@ -32,7 +39,7 @@ async fn inspect_model(
         model::inspect(path, animation_sources.unwrap_or_default(), profile_path)
     })
     .await
-    .map_err(|_| "模型检查失败，请重试。".to_string())?
+    .map_err(|_| crate::locale::message("模型检查失败，请重试。").to_string())?
 }
 
 #[tauri::command]
@@ -58,7 +65,7 @@ async fn remove_model(app: AppHandle, model_id: String) -> Result<model::ModelRe
         })
     })
     .await
-    .map_err(|_| "模型移除失败，请重试。".to_string())?
+    .map_err(|_| crate::locale::message("模型移除失败，请重试。").to_string())?
 }
 
 #[tauri::command]
@@ -90,7 +97,7 @@ async fn get_model_license(
 ) -> Result<Option<settings::ModelLicense>, String> {
     tauri::async_runtime::spawn_blocking(move || default_model::model_license(&app, model_id))
         .await
-        .map_err(|_| "无法读取模型许可，请重试。".to_string())?
+        .map_err(|_| crate::locale::message("无法读取模型许可，请重试。").to_string())?
 }
 
 async fn mutate_model_settings(
@@ -114,7 +121,7 @@ async fn mutate_model_settings(
         })
     })
     .await
-    .map_err(|_| "模型设置操作失败，请重试。".to_string())?
+    .map_err(|_| crate::locale::message("模型设置操作失败，请重试。").to_string())?
 }
 
 #[tauri::command]
@@ -202,6 +209,7 @@ pub fn run() {
         .manage(model_viewport::ModelViewportState::default())
         .manage(settings::SettingsWriteState::default())
         .invoke_handler(tauri::generate_handler![
+            get_ui_locale,
             get_settings,
             get_default_models,
             inspect_model,
@@ -231,6 +239,12 @@ pub fn run() {
             hit_test::end_model_drag,
         ])
         .setup(|app| {
+            if let Some(window) = app.get_webview_window("settings") {
+                let _ = window.set_title(locale::text(
+                    "StarLite for DSH 设置",
+                    "StarLite for DSH Settings",
+                ));
+            }
             tray::setup(app)?;
             hit_test::setup(app.handle())?;
             if !startup::is_connection_launch(std::env::args_os()) {

@@ -17,6 +17,22 @@ const PROFILE_LIMIT: usize = 1024 * 1024;
 pub const DEFAULT_IDLE_NAME: &str = "StarLiteIdle";
 const DEFAULT_IDLE: &[u8] = include_bytes!("../assets/default-idle.vrma");
 
+/// Program gestures live in the shared runtime, without per-model disk files.
+pub const BUILTIN_GESTURES: [(&str, f64); 3] = [
+    ("StarLiteCuriousPeek", 2100.0),
+    ("StarLiteHappyWave", 4500.0),
+    ("StarLiteSleepyStartle", 5500.0),
+];
+pub fn builtin_gesture_catalog() -> Vec<Value> {
+    BUILTIN_GESTURES
+        .iter()
+        .map(|(name, duration)| json!({"name":name,"durationMs":duration}))
+        .collect()
+}
+pub fn is_builtin_gesture(name: &str) -> bool {
+    BUILTIN_GESTURES.iter().any(|(builtin, _)| *builtin == name)
+}
+
 pub struct Prepared {
     pub source_sha256: String,
     pub source_bytes: u64,
@@ -41,6 +57,7 @@ impl Prepared {
                     .iter()
                     .map(|(name, duration)| json!({"name":name,"durationMs":duration})),
             )
+            .chain(builtin_gesture_catalog())
             .collect()
     }
     pub fn write(&self, directory: &Path) -> Result<(String, VrmModelData), String> {
@@ -98,7 +115,10 @@ pub fn inspect(
             .iter()
             .any(|name| name == extension_name)
     {
-        return Err("missing VRM extension declaration：请使用 VRM 导出器重新导出模型。".into());
+        return Err(crate::locale::message(
+            "missing VRM extension declaration：请使用 VRM 导出器重新导出模型。",
+        )
+        .into());
     }
     let bones = validate_humanoid(&parsed.json)?;
     let capabilities = inspect_capabilities(&parsed.json, &bones)?;
@@ -141,6 +161,7 @@ pub fn inspect(
             || source.name.len() > 128
             || source.name.chars().any(char::is_control)
             || source.name == DEFAULT_IDLE_NAME
+            || is_builtin_gesture(&source.name)
             || !names.insert(source.name.as_str())
         {
             return Err("invalid or duplicate animation name".into());
@@ -161,6 +182,7 @@ pub fn inspect(
         DEFAULT_IDLE.into(),
     ));
     names.insert(DEFAULT_IDLE_NAME);
+    names.extend(BUILTIN_GESTURES.iter().map(|(name, _)| *name));
     let (profile, neutral_animation) = if let Some(path) = profile {
         let bytes = read_limited(path, PROFILE_LIMIT)?;
         let value: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
@@ -212,6 +234,7 @@ pub fn inspect(
                 .iter()
                 .map(|(name, duration)| json!({"name":name,"durationMs":duration})),
         )
+        .chain(builtin_gesture_catalog())
         .collect();
     settings::validate_mappings(&default_mappings, &catalog)?;
     let source_sha256 = format!("{:x}", Sha256::digest(&model));
@@ -238,23 +261,26 @@ fn metadata_license(meta: &Value) -> Result<Option<ModelLicense>, String> {
     }
     let mut entries = Vec::new();
     for (field, label) in [
-        ("title", "模型"),
-        ("name", "模型"),
-        ("version", "版本"),
-        ("author", "作者"),
-        ("copyrightInformation", "版权信息"),
-        ("contactInformation", "作者联系方式"),
-        ("reference", "来源"),
-        ("licenseName", "许可标识"),
-        ("licenseUrl", "许可文件"),
-        ("otherLicenseUrl", "补充许可文件"),
-        ("otherPermissionUrl", "补充使用条件"),
+        ("title", crate::locale::message("模型")),
+        ("name", crate::locale::message("模型")),
+        ("version", crate::locale::message("版本")),
+        ("author", crate::locale::message("作者")),
+        ("copyrightInformation", crate::locale::message("版权信息")),
+        ("contactInformation", crate::locale::message("作者联系方式")),
+        ("reference", crate::locale::message("来源")),
+        ("licenseName", crate::locale::message("许可标识")),
+        ("licenseUrl", crate::locale::message("许可文件")),
+        ("otherLicenseUrl", crate::locale::message("补充许可文件")),
+        ("otherPermissionUrl", crate::locale::message("补充使用条件")),
     ] {
         if let Some(text) = metadata_text(&meta[field])? {
             entries.push(format!("- {label}：{}", markdown_literal(text)));
         }
     }
-    for (field, label) in [("authors", "作者"), ("references", "来源")] {
+    for (field, label) in [
+        ("authors", crate::locale::message("作者")),
+        ("references", crate::locale::message("来源")),
+    ] {
         if let Some(values) = meta[field].as_array() {
             if values.len() > 64 {
                 return Err("too many VRM metadata entries".into());
@@ -274,56 +300,78 @@ fn metadata_license(meta: &Value) -> Result<Option<ModelLicense>, String> {
         }
     }
     for (field, label) in [
-        ("allowedUserName", "角色扮演使用者"),
-        ("avatarPermission", "角色扮演使用者"),
-        ("violentUssageName", "暴力内容"),
-        ("sexualUssageName", "成人内容"),
-        ("commercialUssageName", "商业使用"),
-        ("commercialUsage", "商业使用"),
-        ("creditNotation", "署名"),
-        ("modification", "修改模型"),
+        ("allowedUserName", crate::locale::message("角色扮演使用者")),
+        ("avatarPermission", crate::locale::message("角色扮演使用者")),
+        ("violentUssageName", crate::locale::message("暴力内容")),
+        ("sexualUssageName", crate::locale::message("成人内容")),
+        ("commercialUssageName", crate::locale::message("商业使用")),
+        ("commercialUsage", crate::locale::message("商业使用")),
+        ("creditNotation", crate::locale::message("署名")),
+        ("modification", crate::locale::message("修改模型")),
     ] {
         if let Some(text) = metadata_text(&meta[field])? {
             let description = match text {
-                "OnlyAuthor" | "onlyAuthor" => "仅作者",
-                "ExplicitlyLicensedPerson" | "onlySeparatelyLicensedPerson" => "另获授权者",
-                "Everyone" | "everyone" => "所有人",
-                "Disallow" | "prohibited" => "禁止",
-                "Allow" => "允许",
-                "personalNonProfit" => "个人非商业使用",
-                "personalProfit" => "个人营利使用",
-                "corporation" => "企业商业使用",
-                "required" => "必须署名",
-                "unnecessary" => "无需署名",
-                "allowModification" => "允许修改",
-                "allowModificationRedistribution" => "允许修改并再分发",
+                "OnlyAuthor" | "onlyAuthor" => crate::locale::message("仅作者"),
+                "ExplicitlyLicensedPerson" | "onlySeparatelyLicensedPerson" => {
+                    crate::locale::message("另获授权者")
+                }
+                "Everyone" | "everyone" => crate::locale::message("所有人"),
+                "Disallow" | "prohibited" => crate::locale::message("禁止"),
+                "Allow" => crate::locale::message("允许"),
+                "personalNonProfit" => crate::locale::message("个人非商业使用"),
+                "personalProfit" => crate::locale::message("个人营利使用"),
+                "corporation" => crate::locale::message("企业商业使用"),
+                "required" => crate::locale::message("必须署名"),
+                "unnecessary" => crate::locale::message("无需署名"),
+                "allowModification" => crate::locale::message("允许修改"),
+                "allowModificationRedistribution" => crate::locale::message("允许修改并再分发"),
                 other => other,
             };
             entries.push(format!("- {label}：{}", markdown_literal(description)));
         }
     }
     for (field, label) in [
-        ("allowExcessivelyViolentUsage", "过激暴力内容"),
-        ("allowExcessivelySexualUsage", "过激成人内容"),
-        ("allowPoliticalOrReligiousUsage", "政治或宗教内容"),
-        ("allowAntisocialOrHateUsage", "反社会或仇恨内容"),
-        ("allowRedistribution", "再分发"),
+        (
+            "allowExcessivelyViolentUsage",
+            crate::locale::message("过激暴力内容"),
+        ),
+        (
+            "allowExcessivelySexualUsage",
+            crate::locale::message("过激成人内容"),
+        ),
+        (
+            "allowPoliticalOrReligiousUsage",
+            crate::locale::message("政治或宗教内容"),
+        ),
+        (
+            "allowAntisocialOrHateUsage",
+            crate::locale::message("反社会或仇恨内容"),
+        ),
+        ("allowRedistribution", crate::locale::message("再分发")),
     ] {
         if let Some(allowed) = meta[field].as_bool() {
             entries.push(format!(
                 "- {label}：{}",
-                if allowed { "允许" } else { "禁止" }
+                if allowed {
+                    crate::locale::message("允许")
+                } else {
+                    crate::locale::message("禁止")
+                }
             ));
         }
     }
     if let Some(text) = metadata_text(&meta["thirdPartyLicenses"])? {
-        entries.push(format!("\n## 第三方许可\n\n{text}"));
+        entries.push(crate::locale::localized_format!(
+            "\n## 第三方许可\n\n{text}",
+            "\n## Third-party licenses\n\n{text}"
+        ));
     }
     if entries.is_empty() {
         return Ok(None);
     }
-    let text = format!(
+    let text = crate::locale::localized_format!(
         "# 模型许可信息\n\n以下为模型文件内记录的信息。完整许可以作者提供的条款为准；未列出的权限不代表授权。\n\n{}",
+        "# Model license information\n\nThis information is recorded in the model file. The author's full terms are authoritative; omitted permissions do not grant rights.\n\n{}",
         entries.join("\n")
     );
     if text.len() > 256 * 1024 {
@@ -332,14 +380,14 @@ fn metadata_license(meta: &Value) -> Result<Option<ModelLicense>, String> {
     let title = meta["title"]
         .as_str()
         .or_else(|| meta["name"].as_str())
-        .unwrap_or("VRM 模型")
+        .unwrap_or(crate::locale::message("VRM 模型"))
         .chars()
         .filter(|c| !c.is_control())
         .take(128)
         .collect::<String>();
     Ok(Some(ModelLicense {
         title: if title.trim().is_empty() {
-            "VRM 模型".into()
+            crate::locale::message("VRM 模型").into()
         } else {
             title
         },
@@ -445,7 +493,7 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
         || u32_at(bytes, 4)? != 2
         || u32_at(bytes, 8)? as usize != bytes.len()
     {
-        return Err("invalid GLB header or size：请使用完整的二进制 VRM / VRMA 文件（模型不超过 64 MiB，单个动作不超过 16 MiB）；FBX 或普通 JSON glTF 不能直接导入。".into());
+        return Err(crate::locale::message("invalid GLB header or size：请使用完整的二进制 VRM / VRMA 文件（模型不超过 64 MiB，单个动作不超过 16 MiB）；FBX 或普通 JSON glTF 不能直接导入。").into());
     }
     let mut at = 12;
     let mut count = 0;
@@ -456,7 +504,10 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
         let kind = u32_at(bytes, at + 4)?;
         at += 8;
         if size % 4 != 0 || size > bytes.len() - at {
-            return Err("invalid GLB chunk size：文件不完整或已损坏，请重新下载或导出。".into());
+            return Err(crate::locale::message(
+                "invalid GLB chunk size：文件不完整或已损坏，请重新下载或导出。",
+            )
+            .into());
         }
         match (count, kind) {
             (0, 0x4e4f534a) => {
@@ -464,19 +515,27 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
                     return Err("GLB JSON exceeds 8 MiB".into());
                 }
                 value = Some(
-                    serde_json::from_slice::<Value>(&bytes[at..at + size])
-                        .map_err(|_| "invalid GLB JSON：请使用 VRM 导出器重新导出文件。")?,
+                    serde_json::from_slice::<Value>(&bytes[at..at + size]).map_err(|_| {
+                        crate::locale::message("invalid GLB JSON：请使用 VRM 导出器重新导出文件。")
+                    })?,
                 )
             }
             (1, 0x004e4942) => bin = &bytes[at..at + size],
-            _ => return Err("unexpected GLB chunk：请重新导出单文件 VRM / VRMA。".into()),
+            _ => {
+                return Err(crate::locale::message(
+                    "unexpected GLB chunk：请重新导出单文件 VRM / VRMA。",
+                )
+                .into())
+            }
         }
         at += size;
         count += 1;
     }
     let json = value.ok_or("GLB JSON is missing")?;
     if json["asset"]["version"] != "2.0" {
-        return Err("glTF 2.0 is required：请使用 VRM 0.0 / 1.0 导出器。".into());
+        return Err(
+            crate::locale::message("glTF 2.0 is required：请使用 VRM 0.0 / 1.0 导出器。").into(),
+        );
     }
     let ext = &json["extensions"];
     if animation {
@@ -485,10 +544,15 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
         }
     } else if ext["VRM"].is_object() {
         if ext["VRM"]["specVersion"] != "0.0" || ext["VRMC_vrm"].is_object() {
-            return Err("unsupported VRM version：请导出 VRM 0.0 或 1.0。".into());
+            return Err(
+                crate::locale::message("unsupported VRM version：请导出 VRM 0.0 或 1.0。").into(),
+            );
         }
     } else if ext["VRMC_vrm"]["specVersion"] != "1.0" {
-        return Err("VRM 0 or VRM 1 is required：普通 GLB、FBX 需要先通过 VRM 导出器转换。".into());
+        return Err(crate::locale::message(
+            "VRM 0 or VRM 1 is required：普通 GLB、FBX 需要先通过 VRM 导出器转换。",
+        )
+        .into());
     }
     let allowed = [
         "VRM",
@@ -506,10 +570,10 @@ fn parse_glb(bytes: &[u8], animation: bool) -> Result<Glb<'_>, String> {
         .iter()
         .any(|v| !v.as_str().is_some_and(|s| allowed.contains(&s)))
     {
-        return Err(
-            "unsupported required glTF extension：请关闭额外的几何或贴图压缩扩展后重新导出。"
-                .into(),
-        );
+        return Err(crate::locale::message(
+            "unsupported required glTF extension：请关闭额外的几何或贴图压缩扩展后重新导出。",
+        )
+        .into());
     }
     reject_uris(&json, 0)?;
     let buffers = array(&json, "buffers")?;
@@ -744,7 +808,7 @@ fn reject_uris(value: &Value, depth: usize) -> Result<(), String> {
         Value::Object(map) => {
             for (key, value) in map {
                 if key == "uri" {
-                    return Err("external glTF resources are not supported：请将全部贴图和缓冲区内嵌到同一个 VRM / VRMA 文件后重新导出。".into());
+                    return Err(crate::locale::message("external glTF resources are not supported：请将全部贴图和缓冲区内嵌到同一个 VRM / VRMA 文件后重新导出。").into());
                 }
                 reject_uris(value, depth + 1)?
             }
@@ -841,9 +905,9 @@ fn validate_humanoid(json: &Value) -> Result<BTreeMap<String, usize>, String> {
     let entries: Vec<(&str, &Value)> = if vrm0 {
         let mut entries = Vec::new();
         for bone in human.as_array().into_iter().flatten() {
-            let name = bone["bone"]
-                .as_str()
-                .ok_or("invalid humanoid bone：人形骨骼条目缺少标准名称，请重新导出 VRM。")?;
+            let name = bone["bone"].as_str().ok_or(crate::locale::message(
+                "invalid humanoid bone：人形骨骼条目缺少标准名称，请重新导出 VRM。",
+            ))?;
             entries.push((name, bone));
         }
         entries
@@ -865,13 +929,15 @@ fn validate_humanoid(json: &Value) -> Result<BTreeMap<String, usize>, String> {
         // authored names and URI-like strings are never copied into errors.
         if !known.contains(name) {
             if !all_names.insert(name) {
-                return Err(
-                    "duplicate humanoid bone：额外的人形骨骼条目重复，请在导出器中移除重复映射。"
-                        .into(),
-                );
+                return Err(crate::locale::message(
+                    "duplicate humanoid bone：额外的人形骨骼条目重复，请在导出器中移除重复映射。",
+                )
+                .into());
             }
             index(&bone["node"], node_count).map_err(|_| {
-                "invalid humanoid bone：额外的人形骨骼条目引用了无效节点，请重新导出 VRM。"
+                crate::locale::message(
+                    "invalid humanoid bone：额外的人形骨骼条目引用了无效节点，请重新导出 VRM。",
+                )
             })?;
             continue;
         }
@@ -902,15 +968,27 @@ fn validate_humanoid(json: &Value) -> Result<BTreeMap<String, usize>, String> {
         duplicate.dedup();
         let mut issues = Vec::new();
         if !missing.is_empty() {
-            issues.push(format!("缺少：{}", missing.join(", ")));
+            issues.push(crate::locale::localized_format!(
+                "缺少：{}",
+                "Missing: {}",
+                missing.join(", ")
+            ));
         }
         if !invalid.is_empty() {
-            issues.push(format!("节点无效：{}", invalid.join(", ")));
+            issues.push(crate::locale::localized_format!(
+                "节点无效：{}",
+                "Invalid nodes: {}",
+                invalid.join(", ")
+            ));
         }
         if !duplicate.is_empty() {
-            issues.push(format!("重复绑定：{}", duplicate.join(", ")));
+            issues.push(crate::locale::localized_format!(
+                "重复绑定：{}",
+                "Duplicate mappings: {}",
+                duplicate.join(", ")
+            ));
         }
-        return Err(format!("invalid required humanoid bone：{}。请在 VRM 导出器中为这些人形骨骼指定有效、互不重复的骨骼节点后重新导出。", issues.join("；")));
+        return Err(crate::locale::localized_format!("invalid required humanoid bone：{}。请在 VRM 导出器中为这些人形骨骼指定有效、互不重复的骨骼节点后重新导出。", "invalid required humanoid bone: {}. Assign valid, unique nodes to these humanoid mappings in the VRM exporter, then export again.", issues.join("; ")));
     }
     Ok(bones)
 }
@@ -966,17 +1044,21 @@ fn morph_expression_usable(
     blink: bool,
 ) -> Result<bool, String> {
     let (_, vrm0) = vrm_extension(model);
-    let label = if blink { "眨眼" } else { "视线" };
+    let label = if blink {
+        crate::locale::message("眨眼")
+    } else {
+        crate::locale::message("视线")
+    };
     let problem = |detail: &str| {
-        format!("{label}表达（{name}）{detail}。请在 VRM 导出器中检查网格、形态键索引和权重后重新导出。")
+        crate::locale::localized_format!("{label}表达（{name}）{detail}。请在 VRM 导出器中检查网格、形态键索引和权重后重新导出。", "{label} expression ({name}){detail}. Check mesh, morph indices, and weights in the VRM exporter, then export again.")
     };
     if !expression.is_object() {
-        return Err(problem("格式无效"));
+        return Err(problem(crate::locale::message("格式无效")));
     }
     let binds = array(expression, if vrm0 { "binds" } else { "morphTargetBinds" })
-        .map_err(|_| problem("绑定列表无效"))?;
+        .map_err(|_| problem(crate::locale::message("绑定列表无效")))?;
     if binds.len() > 256 {
-        return Err(problem("绑定数量超过 256 个"));
+        return Err(problem(crate::locale::message("绑定数量超过 256 个")));
     }
     let meshes = array(model, "meshes")?;
     let nodes = array(model, "nodes")?;
@@ -989,25 +1071,25 @@ fn morph_expression_usable(
             index(&bind["node"], nodes.len())
                 .and_then(|node| index(&nodes[node]["mesh"], meshes.len()))
         }
-        .map_err(|_| problem("引用了无效的模型网格"))?;
+        .map_err(|_| problem(crate::locale::message("引用了无效的模型网格")))?;
         let target = bind["index"]
             .as_u64()
             .and_then(|n| usize::try_from(n).ok())
-            .ok_or_else(|| problem("的形态键索引无效"))?;
+            .ok_or_else(|| problem(crate::locale::message("的形态键索引无效")))?;
         let primitives = array(&meshes[mesh], "primitives")?;
         if primitives.is_empty()
             || primitives.iter().any(|primitive| {
                 !array(primitive, "targets").is_ok_and(|targets| target < targets.len())
             })
         {
-            return Err(problem("引用了不存在的形态键"));
+            return Err(problem(crate::locale::message("引用了不存在的形态键")));
         }
         let weight = bind["weight"]
             .as_f64()
             .filter(|weight| {
                 weight.is_finite() && (0.0..=if vrm0 { 100.0 } else { 1.0 }).contains(weight)
             })
-            .ok_or_else(|| problem("的形态键权重无效"))?;
+            .ok_or_else(|| problem(crate::locale::message("的形态键权重无效")))?;
         let instantiated = !vrm0
             || nodes
                 .iter()
@@ -1032,7 +1114,10 @@ fn validate_blink_bindings(model: &Value) -> Result<(), String> {
             return Ok(());
         };
         if !master.is_object() {
-            return Err("眨眼表达格式无效：invalid VRM blendShapeMaster。请重新导出 VRM。".into());
+            return Err(crate::locale::message(
+                "眨眼表达格式无效：invalid VRM blendShapeMaster。请重新导出 VRM。",
+            )
+            .into());
         }
         for expression in array(master, "blendShapeGroups")? {
             if let Some(name @ ("blink" | "blinkLeft" | "blinkRight")) =
@@ -1043,13 +1128,17 @@ fn validate_blink_bindings(model: &Value) -> Result<(), String> {
         }
     } else if let Some(expressions) = extension.get("expressions") {
         if !expressions.is_object() {
-            return Err("眨眼表达格式无效：invalid VRM expressions。请重新导出 VRM。".into());
+            return Err(crate::locale::message(
+                "眨眼表达格式无效：invalid VRM expressions。请重新导出 VRM。",
+            )
+            .into());
         }
         if let Some(presets) = expressions.get("preset") {
             if !presets.is_object() {
-                return Err(
-                    "眨眼表达格式无效：invalid VRM expression presets。请重新导出 VRM。".into(),
-                );
+                return Err(crate::locale::message(
+                    "眨眼表达格式无效：invalid VRM expression presets。请重新导出 VRM。",
+                )
+                .into());
             }
             for name in ["blink", "blinkLeft", "blinkRight"] {
                 if let Some(expression) = presets.get(name) {
@@ -1088,7 +1177,7 @@ fn inspect_look_at(model: &Value, bones: &BTreeMap<String, usize>) -> Result<Val
         return Ok(empty);
     };
     if !look_at.is_object() {
-        return Err("视线配置格式无效，请重新导出 VRM。".into());
+        return Err(crate::locale::message("视线配置格式无效，请重新导出 VRM。").into());
     }
     // three-vrm requires an expression manager even for bone-driven lookAt.
     if extension
@@ -1111,13 +1200,16 @@ fn inspect_look_at(model: &Value, bones: &BTreeMap<String, usize>) -> Result<Val
             }
         })
     {
-        return Err("视线类型无效，请在 VRM 导出器中选择骨骼或表达视线模式。".into());
+        return Err(crate::locale::message(
+            "视线类型无效，请在 VRM 导出器中选择骨骼或表达视线模式。",
+        )
+        .into());
     }
     let expression_mode = kind == if vrm0 { "BlendShape" } else { "expression" };
     let scale = |key| -> Result<f64, String> {
         let range = &look_at[key];
         if !range.is_null() && !range.is_object() {
-            return Err("视线角度范围格式无效，请重新导出 VRM。".into());
+            return Err(crate::locale::message("视线角度范围格式无效，请重新导出 VRM。").into());
         }
         for field in [
             if vrm0 { "xRange" } else { "inputMaxValue" },
@@ -1128,7 +1220,10 @@ fn inspect_look_at(model: &Value, bones: &BTreeMap<String, usize>) -> Result<Val
                     .as_f64()
                     .is_some_and(|value| value.is_finite() && value >= 0.0)
             {
-                return Err("视线角度范围无效，请设置有限、非负的输入和输出角度。".into());
+                return Err(crate::locale::message(
+                    "视线角度范围无效，请设置有限、非负的输入和输出角度。",
+                )
+                .into());
             }
         }
         Ok(range[if vrm0 { "yRange" } else { "outputScale" }]
@@ -1263,6 +1358,7 @@ fn embedded_animations(glb: &Glb<'_>) -> Result<Vec<(String, f64)>, String> {
                 || name.len() > 128
                 || name.chars().any(char::is_control)
                 || name == DEFAULT_IDLE_NAME
+                || is_builtin_gesture(&name)
                 || !names.insert(name.clone())
             {
                 return Err("invalid or duplicate embedded animation name".into());
@@ -2040,7 +2136,7 @@ mod tests {
         let source = temp.path().join("model.vrm");
         fs::write(&source, glb(model(), vec![])).unwrap();
         let prepared = inspect(&source, &[], None).unwrap();
-        assert_eq!(prepared.catalog().len(), 1);
+        assert_eq!(prepared.catalog().len(), 4);
         assert_eq!(prepared.catalog()[0]["name"], DEFAULT_IDLE_NAME);
         assert!(prepared.catalog()[0]["durationMs"].as_f64().unwrap() > 0.0);
         assert_eq!(prepared.default_mappings.idle, DEFAULT_IDLE_NAME);
@@ -2091,7 +2187,7 @@ mod tests {
         let source = temp.path().join("model.vrm");
         fs::write(&source, glb(value, bin)).unwrap();
         let prepared = inspect(&source, &[], None).unwrap();
-        assert_eq!(prepared.catalog().len(), 2);
+        assert_eq!(prepared.catalog().len(), 5);
         assert_eq!(
             prepared.catalog()[1],
             json!({"name":"Wave","durationMs":1000.0})
@@ -2253,7 +2349,7 @@ mod tests {
         let source = std::env::var("DSH_PET_VRM_FILE").expect("set DSH_PET_VRM_FILE");
         let prepared = inspect(Path::new(&source), &[], None).unwrap();
         assert_eq!(prepared.embedded_animations.len(), 14);
-        assert_eq!(prepared.catalog().len(), 15);
+        assert_eq!(prepared.catalog().len(), 18);
         assert_eq!(prepared.default_mappings.idle, "Idle");
         assert_eq!(prepared.default_mappings.click.len(), 5);
         assert_eq!(prepared.default_mappings.ambient.len(), 3);

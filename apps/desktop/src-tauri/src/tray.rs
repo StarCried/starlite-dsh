@@ -123,14 +123,55 @@ pub fn set_pet_visible(app: AppHandle, visible: bool) -> Result<PetUiState, Stri
 }
 
 pub fn setup(app: &mut App) -> tauri::Result<()> {
-    let settings = MenuItem::with_id(app, "settings", "设置…", true, None::<&str>)?;
-    let visibility = MenuItem::with_id(app, "visibility", "显示/隐藏", true, None::<&str>)?;
-    let pause = MenuItem::with_id(app, "pause", "暂停/继续动画", true, None::<&str>)?;
-    let click_through =
-        MenuItem::with_id(app, "click-through", "鼠标穿透开关", true, None::<&str>)?;
-    let privacy = MenuItem::with_id(app, "privacy", "隐藏会话内容", true, None::<&str>)?;
-    let reset = MenuItem::with_id(app, "reset", "复位模型", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let settings = MenuItem::with_id(
+        app,
+        "settings",
+        crate::locale::text("设置…", "Settings…"),
+        true,
+        None::<&str>,
+    )?;
+    let visibility = MenuItem::with_id(
+        app,
+        "visibility",
+        crate::locale::text("显示/隐藏", "Show / hide"),
+        true,
+        None::<&str>,
+    )?;
+    let pause = MenuItem::with_id(
+        app,
+        "pause",
+        crate::locale::text("暂停/继续动画", "Pause / resume animation"),
+        true,
+        None::<&str>,
+    )?;
+    let click_through = MenuItem::with_id(
+        app,
+        "click-through",
+        crate::locale::text("鼠标穿透开关", "Toggle click-through"),
+        true,
+        None::<&str>,
+    )?;
+    let privacy = MenuItem::with_id(
+        app,
+        "privacy",
+        crate::locale::text("隐藏会话内容", "Hide session content"),
+        true,
+        None::<&str>,
+    )?;
+    let reset = MenuItem::with_id(
+        app,
+        "reset",
+        crate::locale::text("复位模型", "Reset model"),
+        true,
+        None::<&str>,
+    )?;
+    let quit = MenuItem::with_id(
+        app,
+        "quit",
+        crate::locale::text("退出", "Quit"),
+        true,
+        None::<&str>,
+    )?;
     let menu = Menu::with_items(
         app,
         &[

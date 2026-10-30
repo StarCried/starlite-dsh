@@ -59,3 +59,16 @@ dsh --profile web
 自己的标准人形 VRM 需要有效的人形映射，无动作时自动使用自带基础待机；眨眼和眼球跟随是可选能力，缺少时仍可使用。模型内的动作会自动列出供映射；模型卡片可移除不用的模型，源文件保留，重启不重新添加。桌宠准备、下载或兼容性检查失败时，DSH 仍可正常运行。API Key、用户提示、工具参数／结果和真实会话 ID 不发送给桌宠。桌面版关闭主窗口只隐藏界面，须从 DSH 托盘退出才停止 Host。
 
 程序 BSD-2-Clause；默认待机随程序提供，来源见开发文档。微光及其其他动作独立授权，不打包在 npm 插件内。Windows 程序目前未签名。
+
+<details>
+<summary>模型下载、联网与存储</summary>
+
+安装阶段没有模型下载脚本。启动 DSH 时，插件按需从 `github.com/StarCried/starlite/releases/download/` 下载所选示例，允许 GitHub 跳转至 `release-assets.githubusercontent.com`。下载不携带 API Key、Cookie 或会话内容；URL、长度及 SHA-256 固定在随包的 `assets/windows-x64/manifest.json` 中，有效缓存直接复用。
+
+程序和下载缓存位于 `%LOCALAPPDATA%\StarCried\StarLite\companions`，导入模型与偏好位于 `%APPDATA%\com.starcried.dsh-inochi2d-pet`。插件启动随包的 Windows EXE，DSH 与桌宠通过有临时令牌认证的本机 `127.0.0.1` 随机端口通信。WSL 也使用 Windows 程序和缓存。
+
+打开费用卡时，已配置的官方 DeepSeek 账户会向 `https://api.deepseek.com/user/balance` 查询余额，余额缓存 60 秒；账户凭据仅用于该官方请求，不交给桌宠。没有遥测或后台更新检查。选择「不显示模型」或自定义模型后，后续启动不获取默认示例；停用插件可停止其运行。
+
+[完整联网说明与源码核对入口](https://github.com/StarCried/starlite-dsh/blob/main/docs/network-and-storage.md)
+
+</details>

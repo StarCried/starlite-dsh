@@ -51,6 +51,31 @@ it("uses English library, mapping, and removal controls while preserving model t
  } finally {setUiLocale("zh-CN");}
 });
 
+it.each(["zh-CN","en"] as const)("offers all bundled motions for an animation-free model and saves optional mappings (%s)",async locale=>{
+ setUiLocale(locale);
+ try {
+  translateTemplate(document.body);
+  const animations=[{name:"StarLiteIdle",durationMs:4000},{name:"StarLiteCuriousPeek",durationMs:2100},{name:"StarLiteHappyWave",durationMs:4500},{name:"StarLiteSleepyStartle",durationMs:5500}];
+  const generic:LibraryModel={...custom,title:"Demo VRM",animations,vrm:{animations:[{name:"StarLiteIdle",path:"C:/models/program-idle.vrma"}],embeddedAnimations:[]},mappings:{idle:"StarLiteIdle",working:null,completed:null,error:null,blocked:null,approval:null,click:[],ambient:[]}};
+  await launch({...installed,models:[model,generic],activeModelId:generic.id});
+  expect(activeIdle().value).toBe("StarLiteIdle");
+  expect([...activeIdle().options].filter(option=>option.value).map(option=>option.value)).toEqual(animations.map(clip=>clip.name));
+  for(const pool of ["click","ambient"]){
+   const choices=[...document.querySelectorAll<HTMLInputElement>('[data-pool="'+pool+'"] input')];
+   expect(choices.map(choice=>choice.value)).toEqual(animations.map(clip=>clip.name));
+   expect(choices.some(choice=>choice.checked)).toBe(false);
+  }
+  for(const name of animations.slice(1).map(clip=>clip.name)) document.querySelector<HTMLInputElement>('[data-pool="click"] input[value="'+name+'"]')!.click();
+  document.querySelector<HTMLInputElement>('[data-pool="ambient"] input[value="StarLiteSleepyStartle"]')!.click();
+  await vi.waitFor(()=>expect(current.models[1]!.mappings.click).toEqual(animations.slice(1).map(clip=>clip.name)));
+  await vi.waitFor(()=>expect(current.models[1]!.mappings.ambient).toEqual(["StarLiteSleepyStartle"]));
+  expect(current.models[1]!.mappings.idle).toBe("StarLiteIdle");
+  expect(current.models[0]).toEqual(model);
+  expect(current.models[1]!.vrm).toEqual(generic.vrm);
+  if(locale==="en") expect(document.querySelector("#animation-mappings")!.textContent).not.toMatch(/\p{Script=Han}/u);
+ } finally {setUiLocale("zh-CN");}
+});
+
 async function launch(initial:DesktopSettings=installed,prepared:DesktopSettings|Error=initial,defaults:DefaultModelSummary[]=[{id:"weiguang-default",title:"微光"}]) {
  current=structuredClone(initial);
  native.invoke.mockImplementation(async (command:string,args?:NativeArgs) => {

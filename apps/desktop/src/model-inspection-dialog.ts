@@ -59,7 +59,7 @@ export function showModelInspection(report: ModelInspection): void {
   overview.append(
     metric(t("三角面"), triangles === undefined ? "—" : count(triangles), triangles === undefined ? t("未提供统计") : t("VRChat PC 单项参考"), rating),
     metric(t("模型文件"), ((metrics?.fileBytes ?? report.sourceBytes) / 1048576).toFixed(2) + " MiB", t("文件体积，不等于运行内存")),
-    metric(t("可用动作"), count(report.animations.length), t("含程序默认 Idle；数量不参与评级")),
+    metric(t("可用动作"), count(report.animations.length), t("含程序自带动作；数量不参与评级")),
   );
   content.append(overview);
 
@@ -77,7 +77,7 @@ export function showModelInspection(report: ModelInspection): void {
     for (const label of [t("人形映射"), t("自动眨眼"), t("眼球跟随")]) capabilities.append(capability(label, t("未提供检查结果"), t("重新打开模型信息可检查能力"), "neutral"));
   }
   content.append(capabilities);
-  if (caps?.lookAt.head) content.append(element("p", "inspection-hint", t("头部跟随可用，并有角度限制。其他事件动作需由模型提供并在动作映射中选择。")));
+  if (caps?.lookAt.head) content.append(element("p", "inspection-hint", t("头部跟随可用，并有角度限制。可在动作映射中选择程序自带或模型提供的事件动作。")));
 
   if ((caps && (!caps.blink.automatic || !caps.lookAt.eyes || !caps.lookAt.horizontal || !caps.lookAt.vertical)) || report.issues.length > 0) {
     const advice = element("section", "inspection-advice");

@@ -21,22 +21,30 @@ with a stale/offline database. New vulnerabilities or informational warnings,
 changed warning kinds/versions, expired exceptions, scanner/network failures,
 and incomplete reports fail the check.
 
-## Reviewed baseline: 2026-10-22
+## Reviewed baseline: 2026-10-31
 
 | Scan | Result |
 | --- | --- |
 | `pnpm audit --json` | 173 dependencies, no reported vulnerabilities |
 | Full desktop Cargo.lock, cargo-audit 0.22.2 | 500 dependencies, 0 vulnerability entries, 9 unmaintained notices, 1 unsoundness warning |
 
-The 2026-10-22 patch updates Vite from 8.2.1 to 8.2.4 and Vitest from
-4.1.11 to 4.1.12, including the matching `@vitest/mocker`. These are the
-compatible fixes for the newly reported development-server advisories,
-including [Vite's Windows editor-launch issue](https://github.com/advisories/GHSA-698v-4r3x-3vcv)
-and [Vitest's mock-registration issue](https://github.com/advisories/GHSA-qxg6-89mg-rqv8).
-No advisory exception was added. The full online gate passed against RustSec
-database `59ef7abf8ce56ea80fe7eba97ba3835449009fa4`, including the Windows
-target-graph check. Raw findings remain in the ignored local
-`target/dependency-audit/` directory.
+Happy DOM is updated from 20.11.0 to 21.0.4, including the upstream fix for
+[ESM import-alias code execution](https://github.com/advisories/GHSA-834v-8h66-3h79).
+It is a development test dependency and is not part of the desktop runtime.
+
+Tokio is updated from 1.53.1 to 1.53.3, the compatible patch for
+[RUSTSEC-2026-0386](https://rustsec.org/advisories/RUSTSEC-2026-0386.html).
+The advisory concerns Unix `AsyncFd` constructors and I/O unsoundness. Although
+the affected API is Unix-specific, the full lockfile is patched rather than
+adding another exception. Cargo also resolves four existing Windows dependency
+edges to the already installed windows-sys 0.61.2 within their declared ranges;
+no new windows-sys version is introduced.
+
+The complete online gate passed against RustSec database
+`2295466c4e9df26647fd67d8fa1c705ac2fc7f81`, including the supported Windows
+target-graph check. No new advisory exception was added. Raw findings and the
+summary remain in the ignored `target/dependency-audit/` directory. These are
+point-in-time results; run the online gate again for each release.
 
 The Rust warnings are intentionally visible in the report and summary. The
 following narrowly scoped maintenance decisions expire on **2026-11-18**:

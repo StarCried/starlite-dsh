@@ -50,7 +50,7 @@ pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/Star
 
 ### 准备统一插件和本地下载服务
 
-程序包只带 `assets/windows-x64/` 中的 EXE、两份程序许可和固定清单。EXE 内嵌已批准的基础待机，来源见 [default-idle.md](../apps/desktop/src-tauri/assets/default-idle.md)。微光角色和其他动作保存在独立、自包含 VRM 中，不进入 npm tarball、桌宠资源或源码。
+程序包除插件代码与文档外，带有 `assets/windows-x64/` 中的 EXE、两份程序许可和固定清单。开发版 EXE 内嵌已批准的基础待机和共享运行时的三个通用动作；基础待机来源见 [default-idle.md](../apps/desktop/src-tauri/assets/default-idle.md)。微光角色和专属动作保存在独立、自包含 VRM 中，不进入 npm tarball、桌宠资源或源码。通用动作不为每个导入模型另存文件；旧设置读取时补齐目录，保留映射与偏好。
 
 需要测试私有或尚未发布的模型时，在 **Windows 或 WSL 的另一个终端**启动只监听 `127.0.0.1` 的资源服务，保持运行。两个参数分别是私有 VRM，以及本仓库 `release-output` 中一个尚不存在的描述文件路径。Windows PowerShell 示例：
 

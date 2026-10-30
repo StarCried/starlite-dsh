@@ -17,7 +17,9 @@
 
 设置中的「添加模型」直接选择 VRM，然后检查并事务安装。原生 `inspect_model`／`install_model` 接口读取标准 humanoid、眨眼绑定、模型元数据及内嵌 glTF animation。公共动作目录只有名称与时长；内嵌动作名称放在 VRM 载荷的 `embeddedAnimations` 中。
 
-程序随原生 EXE 提供单个基础动作 `StarLiteIdle`，所有导入模型均可选择。未提供明确映射时，依次选用角色配置的有效 `neutralAnimation`、模型 `Idle`、程序 `StarLiteIdle`；明确提供的默认映射和已保存用户映射保持优先。其他事件动作只来自用户模型，缺失时保持未映射。基础动作来源见 [记录](../apps/desktop/src-tauri/assets/default-idle.md)，不将含第三方呼吸层的片段表述为完全原创。
+开发版提供基础动作 `StarLiteIdle`，以及 `StarLiteCuriousPeek`、`StarLiteHappyWave`、`StarLiteSleepyStartle` 三个可选通用动作，所有导入模型均可选择。未提供明确映射时，依次选用角色配置的有效 `neutralAnimation`、模型 `Idle`、程序 `StarLiteIdle`；明确提供的默认映射和已保存用户映射保持优先。新导入普通模型的点击／偶发动作保持未映射，由用户按需选择。基础动作来源见 [记录](../apps/desktop/src-tauri/assets/default-idle.md)，不将含第三方呼吸层的片段表述为完全原创。
+
+三个通用动作的资源由共享运行时内嵌；原生导入和旧设置读取只补齐目录项，不为每个模型额外写入动作文件，不改变已有动作映射。发布版 alpha.2 仍只有原先的基础待机，新目录随下一版本发布。
 
 VRM 内嵌动作使用标准 glTF 骨骼、位移及形态权重通道。运行时将原始人形骨骼轨道转换到 VRM normalized 骨骼，再统一更新人形、表情与物理，避免动画覆盖或重复更新。可选 `animation.extras.starlite.expressions` 用表达名称关联 SCALAR sampler，使表情与自动眨眼、视线协作；普通形态动画仍可播放。
 

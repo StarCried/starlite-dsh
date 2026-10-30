@@ -19,7 +19,7 @@ export async function checkPluginPackage(root, { allowLocalTest = true } = {}) {
     cwd: root, encoding: "utf8", windowsHide: true,
   }).trim().split(/\r?\n/u).sort();
   const expected = [
-    "package/LICENSE", "package/README.md", "package/cordis.patch.yml",
+    "package/LICENSE", "package/README.md", "package/README.en.md", "package/cordis.patch.yml",
     "package/dist/client.js", "package/dist/index.js", "package/dist/index.js.map", "package/package.json",
     ...DESKTOP_ASSET_FILES.map(name => `package/assets/windows-x64/${name}`),
   ].sort();

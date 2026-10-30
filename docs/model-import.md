@@ -1,5 +1,7 @@
 # 导入模型
 
+简体中文 · [English](model-import.en.md)
+
 本文对应 `0.1.0-alpha.2`：眨眼是可选能力，不再使用的模型可以移除，模型卡片提供能力和资源信息。旧版的导入限制与发布验收保留在[兼容性记录](dsh-compatibility.md)。
 
 下方双示例目录和下载前许可入口为未发布开发版功能；公开 `alpha.2` 仍使用原来的单微光入口，蓝鱼资产尚未发布。
@@ -40,13 +42,13 @@ VRM 0／1 的元数据、材质与物理由 VRM 后端读取。Blender 母版、
 
 程序提供一段基础待机 `StarLiteIdle`，采用当前微光已验收的放松站姿和轻呼吸。模型未指定基础动作时，优先选用名为 `Idle` 的模型动作，否则使用 `StarLiteIdle`；角色配置的有效 `neutralAnimation` 可指定模型的基础动作。明确提供的默认动作映射及用户保存的映射优先，可在设置中更换。
 
-该片段通过标准人形映射重定向，模型的身材、骨骼和权重仍会影响姿态，不能保证所有非标准身体都无穿模。限角头部跟随使用人形映射；自动眨眼和眼球跟随分别依赖有效 Blink 与 lookAt 配置。程序只提供这段基础动作，不自动生成挥手、工作、完成等事件动作。
+该片段通过标准人形映射重定向，模型的身材、骨骼和权重仍会影响姿态，不能保证所有非标准身体都无穿模。限角头部跟随使用人形映射；自动眨眼和眼球跟随分别依赖有效 Blink 与 lookAt 配置。开发版还提供 `StarLiteCuriousPeek`（好奇探头，2.1 秒）、`StarLiteHappyWave`（开心招手，4.5 秒）、`StarLiteSleepyStartle`（困倦惊醒，5.5 秒），全部模型均可按需映射。现有映射保持不变；新导入普通模型的点击／偶发列表仍为空。
 
 基础待机的最终姿态和烘焙由 StarCried 制作，包含 Warudo `Human@SM Breathe` 呼吸层，不能称为完全原创。来源记录见 [default-idle.md](../apps/desktop/src-tauri/assets/default-idle.md)。
 
 ## 有动作时
 
-模型内嵌的标准 glTF 动作自动列入目录。建议用唯一英文名称，名称区分大小写；`StarLiteIdle` 为程序保留名称。推荐的事件名称为 `Idle`、`Working`、`Completed`、`Error`、`Blocked`、`Approval`、`Click` 和 `Ambient`，其他名称仍可手动映射。
+模型内嵌的标准 glTF 动作自动列入目录。建议用唯一英文名称，名称区分大小写；`StarLiteIdle`、`StarLiteCuriousPeek`、`StarLiteHappyWave`、`StarLiteSleepyStartle` 为程序保留名称。推荐的事件名称为 `Idle`、`Working`、`Completed`、`Error`、`Blocked`、`Approval`、`Click` 和 `Ambient`，其他名称仍可手动映射。
 
 | 映射 | 播放方式 |
 | --- | --- |

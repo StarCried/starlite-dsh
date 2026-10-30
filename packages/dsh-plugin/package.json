@@ -19,7 +19,8 @@
     "assets/windows-x64",
     "cordis.patch.yml",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "README.en.md"
   ],
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

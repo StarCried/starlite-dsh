@@ -1,5 +1,7 @@
 # 下载、联网与本地存储
 
+简体中文 · [English](network-and-storage.en.md)
+
 StarLite 不在 npm 安装阶段运行模型下载脚本。npm 包携带 Windows 程序；示例 VRM 独立授权，在启动 DSH 后按需获取。下载不是模型推理，不发送提示词，也不消耗模型 token。
 
 ## 插件发起的请求

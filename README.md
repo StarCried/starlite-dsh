@@ -1,5 +1,7 @@
 # StarLite for DSH
 
+简体中文 · [English](README.en.md)
+
 让微光陪你使用 DeepSeek Harness：安静待机，用动作和气泡显示工作状态，也能直接回答会话里的选择题。
 
 **[先看模型效果](https://starcried.github.io/)**：无需安装，用桌面浏览器体验博客中的微光；DSH 的工作状态与问答气泡需安装下方插件。

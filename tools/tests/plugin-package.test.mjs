@@ -36,7 +36,7 @@ async function fixture(defaultModel = model) {
   for (const name of DESKTOP_ASSET_FILES) await file(root, `packages/dsh-plugin/assets/windows-x64/${name}`, assets[name]);
   async function pack(changes = {}) {
     const files = {
-      "LICENSE": Buffer.from("Generated bundle notice"), "README.md": Buffer.from("Generated instructions"),
+      "LICENSE": Buffer.from("Generated bundle notice"), "README.md": Buffer.from("Generated instructions"), "README.en.md": Buffer.from("Generated English instructions"),
       "cordis.patch.yml": Buffer.from("[]"), "dist/client.js": Buffer.from("generated client"),
       "dist/index.js": Buffer.from("generated host"), "dist/index.js.map": Buffer.from("{}"), "package.json": json({ name: "dsh-starlite", version }),
       ...Object.fromEntries(DESKTOP_ASSET_FILES.map(name => [`assets/windows-x64/${name}`, changes[name] ?? assets[name]])),
@@ -53,7 +53,7 @@ async function fixture(defaultModel = model) {
 
 it("accepts a public archive whose four desktop assets exactly match staging", async () => {
   const { root } = await fixture();
-  expect(await checkPluginPackage(root, { allowLocalTest: false })).toMatchObject({ fileCount: 11, localTest: false });
+  expect(await checkPluginPackage(root, { allowLocalTest: false })).toMatchObject({ fileCount: 12, localTest: false });
 });
 
 it("rejects an old local-only archive even after staging a public model source", async () => {
@@ -77,6 +77,6 @@ it.each(DESKTOP_ASSET_FILES)("rejects a valid but stale packed %s", async name =
 
 it("allows matching local assets only in the explicit local validation mode", async () => {
   const { root } = await fixture({ ...model, url: "http://127.0.0.1:44123/fixture.vrm", localTest: true });
-  expect(await checkPluginPackage(root, { allowLocalTest: true })).toMatchObject({ fileCount: 11, localTest: true });
+  expect(await checkPluginPackage(root, { allowLocalTest: true })).toMatchObject({ fileCount: 12, localTest: true });
   await expect(checkPluginPackage(root, { allowLocalTest: false })).rejects.toThrow(/publicly released/);
 });

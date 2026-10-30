@@ -1,5 +1,7 @@
 # StarLite for DSH 安装与使用
 
+简体中文 · [English](user-guide.en.md)
+
 需要 Windows 11 x64、WebView2，以及以下任一种 DSH：官方 Windows 桌面版、Windows 原生 CLI/Web、WSL2 CLI/Web。只安装一个 `dsh-starlite` 插件：桌宠由插件准备和启动，不需要安装器、管理员权限或手动设置 EXE 路径。
 
 本文对应 `0.1.0-alpha.2`。安装使用 alpha 渠道 `dsh-starlite@alpha`；需要固定版本时可换为 `dsh-starlite@0.1.0-alpha.2`。[版本变化](../CHANGELOG.md) · [兼容性与验收](dsh-compatibility.md) · [升级与排错](upgrade.md)
@@ -58,7 +60,7 @@ dsh plugin --profile web remove dsh-inochi2d-pet
 
 已经配置的 VRM 模型、映射、显示、隐私和气泡偏好保留。当前版本关闭 Inochi2D 导入与显示；旧模型文件和偏好保留，微光准备成功后可使用默认微光。
 
-程序和微光独立授权、独立传输；npm 插件不包含微光角色及其其他动作，仅随 Windows 程序提供一段基础待机。Windows 程序使用系统 WebView2，不打包浏览器。目前程序未签名；单独下载 Windows 程序时请核对项目 Release 来源与 SHA-256，不关闭系统防护。
+程序和微光独立授权、独立传输；npm 插件不包含微光角色外观。公开 alpha.2 自带基础待机，当前开发版另提供三个可选通用动作。Windows 程序使用系统 WebView2，不打包浏览器。目前程序未签名；单独下载 Windows 程序时请核对项目 Release 来源与 SHA-256，不关闭系统防护。
 
 日常只需：
 
@@ -95,7 +97,7 @@ dsh --profile web
 
 卡片的「移除」会在确认后移除该模型和动作映射，清理程序管理的导入副本，保留原始 VRM 文件；正在使用的模型被移除时切为「不显示模型」，不会自动选用其他模型。微光同样可以移除，重启后不会自动重新添加或下载。之后需要时，通过「添加 VRM 模型」重新导入文件即可。恢复微光可从[独立模型发行](https://github.com/StarCried/starlite/releases/tag/weiguang-v3.0.0-starlite.1)下载 `Weiguang-StarLite.vrm` 再导入。
 
-没有动作的标准人形 VRM 自动使用程序自带的基础待机，提供放松站姿、轻呼吸和限角头部跟随。眨眼和眼球跟随是可选功能，分别依赖有效的 blink 表达和 lookAt 映射；缺少时仍可使用模型，只停用对应行为。模型内的标准 glTF 动作会自动列出，可按需映射到应用状态、点击和偶发互动。程序不补齐其他缺失动作。详见 [模型导入](model-import.md)。
+没有动作的标准人形 VRM 自动使用程序自带的基础待机，提供放松站姿、轻呼吸和限角头部跟随。眨眼和眼球跟随是可选功能，分别依赖有效的 blink 表达和 lookAt 映射；缺少时仍可使用模型，只停用对应行为。模型内的标准 glTF 动作会自动列出，可按需映射到应用状态、点击和偶发互动。开发版另提供好奇探头、开心招手、困倦惊醒三个通用动作供选择，不自动修改已保存的事件映射。详见 [模型导入](model-import.md)。
 
 不同身材的模型可在设置中展开「姿态与跟随」，微调双臂、对称掌心、手腕抬高、手部张合与独立头眼灵敏度。调节按模型自动保存，姿态修正仅作用于程序默认站姿，不修改原始 VRM 或模型自带动作；每项都可还原。更多参数与适用范围见[升级说明](upgrade.md#模型姿态与跟随alpha2-起)。
 

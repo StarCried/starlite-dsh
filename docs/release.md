@@ -2,6 +2,14 @@
 
 `0.1.0-alpha.2` 已于 2026-10-22 公开，包含右键快捷菜单、按模型保存的姿态与跟随调节、动作过渡修复、性能参数、模型信息界面及 Vite／Vitest 安全补丁；见 [版本变化](../CHANGELOG.md)。本页保留构建与发布流程，公开来源和精确下载校验结果见 [发布验收](dsh-compatibility.md#公开发行-010-alpha22026-10-22)。
 
+## 当前源码检查（2026-10-31，尚未发行）
+
+当前源码增加英文界面与文档，并将基础 Idle 和三个可选通用动作接入模型目录；既有映射和偏好保持不变。共享运行时固定为 `c4a7d46d19942d779fb2a55e45dcf54cb15735e5`。这些改动未发布到 npm，不改变下方 alpha.2 的发行身份。
+
+本地 `pnpm check` 通过 569 项测试及 14 项依赖审计策略测试、lint、类型检查与构建；Rust fmt、debug/release Clippy、81 项普通测试及单独启用的新版微光导入测试通过。最终 Tauri 构建包含前端资源，实际打包插件在隔离的官方 Windows DSH `0.2.1-rc.2` profile 中通过安装、认证首页、fail-open 和退出回收，不调用付费模型 API、不启动日常桌宠。
+
+英文设置、动作映射、模型信息、快捷菜单和气泡已进行真实 Chromium 页面检查，使用模拟原生 IPC；这不等同于英文 Windows 上的原生 GUI 人工验收。新模型及其画面检查留在本机，未上传角色资源；候选包使用无角色、不可下载的本机测试来源，不能作为公开发行包。
+
 ## 本次公开发行 alpha.2
 
 安装使用 [`dsh-starlite@alpha`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.2)，`alpha` 为 alpha.2，`latest` 保留 alpha.0。发行源码为 [`80f9220`](https://github.com/StarCried/starlite-dsh/commit/80f92200393b58f617864af5b2fb910171b8347a)，共享运行时为 [`f83a4ec`](https://github.com/StarCried/starlite/commit/f83a4ec0f795a14f36d6724465e3a89f9c1e8529)。该精确源码的[主 CI](https://github.com/StarCried/starlite-dsh/actions/runs/39753442237)、[依赖审计](https://github.com/StarCried/starlite-dsh/actions/runs/39753442269) 与 [DSH latest 兼容检查](https://github.com/StarCried/starlite-dsh/actions/runs/39753656026) 全部成功。

@@ -3,6 +3,7 @@ import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {startSettings} from "../src/settings.js";
+import {setUiLocale,translateTemplate} from "../src/i18n.js";
 import type {AnimationMappings, DefaultModelSummary, DesktopPreferences, DesktopSettings, LibraryModel, ModelAdjustments} from "../src/types.js";
 const native=vi.hoisted(() => ({invoke:vi.fn(),open:vi.fn(),listen:vi.fn(async () => () => {}),emitTo:vi.fn(async () => undefined)}));
 vi.mock("@tauri-apps/api/core",() => ({invoke:native.invoke}));
@@ -30,6 +31,25 @@ beforeEach(() => {
  native.invoke.mockReset();native.open.mockReset().mockResolvedValue(path);native.listen.mockClear();native.emitTo.mockClear();
 });
 afterEach(() => {vi.unstubAllGlobals();vi.restoreAllMocks();});
+
+it("uses English library, mapping, and removal controls while preserving model titles",async()=>{
+ setUiLocale("en");
+ try {
+  translateTemplate(document.body);
+  await launch();
+  expect(document.getElementById("settings-status")?.textContent).toBe("Changes are saved automatically");
+  expect(document.querySelector(".model-choice strong")?.textContent).toBe("微光");
+  expect(document.querySelector(".model-selection")?.textContent).toBe("Active");
+  expect(document.querySelector('[data-state="working"]')?.closest("label")?.textContent).toContain("Working (including thinking)");
+  document.querySelector<HTMLButtonElement>(".model-remove")!.click();
+  const dialog=document.querySelector<HTMLDialogElement>("dialog")!;
+  expect(dialog.querySelector("h2")?.textContent).toBe("Remove “微光”?");
+  expect(dialog.textContent).toContain("Your original VRM file is kept");
+  [...dialog.querySelectorAll("button")].find(button=>button.textContent==="Cancel")!.click();
+  await tick();
+  expect(current.models).toHaveLength(1);
+ } finally {setUiLocale("zh-CN");}
+});
 
 async function launch(initial:DesktopSettings=installed,prepared:DesktopSettings|Error=initial,defaults:DefaultModelSummary[]=[{id:"weiguang-default",title:"微光"}]) {
  current=structuredClone(initial);

@@ -1,3 +1,4 @@
+import { t, format, hostNotice } from "./i18n.js";
 import type {PetSnapshot,PetActivity,PetInteraction,PetAnswer} from "@starcried/starlite-dsh-protocol";
 import type {DesktopPreferences} from "./types.js";
 import {createQuestionForm} from "./question-form.js";
@@ -15,8 +16,9 @@ export function renderPlainBubble(element:HTMLElement,text:string,kind:string,ti
 export function renderBubble(element:HTMLElement,snapshot:PetSnapshot,privacy:boolean,mode:DesktopPreferences["bubbleMode"]="compact"):void{
   if(snapshot.state==="idle"){element.hidden=true;element.replaceChildren();delete element.dataset.bubbleKind;delete element.dataset.interactive;return;}
   const activity=snapshot.activity==="waiting"&&!snapshot.inputRequest?STATE_ACTIVITY.approval:snapshot.activity?ACTIVITIES[snapshot.activity]:STATE_ACTIVITY[snapshot.state];
-  const text=privacy||mode==="compact"?activity:snapshot.bubble?.text??activity;
-  renderPlainBubble(element,text,privacy||mode==="compact"?"notice":snapshot.bubble?.kind??"notice",privacy?"DSH":snapshot.session?.title??"DSH 会话");
+  const content=snapshot.bubble;
+  const text=privacy||mode==="compact"?t(activity):content?(content.kind==="notice"||content.kind==="tool"?hostNotice(content.text):content.text):t(activity);
+  renderPlainBubble(element,text,privacy||mode==="compact"?"notice":snapshot.bubble?.kind??"notice",privacy?"DSH":snapshot.session?.title??t("DSH 会话"));
   element.dataset.bubbleMode=privacy?"compact":mode;
 }
 
@@ -46,15 +48,15 @@ export class WorkBubble {
   }
   #load(snapshot:PetSnapshot):void{
     const generation=this.#generation,requestId=snapshot.inputRequest!,sessionRef=snapshot.session!.ref;
-    renderPlainBubble(this.element,"正在加载输入…","notice",snapshot.session!.title);this.element.dataset.interactive="true";
+    renderPlainBubble(this.element,t("正在加载输入…"),"notice",snapshot.session!.title);this.element.dataset.interactive="true";
     const body=this.element.querySelector(".bubble-content")!,open=document.createElement("button"),retry=document.createElement("button"),status=document.createElement("span");
-    body.className="question-body";open.type="button";open.textContent="转到 DSH 回答";retry.type="button";retry.textContent="重试";retry.hidden=true;
+    body.className="question-body";open.type="button";open.textContent=t("转到 DSH 回答");retry.type="button";retry.textContent=t("重试");retry.hidden=true;
     status.className="question-status question-navigation-status";status.setAttribute("role","status");status.hidden=true;
     open.addEventListener("click",async()=>{
       if(generation!==this.#generation)return;
       open.disabled=true;status.hidden=true;status.textContent="";this.actions.changed();
       try{await this.actions.open(sessionRef);}
-      catch{if(generation===this.#generation){status.textContent="暂时无法转到 DSH 回答。请重试，或继续在气泡中回答。";status.hidden=false;open.disabled=false;this.actions.changed();}}
+      catch{if(generation===this.#generation){status.textContent=t("暂时无法转到 DSH 回答。请重试，或继续在气泡中回答。");status.hidden=false;open.disabled=false;this.actions.changed();}}
     });
     retry.addEventListener("click",()=>{if(this.#latest&&this.#preferences){this.#key=undefined;this.update(this.#latest,this.#preferences)}});
     this.element.append(open,retry,status);this.actions.changed();
@@ -67,14 +69,14 @@ export class WorkBubble {
       }));this.#showWait(request,generation,body);this.actions.changed();
     }).catch(()=>{
       if(generation!==this.#generation)return;
-      body.textContent="输入请求暂时无法加载。";retry.hidden=false;this.actions.changed();
+      body.textContent=t("输入请求暂时无法加载。");retry.hidden=false;this.actions.changed();
     });
   }
   #showWait(request:PetInteraction,generation:number,body:Element):void{
     if(!request.wait)return;
     const status=document.createElement("span");status.className="question-status question-wait-status";body.before(status);
     if(request.wait.state==="continued"){
-      status.setAttribute("role","status");status.textContent="DSH 已继续处理，仍可补答。";return;
+      status.setAttribute("role","status");status.textContent=t("DSH 已继续处理，仍可补答。");return;
     }
     status.setAttribute("role","timer");
     const deadline=request.wait.deadline;
@@ -86,7 +88,7 @@ export class WorkBubble {
     const tick=()=>{
       if(generation!==this.#generation){this.#stopCountdown();return;}
       const seconds=Math.max(0,Math.ceil((endsAt-performance.now())/1000));
-      const text=seconds?`剩余 ${seconds} 秒；到时 DSH 将继续处理。`:"等待时间已结束，DSH 将继续处理。";
+      const text=seconds?format("剩余 {seconds} 秒；到时 DSH 将继续处理。",{seconds}):t("等待时间已结束，DSH 将继续处理。");
       if(status.textContent!==text){status.textContent=text;this.actions.changed();}
       if(seconds===0)this.#stopCountdown();
     };

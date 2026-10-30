@@ -39,13 +39,13 @@ rightUpperLeg, rightLowerLeg, rightFoot
 
 基础待机通过标准人形骨骼重定向，效果受模型比例和权重影响。其最终姿态与烘焙由 StarCried 制作，包含 Warudo `Human@SM Breathe` 呼吸层。
 
-模型内嵌的标准 glTF 动作会自动列出。建议使用**唯一英文名称**，名称区分大小写；`StarLiteIdle` 为程序保留名称。
+模型内嵌的标准 glTF 动作会自动列出。建议使用**唯一英文名称**，名称区分大小写；`StarLiteIdle`、`StarLiteCuriousPeek`、`StarLiteHappyWave`、`StarLiteSleepyStartle` 为程序保留名称。
 
 - **待机**：循环播放，默认已配置。
 - **工作中（含思考）、完成、出错、遇到阻碍、等待确认**：可选，播放一次后回待机；新状态可打断。
 - **点击回应、偶发小动作**：可多选，每次随机播放一个。未选择则不触发，工作期间也不会触发。
 
-程序只自带基础待机，不会生成挥手、工作等其他动作。映射修改后自动保存。
+程序还提供 `StarLiteCuriousPeek`（好奇探头）、`StarLiteHappyWave`（开心招手）、`StarLiteSleepyStartle`（困倦惊醒）三个通用人形动作，可在动作映射中选择。现有映射保持不变；新导入普通模型的点击／偶发动作默认不选。映射修改后自动保存。
 
 # 许可与本地文件
 

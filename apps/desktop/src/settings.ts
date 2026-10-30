@@ -1,3 +1,4 @@
+import { t, format } from "./i18n.js";
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -5,6 +6,7 @@ import { showModelLicense } from "./model-license-dialog.js";
 import { showModelImportHelp } from "./model-import-dialog.js";
 import { showModelInspection } from "./model-inspection-dialog.js";
 import { ModelAdjustmentsPanel } from "./model-adjustments.js";
+import { exampleLicenseText } from "./example-license.js";
 import type { AnimationMappings, AnimationState, DefaultModelSummary, DesktopPreferences, DesktopSettings, LibraryModel, ModelInspection, ModelInstallRequest, ModelRemoval } from "./types.js";
 
 const STATES: ReadonlyArray<{ key: AnimationState; label: string; required: boolean }> = [
@@ -51,7 +53,7 @@ export async function startSettings(): Promise<void> {
   const pendingDownload = () => !activeModel() ? defaultModels.find(model => model.id === settings.activeModelId) : undefined;
   const savedStatus = (otherwise: string) => {
     const pending = pendingDownload();
-    return pending ? `重启 DSH 后自动下载${pending.title}资源。` : otherwise;
+    return pending ? format("重启 DSH 后自动下载{title}资源。", {title:pending.title}) : otherwise;
   };
   const mergedPreferences = (): DesktopPreferences => {
     const visible = readPreferences();
@@ -84,7 +86,7 @@ export async function startSettings(): Promise<void> {
     const preparationResolved = next.activeModelId === null || activeModel() !== undefined;
     if (preparationResolved && failedWrites.delete("prepare") && !writing) {
       error.textContent = [...failedWrites.values()].at(-1) ?? "";
-      saveStatus.textContent = failedWrites.size ? "部分更改未保存" : "已自动保存";
+      saveStatus.textContent = failedWrites.size ? t("部分更改未保存") : t("已自动保存");
     }
   };
   const drainWrites = async () => {
@@ -92,19 +94,19 @@ export async function startSettings(): Promise<void> {
     writing = true;
     while (pendingWrites.length) {
       const next = pendingWrites.shift()!;
-      saveStatus.textContent = "正在保存…";
+      saveStatus.textContent = t("正在保存…");
       const revision = settingsRevision;
       try {
         const result = await next.operation();
         if (settingsRevision === revision) adoptSettings(result);
         failedWrites.delete(next.key);
         error.textContent = [...failedWrites.values()].at(-1) ?? "";
-        saveStatus.textContent = failedWrites.size ? "部分更改未保存" : savedStatus("已自动保存");
+        saveStatus.textContent = failedWrites.size ? t("部分更改未保存") : savedStatus(t("已自动保存"));
         for (const waiter of next.waiters) waiter.resolve(result);
       } catch (reason) {
         failedWrites.set(next.key, safeError(reason));
         error.textContent = safeError(reason);
-        saveStatus.textContent = "更改未保存";
+        saveStatus.textContent = t("更改未保存");
         for (const waiter of next.waiters) waiter.reject(reason);
       }
     }
@@ -134,8 +136,8 @@ export async function startSettings(): Promise<void> {
   async function viewLicense(modelId: string): Promise<void> {
     try {
       const license = await invoke<{title: string; text: string} | null>("get_model_license", {modelId});
-      if (!license) throw new Error("模型未提供许可信息，请向模型作者确认使用范围。");
-      showModelLicense(license);
+      if (!license) throw new Error(t("模型未提供许可信息，请向模型作者确认使用范围。"));
+      showModelLicense({...license,text:exampleLicenseText(modelId,license.text)});
     } catch (reason) { reportFailure(reason); }
   }
   async function viewInfo(modelId: string): Promise<void> {
@@ -158,7 +160,7 @@ export async function startSettings(): Promise<void> {
         warning = result.cleanupWarning;
         return result.settings;
       });
-      saveStatus.textContent = warning ?? "模型已移除";
+      saveStatus.textContent = warning ?? t("模型已移除");
     } catch (reason) { reportFailure(reason); }
     finally { removing.delete(modelId); }
   }
@@ -195,7 +197,7 @@ export async function startSettings(): Promise<void> {
       }
     } catch (reason) {
       if (target.closest("#animation-mappings")) renderMappings(mappings, activeModel()?.animations ?? [], activeModel()?.mappings, "animation-pool-help");
-      reportFailure(reason); saveStatus.textContent = "更改未保存";
+      reportFailure(reason); saveStatus.textContent = t("更改未保存");
     }
   });
   const importModel = async () => {
@@ -205,18 +207,18 @@ export async function startSettings(): Promise<void> {
     add.disabled = true;
     error.textContent = "";
     try {
-      const path = await open({title:"添加 VRM 模型",multiple:false,directory:false,filters:[{name:"VRM",extensions:["vrm"]}]});
+      const path = await open({title:t("添加 VRM 模型"),multiple:false,directory:false,filters:[{name:"VRM",extensions:["vrm"]}]});
       if (typeof path !== "string") return;
-      if (!path.toLowerCase().endsWith(".vrm")) throw new Error("请选择 .vrm 模型文件。本版本不支持 Inochi2D。");
-      saveStatus.textContent = "正在检查模型…";
+      if (!path.toLowerCase().endsWith(".vrm")) throw new Error(t("请选择 .vrm 模型文件。本版本不支持 Inochi2D。"));
+      saveStatus.textContent = t("正在检查模型…");
       const result = await invoke<ModelInspection>("inspect_model", {path});
-      if (!result.compatibilitySupported || result.backend !== "vrm") throw new Error(result.issues.map(({message}) => message).join("；") || "模型不兼容。");
+      if (!result.compatibilitySupported || result.backend !== "vrm") throw new Error(result.issues.map(({message}) => message).join("；") || t("模型不兼容。"));
       const request: ModelInstallRequest = {backend:"vrm",sourcePath:path,animationSources:[],mappings:result.defaultMappings,preferences:mergedPreferences()};
       await enqueueWrite("import", () => invoke<DesktopSettings>("install_model", {request:{...request,preferences:mergedPreferences()}}));
-      saveStatus.textContent = "模型已添加";
+      saveStatus.textContent = t("模型已添加");
     } catch (reason) {
       reportFailure(reason);
-      saveStatus.textContent = "添加失败，原有模型未改变";
+      saveStatus.textContent = t("添加失败，原有模型未改变");
     } finally {
       importing = false;
       requiredElement<HTMLButtonElement>("add-model").disabled = false;
@@ -228,8 +230,8 @@ export async function startSettings(): Promise<void> {
   globalThis.addEventListener("pagehide", () => { adjustmentsPanel.destroy(); globalThis.removeEventListener("blur", flushAdjustments); unlisten(); }, {once:true});
   try {
     await enqueueWrite("prepare", () => invoke<DesktopSettings>("prepare_model"));
-    if (!preferenceRevision && !failedWrites.size) saveStatus.textContent = savedStatus("更改自动保存");
-  } catch (reason) { saveStatus.textContent = "默认模型尚未就绪"; reportFailure(reason); }
+    if (!preferenceRevision && !failedWrites.size) saveStatus.textContent = savedStatus(t("更改自动保存"));
+  } catch (reason) { saveStatus.textContent = t("默认模型尚未就绪"); reportFailure(reason); }
 }
 
 function renderLibrary(host: HTMLElement, models: LibraryModel[], defaults: DefaultModelSummary[], activeModelId: string | null, select: (id: string | null) => void, viewLicense: (id: string) => Promise<void>, viewInfo: (id: string) => Promise<void>, remove: (id: string, title: string) => Promise<void>, add: () => void): void {
@@ -240,15 +242,15 @@ function renderLibrary(host: HTMLElement, models: LibraryModel[], defaults: Defa
     const button = document.createElement("button");
     button.type = "button"; button.className = "model-choice"; button.dataset.modelId = model.id; button.setAttribute("aria-pressed", String(model.id === activeModelId)); button.disabled = model.backend !== "vrm";
     const title = document.createElement("strong"); title.textContent = model.title;
-    const subtitle = document.createElement("span"); subtitle.textContent = model.backend === "vrm" ? "VRM · " + model.animations.length + " 个动作" : "Inochi2D · 本版本暂不支持";
-    const selected = document.createElement("span"); selected.className = "model-selection"; selected.textContent = model.id === activeModelId ? "使用中" : "点击使用";
+    const subtitle = document.createElement("span"); subtitle.textContent = model.backend === "vrm" ? "VRM · " + model.animations.length + t(" 个动作") : t("Inochi2D · 本版本暂不支持");
+    const selected = document.createElement("span"); selected.className = "model-selection"; selected.textContent = model.id === activeModelId ? t("使用中") : t("点击使用");
     button.append(title, subtitle, selected); button.addEventListener("click", () => select(model.id));
     const license = document.createElement("button");
-    license.type = "button"; license.className = "model-license"; license.textContent = "查看许可"; license.setAttribute("aria-label", model.title + "的许可");
+    license.type = "button"; license.className = "model-license"; license.textContent = t("查看许可"); license.setAttribute("aria-label", model.title + t("的许可"));
     license.addEventListener("click", () => { void viewLicense(model.id); });
     const actions = document.createElement("div"); actions.className = "model-card-actions";
     const info = document.createElement("button"); info.type = "button"; info.className = "model-license";
-    info.textContent = "模型信息"; info.setAttribute("aria-label", model.title + "的模型信息");
+    info.textContent = t("模型信息"); info.setAttribute("aria-label", model.title + t("的模型信息"));
     info.addEventListener("click", () => { void viewInfo(model.id); });
     actions.append(info, license, removalButton(model.id, model.title, remove));
     card.append(button, actions); host.append(card);
@@ -259,9 +261,9 @@ function renderLibrary(host: HTMLElement, models: LibraryModel[], defaults: Defa
     const choose = document.createElement("button"); choose.type = "button"; choose.className = "model-choice";
     choose.dataset.modelId = model.id; choose.setAttribute("aria-pressed", String(activeModelId === model.id));
     const title = document.createElement("strong"); title.textContent = model.title;
-    const hint = document.createElement("span"); hint.textContent = activeModelId === model.id ? "待下载 · 重启 DSH 获取" : "示例 · 未安装 · 点击使用";
+    const hint = document.createElement("span"); hint.textContent = activeModelId === model.id ? t("待下载 · 重启 DSH 获取") : t("示例 · 未安装 · 点击使用");
     choose.append(title, hint); choose.addEventListener("click", () => select(model.id));
-    const license = document.createElement("button"); license.type = "button"; license.className = "model-license"; license.textContent = "查看许可"; license.setAttribute("aria-label", model.title + "的许可");
+    const license = document.createElement("button"); license.type = "button"; license.className = "model-license"; license.textContent = t("查看许可"); license.setAttribute("aria-label", model.title + t("的许可"));
     license.addEventListener("click", () => { void viewLicense(model.id); });
     const actions = document.createElement("div"); actions.className = "model-card-actions";
     actions.append(license);
@@ -271,14 +273,14 @@ function renderLibrary(host: HTMLElement, models: LibraryModel[], defaults: Defa
   const none = document.createElement("button");
   none.type = "button"; none.className = "model-card model-none"; none.dataset.modelId = "";
   none.setAttribute("aria-pressed", String(activeModelId === null)); none.dataset.active = String(activeModelId === null);
-  none.textContent = "不显示模型"; none.addEventListener("click", () => select(null)); host.append(none);
+  none.textContent = t("不显示模型"); none.addEventListener("click", () => select(null)); host.append(none);
   const addCard = document.createElement("article"); addCard.className = "model-card model-add";
   const addButton = document.createElement("button");
-  addButton.type = "button"; addButton.className = "model-choice"; addButton.id = "add-model"; addButton.setAttribute("aria-label", "添加 VRM 模型");
-  const addTitle = document.createElement("strong"); addTitle.textContent = "＋ 添加 VRM 模型";
+  addButton.type = "button"; addButton.className = "model-choice"; addButton.id = "add-model"; addButton.setAttribute("aria-label", t("添加 VRM 模型"));
+  const addTitle = document.createElement("strong"); addTitle.textContent = t("＋ 添加 VRM 模型");
   addButton.append(addTitle); addButton.addEventListener("click", add);
   const help = document.createElement("button");
-  help.type = "button"; help.className = "model-license"; help.id = "model-import-help"; help.textContent = "查看导入说明";
+  help.type = "button"; help.className = "model-license"; help.id = "model-import-help"; help.textContent = t("查看导入说明");
   help.setAttribute("aria-haspopup", "dialog"); help.addEventListener("click", showModelImportHelp);
   addCard.append(addButton, help); host.append(addCard);
 }
@@ -286,7 +288,7 @@ function renderLibrary(host: HTMLElement, models: LibraryModel[], defaults: Defa
 function removalButton(id: string, title: string, remove: (id: string, title: string) => Promise<void>): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button"; button.className = "model-license model-remove";
-  button.textContent = "移除"; button.setAttribute("aria-label", "移除" + title);
+  button.textContent = t("移除"); button.setAttribute("aria-label", format("移除{title}", {title}));
   button.addEventListener("click", () => { void remove(id, title); });
   return button;
 }
@@ -295,13 +297,13 @@ function confirmRemoval(title: string): Promise<boolean> {
   return new Promise(resolve => {
     const dialog = document.createElement("dialog");
     dialog.className = "model-license-dialog model-remove-dialog";
-    dialog.setAttribute("aria-label", "移除模型");
-    const heading = document.createElement("h2"); heading.textContent = "移除「" + title + "」？";
+    dialog.setAttribute("aria-label", t("移除模型"));
+    const heading = document.createElement("h2"); heading.textContent = format("移除「{title}」？", {title});
     const notice = document.createElement("p");
-    notice.textContent = "移除模型及其动作映射，并清理本机导入副本；原始 VRM 文件保留。正在使用的模型会隐藏，重启后不会自动重新添加。";
+    notice.textContent = t("移除模型及其动作映射，并清理本机导入副本；原始 VRM 文件保留。正在使用的模型会隐藏，重启后不会自动重新添加。");
     const actions = document.createElement("div"); actions.className = "license-actions";
-    const cancel = document.createElement("button"); cancel.type = "button"; cancel.textContent = "取消"; cancel.autofocus = true;
-    const confirm = document.createElement("button"); confirm.type = "button"; confirm.textContent = "移除";
+    const cancel = document.createElement("button"); cancel.type = "button"; cancel.textContent = t("取消"); cancel.autofocus = true;
+    const confirm = document.createElement("button"); confirm.type = "button"; confirm.textContent = t("移除");
     cancel.addEventListener("click", () => dialog.close());
     confirm.addEventListener("click", () => dialog.close("remove"));
     actions.append(cancel, confirm); dialog.append(heading, notice, actions);
@@ -316,7 +318,7 @@ function renderMappings(host: HTMLElement, animations: ReadonlyArray<{ name: str
     const pool = state.key === "click" || state.key === "ambient";
     if (pool) {
       const fieldset = document.createElement("fieldset"); fieldset.className = "animation-pool"; fieldset.dataset.pool = state.key; fieldset.setAttribute("aria-describedby", helpId);
-      const legend = document.createElement("legend"); legend.textContent = state.label + " · 随机播放"; fieldset.append(legend);
+      const legend = document.createElement("legend"); legend.textContent = t(state.label) + t(" · 随机播放"); fieldset.append(legend);
       const choices = document.createElement("div"); choices.className = "animation-choices";
       const selected = current?.[state.key];
       for (const animation of animations) {
@@ -324,12 +326,12 @@ function renderMappings(host: HTMLElement, animations: ReadonlyArray<{ name: str
         input.type = "checkbox"; input.value = animation.name; input.checked = Array.isArray(selected) && selected.includes(animation.name);
         const text = document.createElement("span"); text.textContent = animation.name; label.append(input, text); choices.append(label);
       }
-      if (!animations.length) { const empty = document.createElement("p"); empty.className = "empty-animations"; empty.textContent = "导入动作后，在这里勾选。"; choices.append(empty); }
+      if (!animations.length) { const empty = document.createElement("p"); empty.className = "empty-animations"; empty.textContent = t("导入动作后，在这里勾选。"); choices.append(empty); }
       fieldset.append(choices); host.append(fieldset); continue;
     }
     const row = document.createElement("div"); row.className = "mapping-row";
-    const label = document.createElement("label"); label.textContent = state.label;
-    const select = document.createElement("select"); select.dataset.state = state.key; select.append(new Option(state.required ? "请选择待机动作" : "禁用", "")); select.required = state.required;
+    const label = document.createElement("label"); label.textContent = t(state.label);
+    const select = document.createElement("select"); select.dataset.state = state.key; select.append(new Option(state.required ? t("请选择待机动作") : t("禁用"), "")); select.required = state.required;
     for (const animation of animations) select.append(new Option(animation.name, animation.name));
     const selected = current?.[state.key]; for (const option of select.options) option.selected = option.value === selected;
     label.append(select); row.append(label); host.append(row);
@@ -339,7 +341,7 @@ function renderMappings(host: HTMLElement, animations: ReadonlyArray<{ name: str
 function readMappings(host: HTMLElement): AnimationMappings {
   const values = Object.fromEntries([...host.querySelectorAll<HTMLSelectElement>("select[data-state]")].map(select => [select.dataset.state, select.value || null])) as unknown as AnimationMappings;
   for (const key of ["click", "ambient"] as const) values[key] = [...host.querySelectorAll<HTMLInputElement>('[data-pool="' + key + '"] input:checked')].map(input => input.value);
-  if (!values.idle) throw new Error("待机动画必须选择且必须存在于模型中。");
+  if (!values.idle) throw new Error(t("待机动画必须选择且必须存在于模型中。"));
   return values;
 }
 
@@ -356,9 +358,9 @@ function populatePreferences(preferences: DesktopPreferences): void {
 
 function readPreferences(): DesktopPreferences {
   const {fps, maxDevicePixelRatio, scale, privacyMode, bubbleMode, performanceOverlay, pointerEnabled, bubblesVisible} = readUncheckedPreferences();
-  if (fps !== 30 && fps !== 60) throw new Error("帧率只能是 30 或 60。");
-  if (!Number.isFinite(maxDevicePixelRatio) || maxDevicePixelRatio < 1 || maxDevicePixelRatio > 1.5) throw new Error("DPR 上限必须在 1 到 1.5 之间。");
-  if (!Number.isFinite(scale) || scale < 0.25 || scale > 3) throw new Error("模型缩放必须在 0.25 到 3 之间。");
+  if (fps !== 30 && fps !== 60) throw new Error(t("帧率只能是 30 或 60。"));
+  if (!Number.isFinite(maxDevicePixelRatio) || maxDevicePixelRatio < 1 || maxDevicePixelRatio > 1.5) throw new Error(t("DPR 上限必须在 1 到 1.5 之间。"));
+  if (!Number.isFinite(scale) || scale < 0.25 || scale > 3) throw new Error(t("模型缩放必须在 0.25 到 3 之间。"));
   return {fps,maxDevicePixelRatio,scale,privacyMode,bubbleMode,performanceOverlay,pointerEnabled:pointerEnabled!==false,bubblesVisible:bubblesVisible!==false};
 }
 
@@ -376,7 +378,7 @@ function readUncheckedPreferences(): DesktopPreferences {
 }
 
 function safeError(reason: unknown): string {
-  const message = reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "操作失败；原有模型和设置未改变。";
+  const message = reason instanceof Error ? reason.message : typeof reason === "string" ? reason : t("操作失败；原有模型和设置未改变。");
   // oxlint-disable-next-line no-control-regex -- native errors are rendered as local plain text.
   return message.replace(/[\u0000-\u001F\u007F-\u009F]/gu, " ").trim().slice(0, 500);
 }

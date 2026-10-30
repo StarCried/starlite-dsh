@@ -3,6 +3,7 @@ import type { DesktopSettings } from "./types.js";
 import type { ModelCore, ModelModule, ModelSlot, WidgetController, QuickMenu, QuickMenuOptions } from "./vendor-types.js";
 import { VRM_VIEWPORT_PADDING } from "./model-viewport.js";
 import { selectedModel } from "./model-selection.js";
+import { uiLocale } from "./i18n.js";
 const CORE_URL = "/runtime/core/index.js";
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
 const loadCore = () => import(/* @vite-ignore */ CORE_URL) as Promise<ModelCore>;
@@ -21,7 +22,7 @@ export function modelConfig(settings: DesktopSettings): Record<string, unknown> 
   if (model.backend !== "vrm") throw new Error("Inochi2D is disabled in this version");
   if (!model.vrm) throw new Error("Model component is incomplete");
   return {
-    backend: model.backend, model: convertFileSrc(model.modelPath), fallback: TRANSPARENT_PIXEL,
+    backend: model.backend, locale:uiLocale(), model: convertFileSrc(model.modelPath), fallback: TRANSPARENT_PIXEL,
     display: { width: 320 * settings.preferences.scale, height: 480 * settings.preferences.scale },
     performance: { show: settings.preferences.performanceOverlay },
     render: { fps: settings.preferences.fps, maxDevicePixelRatio: settings.preferences.maxDevicePixelRatio, initialScale: 1, autoFit: true, fitPadding:.92,viewportPadding:VRM_VIEWPORT_PADDING },

@@ -1,9 +1,10 @@
+import { t } from "./i18n.js";
 /** Small, text-only Markdown renderer for untrusted model license documents. */
 export function renderLicenseContent(text: string): HTMLDivElement {
   const content = document.createElement("div");
   content.className = "license-content";
   content.tabIndex = 0;
-  content.setAttribute("aria-label", "模型使用许可");
+  content.setAttribute("aria-label", t("模型使用许可"));
   const lines = text.replace(/\r\n?/gu, "\n").split("\n");
   let index = 0;
   while (index < lines.length) {

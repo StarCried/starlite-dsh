@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -264,7 +265,7 @@ export async function startPet(): Promise<void> {
     } catch {
       if (generation !== mountGeneration) return;
       empty.hidden = false;
-      empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
+      empty.textContent = t("模型运行时加载失败，请打开设置检查模型。");
     }
   };
   const menuResize=new ResizeObserver(updateMenuRegion);
@@ -328,7 +329,7 @@ export async function startPet(): Promise<void> {
       })
       .catch(() => {
         empty.hidden = false;
-        empty.textContent = "模型运行时加载失败，请打开设置检查模型。";
+        empty.textContent = t("模型运行时加载失败，请打开设置检查模型。");
       });
   });
   // Native preparation is idempotent, serializes with settings mutations and
@@ -363,7 +364,7 @@ export async function startPet(): Promise<void> {
       beginOfflineCountdown();
     },
     onConflict() {
-      void message("桌宠已连接另一个 DSH Host，当前不会切换。\n\n已保留第一个等待连接的 Host。原 Host 停止且 60 秒重连期结束后会自动连接，无需重新启动 DSH；原 Host 恢复则继续使用原连接。停滞连接最多需要 45 秒检测。后续启动不会覆盖等待中的 Host。", {title:"StarLite for DSH · 等待连接",kind:"info"}).catch(()=>{});
+      void message(t("桌宠已连接另一个 DSH Host，当前不会切换。\n\n已保留第一个等待连接的 Host。原 Host 停止且 60 秒重连期结束后会自动连接，无需重新启动 DSH；原 Host 恢复则继续使用原连接。停滞连接最多需要 45 秒检测。后续启动不会覆盖等待中的 Host。"), {title:t("StarLite for DSH · 等待连接"),kind:"info"}).catch(()=>{});
     },
   });
 
@@ -446,7 +447,7 @@ export async function startPet(): Promise<void> {
     const ref=latestSnapshot?.session?.ref;
     if(!connected||!connection)return;
     void openDisplayedDsh(connection,ref).catch(()=>{
-      if(settings.preferences.bubblesVisible!==false&&latestSnapshot?.session?.ref===ref&&!latestSnapshot?.inputRequest){renderPlainBubble(bubble,ref?"暂时无法打开 DSH 会话":"暂时无法打开 DSH","notice",settings.preferences.privacyMode?"DSH":latestSnapshot?.session?.title);updateRegion();}
+      if(settings.preferences.bubblesVisible!==false&&latestSnapshot?.session?.ref===ref&&!latestSnapshot?.inputRequest){renderPlainBubble(bubble,ref?t("暂时无法打开 DSH 会话"):t("暂时无法打开 DSH"),"notice",settings.preferences.privacyMode?"DSH":latestSnapshot?.session?.title);updateRegion();}
     });
   });
   await keepWindowVisible(window);

@@ -77,7 +77,7 @@ export type QuickSettingItem = {id:string;label:string;disabled?:boolean;descrip
   | {kind:"select";value:string;options:readonly {value:string;label:string}[];onChange:(value:string)=>void|Promise<void>}
   | {kind:"action";onAction:()=>void|Promise<void>}
 );
-export interface QuickMenuOptions {title?:string;tabs:readonly {id:string;label:string;items:readonly QuickSettingItem[]}[]}
+export interface QuickMenuOptions {title?:string;locale?:"zh-CN"|"en";tabs:readonly {id:string;label:string;items:readonly QuickSettingItem[]}[]}
 export interface QuickMenu {
   readonly element:HTMLElement;readonly isOpen:boolean;
   open(x:number,y:number):void;close():void;update(options:QuickMenuOptions):void;destroy():void;

@@ -107,7 +107,8 @@ describe("settings model library",() => {
   await launch();
   const toggle=document.getElementById("environment-lighting") as HTMLInputElement;
   const strength=document.getElementById("environment-strength") as HTMLInputElement;
-  expect(toggle.checked).toBe(false);expect(strength.value).toBe("20");expect(strength.disabled).toBe(true);
+  expect(toggle.checked).toBe(false);expect(strength.value).toBe("100");expect(strength.disabled).toBe(true);
+  expect(strength.max).toBe("200");
   toggle.checked=true;toggle.dispatchEvent(new Event("change",{bubbles:true}));
   await vi.waitFor(()=>expect(current.preferences.environmentLightingEnabled).toBe(true));
   expect(strength.disabled).toBe(false);
@@ -121,6 +122,14 @@ describe("settings model library",() => {
   await vi.waitFor(()=>expect(current.preferences.environmentLightingEnabled).toBe(false));
   expect(strength.disabled).toBe(true);expect(strength.value).toBe("35");
   expect(current.models).toEqual(installed.models);
+ });
+ it("accepts 200% lighting and rejects values beyond the expanded range",async()=>{
+  await launch();
+  edit("environment-strength","200");
+  await vi.waitFor(()=>expect(current.preferences.environmentLightingStrength).toBe(2));
+  edit("environment-strength","205");
+  await vi.waitFor(()=>expect(document.getElementById("settings-error")!.textContent).toContain("0% 到 200%"));
+  expect(current.preferences.environmentLightingStrength).toBe(2);
  });
  it("offers only staged examples and reads Bluefish terms before selecting or downloading it",async()=>{
   await launch(installed,installed,[{id:"weiguang-default",title:"微光"},{id:"bluefish-default",title:"蓝色大肥鱼"}]);

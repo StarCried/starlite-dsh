@@ -92,3 +92,16 @@ it("destroy is idempotent, cancels timers and discards pending results",async()=
   expect(read).toHaveBeenCalledOnce();
   expect(target.setEnvironmentLighting).toHaveBeenCalledExactlyOnceWith(null);
 });
+
+it("passes strengths above 100% through to the runtime without changing the sampling rate",async()=>{
+  const read=vi.fn(async()=>({color:"#123456"})),bridge=new EnvironmentLightingBridge(read),target=controller();
+  bridge.configure(target,true,2,true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(target.setEnvironmentLighting).toHaveBeenLastCalledWith({color:"#123456",strength:2});
+  await vi.advanceTimersByTimeAsync(249);
+  expect(read).toHaveBeenCalledOnce();
+  bridge.configure(target,true,1.5,true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(target.setEnvironmentLighting).toHaveBeenLastCalledWith({color:"#123456",strength:1.5});
+  bridge.destroy();
+});

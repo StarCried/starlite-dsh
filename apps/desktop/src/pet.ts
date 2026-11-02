@@ -201,7 +201,7 @@ export async function startPet(): Promise<void> {
     animator?.setPaused(paused);
     if (paused) controller?.pause();
     else controller?.resume();
-    environmentLighting.configure(controller,settings.preferences.environmentLightingEnabled===true,settings.preferences.environmentLightingStrength??.2,!paused&&connected&&!closing);
+    environmentLighting.configure(controller,settings.preferences.environmentLightingEnabled===true,settings.preferences.environmentLightingStrength??1,!paused&&connected&&!closing);
     if(document.visibilityState!=="visible")quickMenu?.close();
     syncInputAvailable();updateRegion();updateMenuRegion();
   };
@@ -211,7 +211,7 @@ export async function startPet(): Promise<void> {
 
   const beginOfflineCountdown = () => {
     connected = false;
-    environmentLighting.configure(controller,false,settings.preferences.environmentLightingStrength??.2,false);
+    environmentLighting.configure(controller,false,settings.preferences.environmentLightingStrength??1,false);
     quickMenu?.close();
     fees.cancel();
     cancelClick();workBubble.clear();
@@ -235,7 +235,7 @@ export async function startPet(): Promise<void> {
     const enabled = model?.backend === "vrm";
     fees.cancel(); cancelClick(); workBubble.clear(); bubble.hidden = true;
     animator?.disconnected(); animator = undefined;
-    environmentLighting.configure(undefined,false,next.preferences.environmentLightingStrength??.2,false);
+    environmentLighting.configure(undefined,false,next.preferences.environmentLightingStrength??1,false);
     slot.destroy(); controller = undefined;
     syncBubbleAnchor();
     interaction.update(undefined);

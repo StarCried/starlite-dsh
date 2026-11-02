@@ -19,13 +19,18 @@ it("defaults environment lighting off and only writes its dedicated preference",
   const toggle=items.find(item=>item.id==="environment-lighting")!,strength=items.find(item=>item.id==="environment-strength")!;
   if(toggle.kind!=="toggle"||strength.kind!=="range")throw Error("expected lighting controls");
   expect(toggle.value).toBe(false);expect(toggle.description).toContain("不保存或上传");
-  expect(strength.value).toBe(.2);expect(strength.disabled).toBe(true);
+  expect(strength.value).toBe(1);expect(strength.disabled).toBe(true);
+  expect(strength.min).toBe(0);expect(strength.max).toBe(2);
   await toggle.onChange(true);
   expect(f.actions.patch).toHaveBeenCalledExactlyOnceWith({environmentLightingEnabled:true});
-  const enabled=fixture({...settings,preferences:{...settings.preferences,environmentLightingEnabled:true,environmentLightingStrength:.35}}).menu.tabs[0]!.items.find(item=>item.id==="environment-strength")!;
+  const saved=fixture({...settings,preferences:{...settings.preferences,environmentLightingEnabled:true,environmentLightingStrength:.35}});
+  const enabled=saved.menu.tabs[0]!.items.find(item=>item.id==="environment-strength")!;
   if(enabled.kind!=="range")throw Error("expected strength range");
   expect(enabled.disabled).toBe(false);expect(enabled.value).toBe(.35);
   expect(enabled.formatValue?.(.35)).toBe("35%");
+  expect(enabled.formatValue?.(2)).toBe("200%");
+  await enabled.onChange(2);
+  expect(saved.actions.patch).toHaveBeenCalledExactlyOnceWith({environmentLightingStrength:2});
 });
 it("disables all bubbles with a field patch, leaving action mappings and animation pause alone",async()=>{
   const f=fixture(),item=f.menu.tabs[1]!.items.find(item=>item.id==="bubbles")!;

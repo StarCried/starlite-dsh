@@ -7,7 +7,7 @@ export interface EnvironmentColor {color: string}
 export class EnvironmentLightingBridge {
   #controller: LightingController | undefined;
   #active = false;
-  #strength = .2;
+  #strength = 1;
   #generation = 0;
   #pending = false;
   #destroyed = false;
@@ -17,7 +17,7 @@ export class EnvironmentLightingBridge {
 
   configure(controller: LightingController | undefined, enabled: boolean, strength: number, active: boolean): void {
     if (this.#destroyed) return;
-    const safeStrength = Number.isFinite(strength) ? Math.max(0, Math.min(1, strength)) : .2;
+    const safeStrength = Number.isFinite(strength) ? Math.max(0, Math.min(2, strength)) : 1;
     const eligible = enabled && active && safeStrength > 0 && Boolean(controller?.setEnvironmentLighting);
     if (controller === this.#controller && eligible === this.#active && safeStrength === this.#strength) return;
     ++this.#generation;

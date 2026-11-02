@@ -8,6 +8,33 @@ const valid = {
     pricingDate: "2026-10-08", estimates: [{currency: "CNY", minimum: .1, maximum: .2}]},
 };
 describe("billing boundary", () => {
+  const account = {
+    ...valid,
+    balance: {status:"ready",source:"deepseek-account",balances:[{currency:"CNY",remaining:109.89}],bonusBalances:[{currency:"CNY",remaining:.21}]},
+    today:{...valid.today,scope:"account",partial:true,pricedRequests:0,unpricedRequests:0,estimates:[]},
+  };
+  it("projects account wallets separately without leaking profile or credentials", () => {
+    expect(parseBillingSnapshot({...account,token:"PRIVATE",balance:{...account.balance,profile:{phone:"PRIVATE"},
+      bonusBalances:[{currency:"CNY",remaining:.21,token:"PRIVATE"}]}})).toEqual(account);
+    const empty = {...account,balance:{...account.balance,balances:[],bonusBalances:[]}};
+    expect(parseBillingSnapshot(empty)).toEqual(empty);
+    expect(parseBillingSnapshot({...empty,balance:{...empty.balance,status:"unavailable"}}).balance.status).toBe("unavailable");
+  });
+  it("rejects mixed account/API charges and malformed or unscoped bonus amounts", () => {
+    for (const value of [
+      {...account,pricingPeriod:"off-peak"},
+      {...account,today:{...account.today,scope:"api-key"}},
+      {...account,today:{...account.today,partial:false}},
+      {...account,today:{...account.today,pricedRequests:1}},
+      {...account,today:{...account.today,estimates:[{currency:"CNY",minimum:0,maximum:0}]}},
+      {...account,balance:{...account.balance,status:"unavailable"}},
+      {...account,balance:{...account.balance,bonusBalances:undefined}},
+      {...account,balance:{...account.balance,bonusBalances:[{currency:"CNY",remaining:Infinity}]}},
+      {...account,balance:{...account.balance,bonusBalances:[{currency:"CNY",remaining:1},{currency:"CNY",remaining:2}]}},
+      {...valid,balance:{...valid.balance,bonusBalances:[]}},
+      {...valid,today:{...valid.today,scope:"account"}},
+    ]) expect(() => parseBillingSnapshot(value)).toThrow();
+  });
   it("reconstructs only financial fields", () => {
     const parsed = parseBillingSnapshot({...valid, secret: "PRIVATE", balance: {...valid.balance, key: "PRIVATE"}});
     expect(parsed).toEqual(valid);

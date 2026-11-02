@@ -1,4 +1,4 @@
-export { parseBillingSnapshot } from "./billing.js";
+export { parseBillingSnapshot, BILLING_REQUEST_TIMEOUT_MS } from "./billing.js";
 export type { BillingCurrency, BillingSnapshot } from "./billing.js";
 export { ACTIVITIES, MAX_INTERACTION_BYTES, isOpaqueRef, parsePetSession, parsePetInteraction, parsePetAnswer } from "./interaction.js";
 export type { PetActivity, PetSession, PetQuestion, PetQuestionWait, PetInteraction, PetAnswer } from "./interaction.js";

@@ -4,6 +4,26 @@ import { startDshAdapter, type CordisContextLike } from "../src/adapter.js";
 import type { BillingSource } from "../src/billing.js";
 
 describe("DSH compatibility adapter", () => {
+  it.each(["deepseek-account/signed-out", "deepseek-account/session-expired"])("invalidates a non-cancellable account query on %s", async event => {
+    const listeners = new Map<string, (...arguments_: unknown[]) => unknown>();
+    let billing: BillingSource | undefined;
+    let finish!: (value: unknown) => void;
+    const account = {getState: vi.fn(async () => ({status: "credential-stored"})),
+      getBalance: vi.fn(() => new Promise<unknown>(resolve => {finish = resolve;}))};
+    const stop = await startDshAdapter({get: name => name === "deepseekAccount" ? account : undefined,
+      on(name, listener) {listeners.set(name, listener); return () => listeners.delete(name);}}, {
+      host: () => "windows", launch: async () => undefined,
+      startServer: async (_source, options) => {billing = options?.billing; return {port: 41234, token: "a".repeat(43), close: async () => undefined};},
+    });
+    try {
+      const pending = expect(billing!.read()).rejects.toThrow("billing unavailable");
+      await vi.waitFor(() => expect(account.getBalance).toHaveBeenCalledOnce());
+      account.getState.mockResolvedValue({status: "signed-out"}); listeners.get(event)?.(); await pending;
+      expect((await billing!.read()).balance.status).toBe("unconfigured");
+      finish({status: "ready", value: [{currency: "CNY", balance: "999"}], bonusWallets: []});
+      expect((await billing!.read()).balance.status).toBe("unconfigured");
+    } finally {await stop();}
+  });
   it("starts one native Windows bridge and contains companion launch failures", async () => {
     const warn=vi.fn(),close=vi.fn(async()=>undefined);
     const launch=vi.fn(async()=>{throw Error("PRIVATE launch details")});

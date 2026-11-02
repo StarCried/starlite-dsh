@@ -1,4 +1,5 @@
 import { parseBillingSnapshot, type BillingSnapshot } from "@starcried/starlite-dsh-protocol";
+import {readFile} from "node:fs/promises";
 import {deepSeekPricingPeriod} from "./pricing-period.js";
 
 const PRICING_DATE = "2026-10-10";
@@ -16,6 +17,16 @@ const MAX_SESSIONS = 512;
 const MAX_SESSION_BYTES = 16 * 1024 * 1024;
 const MAX_EVENTS = 100_000;
 const MAX_BALANCE_BYTES = 16_384;
+const ACCOUNT_TIMEOUT_MS = 32_000;
+const API_TIMEOUT_MS = 8000;
+const UNAVAILABLE_ACCOUNT = Symbol("unavailable account service");
+
+interface AccountClient {version: string; locale: string; timezoneOffsetSeconds: number;}
+interface AccountService {
+  getState(): Promise<unknown>;
+  getBalance(client: AccountClient): Promise<unknown>;
+  watch?(signal: AbortSignal): AsyncIterable<unknown>;
+}
 
 export interface BillingContext {
   get?(name: string): unknown;
@@ -54,38 +65,135 @@ export class DeepSeekBilling implements BillingSource {
   #abort: AbortController | undefined;
   #closed = false;
   #generation = 0;
+  #accountValue: unknown;
+  #account: AccountService | undefined;
+  #accountWatch: AbortController | undefined;
+  #accountWatchReady: Promise<void> | undefined;
+  #accountWatchHealthy = false;
+  #version: Promise<string> | undefined;
 
   constructor(context: BillingContext, fetchImplementation: typeof fetch = fetch, now: () => number = Date.now) {
     this.#context = context; this.#fetch = fetchImplementation; this.#now = now;
   }
   invalidate(accountChanged = false): void {
     ++this.#generation; this.#snapshot = undefined;
-    if (accountChanged) {this.#balance = undefined; this.#cache.clear(); this.#abort?.abort();}
+    if (accountChanged) {
+      this.#balance = undefined; this.#cache.clear(); this.#abort?.abort();
+      // A replacement account must not wait for an old, non-cancellable Host call.
+      this.#pending = undefined; this.#abort = undefined;
+    }
   }
-  close(): void {this.#closed = true; this.#abort?.abort(); this.#cache.clear(); this.#balance = undefined; this.#snapshot = undefined;}
+  close(): void {
+    this.#closed = true; this.#accountWatch?.abort(); this.invalidate(true);
+  }
   read(): Promise<BillingSnapshot> {
     if (this.#closed) return Promise.reject(new Error("billing unavailable"));
+    this.#bindAccount();
     const now = this.#now();
-    if (this.#snapshot && this.#snapshot.today.date === billingDate(now) && now - this.#snapshot.checkedAt < 5000) return Promise.resolve(this.#snapshot);
+    if ((!this.#accountValue || this.#accountWatchHealthy) && this.#snapshot
+      && this.#snapshot.today.date === billingDate(now) && now - this.#snapshot.checkedAt < 5000) return Promise.resolve(this.#snapshot);
     if (this.#pending) return this.#pending;
     // describe() can announce its first live snapshot. Read it before opening
     // this request so its own settings notification cannot abort the query.
     const routes = officialRoutes(this.#context);
     const generation = this.#generation;
     const abort = new AbortController(); this.#abort = abort;
-    const timer = setTimeout(() => abort.abort(), 8000); timer.unref();
-    this.#pending = this.#query(now, abort.signal, routes).then(snapshot => {
+    const timer = setTimeout(() => abort.abort(), this.#accountValue ? ACCOUNT_TIMEOUT_MS : API_TIMEOUT_MS); timer.unref();
+    const pending = abortable(this.#query(now, abort.signal, routes), abort.signal).then(snapshot => {
       if (!this.#closed && generation === this.#generation) this.#snapshot = snapshot;
       return snapshot;
-    }).finally(() => {clearTimeout(timer); this.#pending = undefined; this.#abort = undefined;});
-    return this.#pending;
+    }).finally(() => {
+      clearTimeout(timer);
+      if (this.#pending === pending) {this.#pending = undefined; this.#abort = undefined;}
+    });
+    this.#pending = pending;
+    return pending;
   }
   async #query(now: number, signal: AbortSignal, routes: readonly OfficialRoute[]): Promise<BillingSnapshot> {
+    const account = this.#account;
+    if (this.#accountValue && !account) return accountSnapshot(now, {status: "unavailable", source: "deepseek-account", balances: []});
+    if (account) {
+      await abortable(this.#accountWatchReady ?? Promise.resolve(), signal);
+      let state: Record<string, unknown> | undefined;
+      try {state = record(await abortable(account.getState(), signal));}
+      catch {if (signal.aborted) throw new Error("billing unavailable");}
+      if (state?.status !== "signed-out") {
+        const balance = state?.status === "credential-stored"
+          ? await this.#readAccountBalance(account, now, signal)
+          : {status: "unavailable" as const, source: "deepseek-account" as const, balances: []};
+        if (signal.aborted || this.#closed) throw new Error("billing unavailable");
+        return accountSnapshot(now, balance);
+      }
+    }
+    // A signed-out account can use an independently configured API key, but
+    // slow API calls retain their existing eight-second limit.
+    const apiAbort = new AbortController();
+    const apiSignal = AbortSignal.any([signal, apiAbort.signal]);
+    const timer = setTimeout(() => apiAbort.abort(), API_TIMEOUT_MS); timer.unref();
+    try {return await abortable(this.#queryApi(now, apiSignal, routes), apiSignal);}
+    finally {clearTimeout(timer);}
+  }
+  #bindAccount(): void {
+    let value: unknown;
+    try {value = this.#context.get?.("deepseekAccount") ?? undefined;}
+    catch {value = UNAVAILABLE_ACCOUNT;}
+    if (value === this.#accountValue) return;
+    this.invalidate(true);
+    this.#accountWatch?.abort(); this.#accountWatch = undefined;
+    this.#accountWatchHealthy = false; this.#accountWatchReady = undefined;
+    this.#accountValue = value;
+    const candidate = record(value);
+    this.#account = candidate && typeof candidate.getState === "function" && typeof candidate.getBalance === "function"
+      ? candidate as unknown as AccountService : undefined;
+    if (!this.#account || typeof this.#account.watch !== "function") return;
+    const account = this.#account;
+    const watch = new AbortController(); this.#accountWatch = watch;
+    let primed!: () => void;
+    this.#accountWatchReady = new Promise<void>(resolve => {primed = resolve;});
+    void (async () => {
+      let first = true;
+      try {
+        for await (const _state of account.watch!(watch.signal)) {
+          if (watch.signal.aborted || this.#accountWatch !== watch) break;
+          if (first) {first = false; this.#accountWatchHealthy = true; primed();}
+          // Every notification invalidates, even when both accounts report
+          // credential-stored. No identity or login-attempt payload is retained.
+          else this.invalidate(true);
+        }
+      } catch { /* Optional account observation must not stop DSH. */ }
+      finally {
+        primed();
+        if (this.#accountWatch === watch) {
+          this.#accountWatchHealthy = false;
+          if (!watch.signal.aborted && !first) this.invalidate(true);
+        }
+      }
+    })();
+  }
+  async #readAccountBalance(account: AccountService, now: number, signal: AbortSignal): Promise<BillingSnapshot["balance"]> {
+    if (this.#accountWatchHealthy && this.#balance?.value.source === "deepseek-account" && now - this.#balance.at < 60_000) return this.#balance.value;
+    let value: BillingSnapshot["balance"] = {status: "unavailable", source: "deepseek-account", balances: []};
+    try {
+      this.#version ??= readFile(new URL("../package.json", import.meta.url), "utf8").then(text => {
+        const version = record(JSON.parse(text))?.version;
+        if (typeof version !== "string" || version.length > 64 || !/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/u.test(version)) throw new Error("invalid plugin version");
+        return version;
+      });
+      const client = {version: await abortable(this.#version, signal), locale: Intl.DateTimeFormat().resolvedOptions().locale,
+        timezoneOffsetSeconds: -new Date(now).getTimezoneOffset() * 60};
+      const raw = record(await abortable(account.getBalance(client), signal));
+      if (raw?.status === "ready") value = {status: "ready", source: "deepseek-account",
+        balances: accountWallets(raw.value), bonusBalances: accountWallets(raw.bonusWallets)};
+    } catch { /* Host failures and rejected grants never become zero balances. */ }
+    if (!signal.aborted && !this.#closed && this.#accountWatchHealthy && account === this.#account) this.#balance = {at: now, value};
+    return value;
+  }
+  async #queryApi(now: number, signal: AbortSignal, routes: readonly OfficialRoute[]): Promise<BillingSnapshot> {
     const date = billingDate(now);
     const official = routes.length > 0;
     const balancePromise = official ? this.#readBalance(routes, now, signal) : Promise.resolve({status: "unconfigured" as const, balances: []});
     const today: BillingSnapshot["today"] = {
-      date, timeZone: "Asia/Shanghai", partial: !official, pricedRequests: 0, unpricedRequests: 0,
+      scope: "api-key", date, timeZone: "Asia/Shanghai", partial: !official, pricedRequests: 0, unpricedRequests: 0,
       pricingDate: PRICING_DATE, estimates: CURRENCIES.map(currency => ({currency, minimum: 0, maximum: 0})),
     };
     const persistence = this.#context.get?.("sessionPersistence") as BillingPersistence | undefined;
@@ -107,6 +215,7 @@ export class DeepSeekBilling implements BillingSource {
               const {events} = await handle.read(0, MAX_EVENTS + 1, {signal});
               if (events.length > MAX_EVENTS || !Number.isSafeInteger(handle.inheritedEventCount) || handle.inheritedEventCount < 0 || handle.inheritedEventCount > events.length) {today.partial = true; continue;}
               usage = {revision: session.revision, date, usage: foldDailyUsage(events, handle.inheritedEventCount, date, routes.map(route => route.provider))};
+              if (signal.aborted) throw new Error("billing unavailable");
               this.#cache.set(id, usage);
             } catch {today.partial = true; continue;}
             finally {await handle?.close().catch(() => {today.partial = true;});}
@@ -122,7 +231,7 @@ export class DeepSeekBilling implements BillingSource {
     return parseBillingSnapshot({billingVersion: 1, checkedAt: now, pricingPeriod: deepSeekPricingPeriod(now), balance, today});
   }
   async #readBalance(routes: readonly OfficialRoute[], now: number, signal: AbortSignal): Promise<BillingSnapshot["balance"]> {
-    if (this.#balance && now - this.#balance.at < 60_000) return this.#balance.value;
+    if (this.#balance && this.#balance.value.source !== "deepseek-account" && now - this.#balance.at < 60_000) return this.#balance.value;
     let value: BillingSnapshot["balance"];
     let source: BillingSnapshot["balance"]["source"];
     try {
@@ -166,6 +275,37 @@ export class DeepSeekBilling implements BillingSource {
     if (!signal.aborted && !this.#closed) this.#balance = {at: now, value};
     return value;
   }
+}
+
+function accountSnapshot(now: number, balance: BillingSnapshot["balance"]): BillingSnapshot {
+  return parseBillingSnapshot({billingVersion: 1, checkedAt: now, balance,
+    today: {scope: "account", date: billingDate(now), timeZone: "Asia/Shanghai", partial: true,
+      pricedRequests: 0, unpricedRequests: 0, pricingDate: PRICING_DATE, estimates: []}});
+}
+function accountWallets(value: unknown): BillingSnapshot["balance"]["balances"] {
+  if (!Array.isArray(value) || value.length > 2) throw new Error("invalid account wallets");
+  const wallets = value.map(item => {
+    const entry = record(item);
+    if (!entry || (entry.currency !== "CNY" && entry.currency !== "USD") || typeof entry.balance !== "string"
+      || entry.balance.length > 128 || !/^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(entry.balance)) throw new Error("invalid account wallet");
+    const remaining = Number(entry.balance);
+    if (!Number.isFinite(remaining) || Math.abs(remaining) > 1_000_000_000) throw new Error("invalid account amount");
+    return {currency: entry.currency as "CNY" | "USD", remaining};
+  });
+  if (new Set(wallets.map(wallet => wallet.currency)).size !== wallets.length) throw new Error("duplicate account currency");
+  return wallets;
+}
+/** Host account methods do not take caller signals. Stop waiting without letting
+ * a late fulfillment populate the cache or an old finally clear a new request. */
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(new Error("billing unavailable"));
+    if (signal.aborted) abort();
+    else signal.addEventListener("abort", abort, {once: true});
+    promise.then(value => {
+      if (signal.aborted) abort(); else resolve(value);
+    }, () => reject(new Error("billing unavailable"))).finally(() => signal.removeEventListener("abort", abort));
+  });
 }
 
 export function billingDate(time: number): string {

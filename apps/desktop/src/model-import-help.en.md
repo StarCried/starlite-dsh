@@ -39,7 +39,7 @@ Models without animation can be imported. The bundled `StarLiteIdle` supplies a 
 
 Humanoid retargeting depends on body proportions and skin weights. The default idle's final pose and bake were made by StarCried and include the Warudo `Human@SM Breathe` breathing layer. Bundled gestures are also available for optional event mapping; they do not require model-specific marks or facial meshes.
 
-Embedded standard glTF animations are listed automatically. Use unique English names; names are case-sensitive. The reserved names are `StarLiteIdle`, `StarLiteCuriousPeek` (2.1 seconds), `StarLiteHappyWave` (4.5 seconds), and `StarLiteSleepyStartle` (5.5 seconds). Existing mappings are retained. New generic models start with empty click/ambient mappings; select the gestures you want.
+Embedded standard glTF animations are listed automatically. Use unique English names; names are case-sensitive. The reserved names are `StarLiteIdle`, `StarLiteCuriousPeek` (2.1 seconds), `StarLiteHappyWave` (3.6 seconds), and `StarLiteSleepyStartle` (5.5 seconds). Existing mappings are retained. New generic models start with empty click/ambient mappings; select the gestures you want.
 
 - **Idle:** loops continuously.
 - **Working (including thinking), Completed, Error, Blocked, Awaiting confirmation:** optional, play once then return to idle; a newer state may interrupt.

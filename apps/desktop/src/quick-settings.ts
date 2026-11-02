@@ -25,6 +25,8 @@ export function petQuickSettings(actions:PetQuickSettingsActions,close:()=>void)
     {id:"position",kind:"action",label:t("恢复默认位置"),onAction:run(actions.restorePosition)},
     {id:"fps",kind:"select",label:t("帧率"),value:String(p.fps),options:[{value:"30",label:"30 FPS"},{value:"60",label:"60 FPS"}],onChange:value=>actions.patch({fps:value==="30"?30:60})},
     {id:"performance",kind:"toggle",label:t("显示性能参数"),value:p.performanceOverlay,onChange:performanceOverlay=>actions.patch({performanceOverlay})},
+    {id:"environment-lighting",kind:"toggle",label:t("环境补光"),value:p.environmentLightingEnabled===true,description:t("仅在本机读取角色周边颜色，不保存或上传图像。"),onChange:environmentLightingEnabled=>actions.patch({environmentLightingEnabled})},
+    {id:"environment-strength",kind:"range",label:t("补光强度"),value:p.environmentLightingStrength??.2,min:0,max:1,step:.05,disabled:p.environmentLightingEnabled!==true,formatValue:value=>`${Math.round(value*100)}%`,onChange:environmentLightingStrength=>actions.patch({environmentLightingStrength})},
   ];
   if(settings.models.length>1)display.unshift({id:"model",kind:"select",label:t("当前模型"),value:settings.activeModelId??"",options:settings.models.filter(model=>model.backend==="vrm").map(model=>({value:model.id,label:model.title})),onChange:actions.selectModel});
   return {title:"StarLite",locale:uiLocale(),tabs:[

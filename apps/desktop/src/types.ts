@@ -36,6 +36,8 @@ export interface DesktopPreferences {
   performanceOverlay: boolean;
   bubblesVisible?: boolean;
   pointerEnabled?: boolean;
+  environmentLightingEnabled?: boolean;
+  environmentLightingStrength?: number;
 }
 
 export interface DesktopSettings {

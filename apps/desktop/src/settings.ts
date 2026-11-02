@@ -26,7 +26,7 @@ interface SettingsWrite {
   waiters: Array<{ resolve: (settings: DesktopSettings) => void; reject: (reason: unknown) => void }>;
 }
 const PREFERENCE_FIELDS = {
-  fps:"fps", dpr:"maxDevicePixelRatio", scale:"scale", privacy:"privacyMode", "bubble-mode":"bubbleMode", "performance-overlay":"performanceOverlay", "pointer-enabled":"pointerEnabled", "bubbles-visible":"bubblesVisible",
+  fps:"fps", dpr:"maxDevicePixelRatio", scale:"scale", privacy:"privacyMode", "bubble-mode":"bubbleMode", "performance-overlay":"performanceOverlay", "pointer-enabled":"pointerEnabled", "bubbles-visible":"bubblesVisible", "environment-lighting":"environmentLightingEnabled", "environment-strength":"environmentLightingStrength",
 } as const;
 
 export async function startSettings(): Promise<void> {
@@ -354,14 +354,18 @@ function populatePreferences(preferences: DesktopPreferences): void {
   requiredElement<HTMLInputElement>("performance-overlay").checked = preferences.performanceOverlay;
   requiredElement<HTMLInputElement>("pointer-enabled").checked = preferences.pointerEnabled !== false;
   requiredElement<HTMLInputElement>("bubbles-visible").checked = preferences.bubblesVisible !== false;
+  requiredElement<HTMLInputElement>("environment-lighting").checked = preferences.environmentLightingEnabled === true;
+  requiredElement<HTMLInputElement>("environment-strength").value = String(Math.round((preferences.environmentLightingStrength ?? .2) * 100));
+  requiredElement<HTMLInputElement>("environment-strength").disabled = preferences.environmentLightingEnabled !== true;
 }
 
 function readPreferences(): DesktopPreferences {
-  const {fps, maxDevicePixelRatio, scale, privacyMode, bubbleMode, performanceOverlay, pointerEnabled, bubblesVisible} = readUncheckedPreferences();
+  const {fps, maxDevicePixelRatio, scale, privacyMode, bubbleMode, performanceOverlay, pointerEnabled, bubblesVisible, environmentLightingEnabled, environmentLightingStrength} = readUncheckedPreferences();
   if (fps !== 30 && fps !== 60) throw new Error(t("帧率只能是 30 或 60。"));
   if (!Number.isFinite(maxDevicePixelRatio) || maxDevicePixelRatio < 1 || maxDevicePixelRatio > 1.5) throw new Error(t("DPR 上限必须在 1 到 1.5 之间。"));
   if (!Number.isFinite(scale) || scale < 0.25 || scale > 3) throw new Error(t("模型缩放必须在 0.25 到 3 之间。"));
-  return {fps,maxDevicePixelRatio,scale,privacyMode,bubbleMode,performanceOverlay,pointerEnabled:pointerEnabled!==false,bubblesVisible:bubblesVisible!==false};
+  if (typeof environmentLightingStrength !== "number" || !Number.isFinite(environmentLightingStrength) || environmentLightingStrength < 0 || environmentLightingStrength > 1) throw new Error(t("补光强度必须在 0% 到 100% 之间。"));
+  return {fps,maxDevicePixelRatio,scale,privacyMode,bubbleMode,performanceOverlay,pointerEnabled:pointerEnabled!==false,bubblesVisible:bubblesVisible!==false,environmentLightingEnabled:environmentLightingEnabled===true,environmentLightingStrength};
 }
 
 function readUncheckedPreferences(): DesktopPreferences {
@@ -374,6 +378,8 @@ function readUncheckedPreferences(): DesktopPreferences {
     performanceOverlay:requiredElement<HTMLInputElement>("performance-overlay").checked,
     pointerEnabled:requiredElement<HTMLInputElement>("pointer-enabled").checked,
     bubblesVisible:requiredElement<HTMLInputElement>("bubbles-visible").checked,
+    environmentLightingEnabled:requiredElement<HTMLInputElement>("environment-lighting").checked,
+    environmentLightingStrength:Number(requiredElement<HTMLInputElement>("environment-strength").value)/100,
   };
 }
 

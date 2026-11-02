@@ -25,6 +25,8 @@ https://github.com/StarCried/starlite/releases/download/weiguang-v3.0.0-starlite
 
 ## 存储与进程
 
+开发版的「环境补光」默认关闭。开启后，Windows 桌宠每秒最多约四次读取窗口周边的小块屏幕颜色，仅将平均颜色传给本机渲染器；不保存、记录或上传屏幕图像，也不发送给 DSH。隐藏、暂停、锁屏时停止取色，取色不可用时恢复原灯光。它近似周边环境，不能读取被模型遮住的下一层画面，也不改变桌宠的截图／录屏可见性。
+
 - Windows 程序与示例下载缓存：`%LOCALAPPDATA%\StarCried\StarLite\companions\<版本号-哈希>\`。缓存经过长度与 SHA-256 校验后复用；程序版本或来源变化可能需要重新准备。
 - 用户导入模型、映射和偏好：`%APPDATA%\com.starcried.dsh-inochi2d-pet\`。标识沿用旧版以保留用户数据，不表示当前启用 Inochi2D。
 - 插件会启动随包提供并校验的 Windows 桌宠 EXE。WSL2 使用 Windows 桌宠和 Windows 缓存，需要 WSL／Windows 互操作；无需第二套渲染程序。

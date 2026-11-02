@@ -103,6 +103,25 @@ function edit(id:string,value:string) {
 }
 
 describe("settings model library",() => {
+ it("defaults local environment sampling off and preserves its strength across unrelated preference edits",async()=>{
+  await launch();
+  const toggle=document.getElementById("environment-lighting") as HTMLInputElement;
+  const strength=document.getElementById("environment-strength") as HTMLInputElement;
+  expect(toggle.checked).toBe(false);expect(strength.value).toBe("20");expect(strength.disabled).toBe(true);
+  toggle.checked=true;toggle.dispatchEvent(new Event("change",{bubbles:true}));
+  await vi.waitFor(()=>expect(current.preferences.environmentLightingEnabled).toBe(true));
+  expect(strength.disabled).toBe(false);
+  edit("environment-strength","35");
+  await vi.waitFor(()=>expect(current.preferences.environmentLightingStrength).toBe(.35));
+  edit("fps","30");
+  await vi.waitFor(()=>expect(current.preferences.fps).toBe(30));
+  expect(current.preferences.environmentLightingEnabled).toBe(true);
+  expect(current.preferences.environmentLightingStrength).toBe(.35);
+  toggle.checked=false;toggle.dispatchEvent(new Event("change",{bubbles:true}));
+  await vi.waitFor(()=>expect(current.preferences.environmentLightingEnabled).toBe(false));
+  expect(strength.disabled).toBe(true);expect(strength.value).toBe("35");
+  expect(current.models).toEqual(installed.models);
+ });
  it("offers only staged examples and reads Bluefish terms before selecting or downloading it",async()=>{
   await launch(installed,installed,[{id:"weiguang-default",title:"微光"},{id:"bluefish-default",title:"蓝色大肥鱼"}]);
   expect([...document.querySelectorAll(".model-choice[data-model-id] strong")].map(item=>item.textContent)).toEqual(["微光","蓝色大肥鱼"]);

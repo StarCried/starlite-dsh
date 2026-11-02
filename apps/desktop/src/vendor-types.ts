@@ -52,6 +52,7 @@ export interface WidgetController {
   setPointerEnabled?(enabled: boolean): void;
   setBubblesVisible?(visible: boolean): void;
   setModelAdjustments?(adjustments: ModelAdjustments): void;
+  setEnvironmentLighting?(lighting: {color: string; strength?: number} | null): void;
   refreshInteractionMask?(): void;
   destroy(): void;
 }

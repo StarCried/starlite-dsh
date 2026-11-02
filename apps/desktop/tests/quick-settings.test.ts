@@ -11,8 +11,21 @@ function fixture(next=settings){
 it("offers only approved quick controls and keeps application actions outside interaction toggles",()=>{
   const f=fixture(),items=f.menu.tabs.flatMap(tab=>tab.items);
   expect(f.menu.tabs.map(tab=>tab.label)).toEqual(["显示","互动","DSH"]);
-  expect(items.map(item=>item.id)).toEqual(["size","reset-size","position","fps","performance","pointer","bubbles","pause","hide","bubble-mode","privacy","open-dsh","settings"]);
+  expect(items.map(item=>item.id)).toEqual(["size","reset-size","position","fps","performance","environment-lighting","environment-strength","pointer","bubbles","pause","hide","bubble-mode","privacy","open-dsh","settings"]);
   expect(items.some(item=>/偶发|点击回应|查看费用/u.test(item.label))).toBe(false);
+});
+it("defaults environment lighting off and only writes its dedicated preference",async()=>{
+  const f=fixture(),items=f.menu.tabs[0]!.items;
+  const toggle=items.find(item=>item.id==="environment-lighting")!,strength=items.find(item=>item.id==="environment-strength")!;
+  if(toggle.kind!=="toggle"||strength.kind!=="range")throw Error("expected lighting controls");
+  expect(toggle.value).toBe(false);expect(toggle.description).toContain("不保存或上传");
+  expect(strength.value).toBe(.2);expect(strength.disabled).toBe(true);
+  await toggle.onChange(true);
+  expect(f.actions.patch).toHaveBeenCalledExactlyOnceWith({environmentLightingEnabled:true});
+  const enabled=fixture({...settings,preferences:{...settings.preferences,environmentLightingEnabled:true,environmentLightingStrength:.35}}).menu.tabs[0]!.items.find(item=>item.id==="environment-strength")!;
+  if(enabled.kind!=="range")throw Error("expected strength range");
+  expect(enabled.disabled).toBe(false);expect(enabled.value).toBe(.35);
+  expect(enabled.formatValue?.(.35)).toBe("35%");
 });
 it("disables all bubbles with a field patch, leaving action mappings and animation pause alone",async()=>{
   const f=fixture(),item=f.menu.tabs[1]!.items.find(item=>item.id==="bubbles")!;

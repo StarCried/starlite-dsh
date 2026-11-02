@@ -23,6 +23,8 @@ The packaged `assets/windows-x64/manifest.json` pins URL, byte length, and SHA-2
 
 ## Storage and processes
 
+Development builds offer optional **Environment lighting**, disabled by default. When enabled, the Windows companion samples small screen patches around its window at up to about four times per second and passes only the average color to its local renderer. It does not save, log, upload, or send screen images to DSH. Sampling stops while hidden, paused, or locked; unavailable samples restore the original lighting. This approximates nearby colors, does not reveal the layer hidden by the model, and does not exclude the companion from screenshots or recordings.
+
 - Program and example cache: `%LOCALAPPDATA%\StarCried\StarLite\companions\<version-hash>\`. Cached bytes are checked before reuse. A new program or source may require restaging.
 - User models, mappings, and preferences: `%APPDATA%\com.starcried.dsh-inochi2d-pet\`. The legacy identifier preserves user data; it does not enable Inochi2D.
 - The plugin starts its verified Windows EXE. WSL2 uses the same Windows runtime and cache through Windows interoperability.

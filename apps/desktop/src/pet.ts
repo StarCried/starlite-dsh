@@ -22,6 +22,7 @@ import { renderingIdentity, selectedModel } from "./model-selection.js";
 import { StateAnimator } from "./state-animator.js";
 import { InteractionMaskBridge } from "./interaction-mask.js";
 import { ModelViewportBridge } from "./model-viewport.js";
+import { EnvironmentLightingBridge, type EnvironmentColor } from "./environment-lighting.js";
 import { HostPositionBridge, screenSpaceAboveModel } from "./host-position.js";
 import { BillingBubble, renderBillingBubble } from "./billing-bubble.js";
 import {WorkBubble,renderPlainBubble} from "./work-bubble.js";
@@ -58,6 +59,7 @@ export async function startPet(): Promise<void> {
   const slot = await createModelSlot();
   let mountGeneration = 0;
   let controller: WidgetController | undefined;
+  const environmentLighting = new EnvironmentLightingBridge(() => invoke<EnvironmentColor | null>("sample_environment_color"));
   let animator: StateAnimator | undefined;
   let latestSnapshot: PetSnapshot | undefined;
   let offlineTimer: ReturnType<typeof setTimeout> | undefined;
@@ -199,6 +201,7 @@ export async function startPet(): Promise<void> {
     animator?.setPaused(paused);
     if (paused) controller?.pause();
     else controller?.resume();
+    environmentLighting.configure(controller,settings.preferences.environmentLightingEnabled===true,settings.preferences.environmentLightingStrength??.2,!paused&&connected&&!closing);
     if(document.visibilityState!=="visible")quickMenu?.close();
     syncInputAvailable();updateRegion();updateMenuRegion();
   };
@@ -208,6 +211,7 @@ export async function startPet(): Promise<void> {
 
   const beginOfflineCountdown = () => {
     connected = false;
+    environmentLighting.configure(controller,false,settings.preferences.environmentLightingStrength??.2,false);
     quickMenu?.close();
     fees.cancel();
     cancelClick();workBubble.clear();
@@ -231,6 +235,7 @@ export async function startPet(): Promise<void> {
     const enabled = model?.backend === "vrm";
     fees.cancel(); cancelClick(); workBubble.clear(); bubble.hidden = true;
     animator?.disconnected(); animator = undefined;
+    environmentLighting.configure(undefined,false,next.preferences.environmentLightingStrength??.2,false);
     slot.destroy(); controller = undefined;
     syncBubbleAnchor();
     interaction.update(undefined);
@@ -278,7 +283,7 @@ export async function startPet(): Promise<void> {
   };
   const closeQuickMenu=()=>{++menuOpenGeneration;quickMenu?.close();syncMenuSurface();};
   globalThis.addEventListener("blur",closeQuickMenu);
-  globalThis.addEventListener("pagehide", () => { closing=true; if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu);host.removeEventListener("model-viewport-change",syncBubbleAnchor); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { closing=true; environmentLighting.destroy(); if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu);host.removeEventListener("model-viewport-change",syncBubbleAnchor); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
   let preparing = true;
   await listen<{modelId: string; adjustments: ModelAdjustments}>("model-adjustments-preview", ({payload}) => {
@@ -319,8 +324,8 @@ export async function startPet(): Promise<void> {
         animator?.disconnected();
         animator = new StateAnimator(controller, model.mappings);
         if (latestSnapshot) animator.apply(latestSnapshot);
-        syncRendering();
       }
+      syncRendering();
       return;
     }
     void remount()
@@ -359,6 +364,7 @@ export async function startPet(): Promise<void> {
       if (ui.visible && modelAvailable() && controller) void window.show();
       else if (settings.activeModelId !== null && (!modelAvailable() || !controller)) void invoke("open_settings");
       syncInputAvailable();
+      syncRendering();
     },
     onDisconnected() {
       beginOfflineCountdown();

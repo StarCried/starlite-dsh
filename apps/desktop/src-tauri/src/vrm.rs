@@ -21,7 +21,7 @@ const DEFAULT_IDLE: &[u8] = include_bytes!("../assets/default-idle.vrma");
 /// Program gestures live in the shared runtime, without per-model disk files.
 pub const BUILTIN_GESTURES: [(&str, f64); 3] = [
     ("StarLiteCuriousPeek", 2100.0),
-    ("StarLiteHappyWave", 4500.0),
+    ("StarLiteHappyWave", 3600.0),
     ("StarLiteSleepyStartle", 5500.0),
 ];
 pub fn builtin_gesture_catalog() -> Vec<Value> {

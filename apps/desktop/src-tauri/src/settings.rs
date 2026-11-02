@@ -632,12 +632,20 @@ pub fn decode_settings(bytes: &[u8]) -> Result<DesktopSettings, String> {
     for model in &mut settings.models {
         if model.data.backend == ModelBackend::Vrm {
             for clip in crate::vrm::builtin_gesture_catalog() {
-                if !model
+                if let Some(existing) = model
                     .data
                     .animations
-                    .iter()
-                    .any(|item| item["name"] == clip["name"])
+                    .iter_mut()
+                    .find(|item| item["name"] == clip["name"])
                 {
+                    // Migrate the known previous program wave duration only.
+                    // Other malformed catalog entries still fail validation.
+                    if existing["name"] == "StarLiteHappyWave"
+                        && existing["durationMs"].as_f64() == Some(4500.0)
+                    {
+                        existing["durationMs"] = clip["durationMs"].clone();
+                    }
+                } else {
                     model.data.animations.push(clip);
                 }
             }
@@ -1369,6 +1377,55 @@ mod tests {
         assert!(settings_bytes(&selected).is_ok());
         selected.models[0].data.animations[1]["durationMs"] = 1.into();
         assert!(settings_bytes(&selected).is_err());
+    }
+
+    #[test]
+    fn migrates_the_replaced_program_wave_without_changing_user_mappings() {
+        let mut original = DesktopSettings::default();
+        original.add_model(test_model("custom")).unwrap();
+        original.models[0]
+            .data
+            .animations
+            .extend(crate::vrm::builtin_gesture_catalog());
+        original.models[0].data.mappings.click = vec!["StarLiteHappyWave".into()];
+        original.preferences.scale = 0.75;
+        let wave = original.models[0]
+            .data
+            .animations
+            .iter_mut()
+            .find(|clip| clip["name"] == "StarLiteHappyWave")
+            .unwrap();
+        wave["durationMs"] = 4500.0.into();
+        let restored = decode_settings(&serde_json::to_vec(&original).unwrap()).unwrap();
+        let updated = restored.models[0]
+            .data
+            .animations
+            .iter()
+            .find(|clip| clip["name"] == "StarLiteHappyWave")
+            .unwrap();
+        assert_eq!(updated["durationMs"], 3600.0);
+        assert_eq!(
+            restored.models[0].data.mappings.click,
+            ["StarLiteHappyWave"]
+        );
+        assert_eq!(restored.preferences.scale, 0.75);
+        assert_eq!(
+            restored.models[0].data.model_path,
+            original.models[0].data.model_path
+        );
+        let again = decode_settings(&settings_bytes(&restored).unwrap()).unwrap();
+        assert_eq!(
+            serde_json::to_value(&again).unwrap(),
+            serde_json::to_value(&restored).unwrap()
+        );
+        let wave = original.models[0]
+            .data
+            .animations
+            .iter_mut()
+            .find(|clip| clip["name"] == "StarLiteHappyWave")
+            .unwrap();
+        wave["durationMs"] = 1234.0.into();
+        assert!(decode_settings(&serde_json::to_vec(&original).unwrap()).is_err());
     }
 
     #[test]

@@ -73,6 +73,9 @@
   The gestures live in the shared runtime; native catalogs add them to existing
   imports without altering mappings or creating per-model motion files. Preserve
   the recorded Warudo upper-body source for HappyWave.
+  When a program motion's duration changes, update the shared and native
+  catalogs together. Migrate only known previous durations on settings load;
+  keep mappings/resources unchanged and still reject malformed catalog values.
 - Creating a remote repository, pushing, publishing npm, publishing a Windows
   installer, and releasing a model each require separate approval.
 - Alpha Windows installers remain unsigned and must document SmartScreen.

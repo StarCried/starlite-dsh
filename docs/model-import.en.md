@@ -53,6 +53,8 @@ Embedded standard glTF animations are listed automatically. Use unique English n
 
 Mappings save automatically. **Pose and tracking** adjusts the bundled idle's arms, palms, wrists, fingers, elbows, and independent head/eye tracking. Pose changes do not alter authored motions or the source file. Each model keeps its own adjustments; each setting can be reset.
 
+Model authors can provide initial settings in `extras.starlite.adjustments`, for example `{"idle":{"wristLiftDegrees":30},"gaze":{"headStrength":2}}`. These values seed the new import once. Saved user settings remain authoritative across restarts, model switches, and plugin updates. Clearing adjustments restores program baseline values without reapplying the embedded defaults. Pose values affect only `StarLiteIdle`, so select it in the model's default idle mapping; gaze-only settings do not require changing the idle motion. The field types and ranges match **Pose and tracking**. Unknown fields or invalid values cause import to fail.
+
 # License and local files
 
 Import creates a local copy without uploading or modifying the source. A failed import leaves the active model unchanged.

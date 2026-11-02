@@ -1220,6 +1220,38 @@ mod tests {
     }
 
     #[test]
+    fn imported_adjustments_can_be_overridden_or_cleared_without_reapplying_defaults() {
+        let mut current = DesktopSettings::default();
+        let mut imported = test_model("imported");
+        imported.adjustments = Some(
+            serde_json::from_value(serde_json::json!({
+                "idle":{"wristLiftDegrees":30},"gaze":{"headStrength":2}
+            }))
+            .unwrap(),
+        );
+        current.add_model(imported).unwrap();
+        let user_adjustments: ModelAdjustments = serde_json::from_value(serde_json::json!({
+            "idle":{"wristLiftDegrees":12},"gaze":{"headStrength":0.8}
+        }))
+        .unwrap();
+        current
+            .set_model_adjustments("imported", user_adjustments.clone())
+            .unwrap();
+        current.add_model(test_model("another")).unwrap();
+        let mut restored = decode_settings(&settings_bytes(&current).unwrap()).unwrap();
+        assert_eq!(
+            serde_json::to_value(restored.models[0].adjustments.as_ref().unwrap()).unwrap(),
+            serde_json::to_value(user_adjustments).unwrap()
+        );
+        assert!(restored.models[1].adjustments.is_none());
+        restored
+            .set_model_adjustments("imported", ModelAdjustments::default())
+            .unwrap();
+        let cleared = decode_settings(&settings_bytes(&restored).unwrap()).unwrap();
+        assert!(cleared.models[0].adjustments.is_none());
+    }
+
+    #[test]
     fn existing_vrm_imports_gain_gestures_once_without_changing_mappings_or_preferences() {
         let mut original = DesktopSettings::default();
         original.add_model(test_model("custom")).unwrap();

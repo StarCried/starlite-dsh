@@ -90,6 +90,10 @@
   glTF motions and the three program gestures for optional mappings; never
   invent missing event actions or automatically replace existing user choices.
   Do not restore the retired custom ZIP resource-pack format or import UI.
+- `extras.starlite.adjustments` seeds a new import's model-local settings only.
+  Validate it with `ModelAdjustments`; never reapply it on load, selection or
+  upgrade, because clearing saved adjustments intentionally restores the program
+  baseline. Pose values apply only to `StarLiteIdle`, without rewriting mappings.
 
 ## Commit discipline
 

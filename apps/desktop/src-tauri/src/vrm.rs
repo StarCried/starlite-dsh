@@ -1,6 +1,7 @@
 //! Self-contained VRM/VRMA import. No model-supplied URI is ever resolved.
 use crate::settings::{
-    self, path_string, AnimationMappings, AnimationSource, ModelLicense, VrmModelData,
+    self, path_string, AnimationMappings, AnimationSource, ModelAdjustments, ModelLicense,
+    VrmModelData,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -39,6 +40,7 @@ pub struct Prepared {
     pub model_name: Option<String>,
     pub license: Option<ModelLicense>,
     pub default_mappings: AnimationMappings,
+    pub default_adjustments: Option<ModelAdjustments>,
     pub capabilities: Value,
     pub metrics: Value,
     model: Vec<u8>,
@@ -133,6 +135,15 @@ pub fn inspect(
         .or_else(|| meta["name"].as_str())
         .map(|name| name.chars().filter(|c| !c.is_control()).take(128).collect());
     let extras = &parsed.json["extras"]["starlite"];
+    let default_adjustments = extras
+        .get("adjustments")
+        .map(|value| {
+            let adjustments: ModelAdjustments = serde_json::from_value(value.clone())
+                .map_err(|_| "invalid embedded model adjustments".to_owned())?;
+            adjustments.validate()?;
+            Ok::<_, String>(adjustments)
+        })
+        .transpose()?;
     let license = if extras["license"].is_null() {
         metadata_license(meta)?
     } else {
@@ -244,6 +255,7 @@ pub fn inspect(
         model_name,
         license,
         default_mappings,
+        default_adjustments,
         capabilities,
         metrics,
         model,
@@ -2150,6 +2162,54 @@ mod tests {
         );
         assert_eq!(prepared.source_sha256.len(), 64);
         assert!(prepared.license.is_none());
+        assert!(prepared.default_adjustments.is_none());
+    }
+    #[test]
+    fn reads_embedded_adjustments_without_changing_source_or_motion_mappings() {
+        for mut value in [model(), model_vrm1()] {
+            value["extras"]["starlite"] = json!({
+                "adjustments":{"idle":{"wristLiftDegrees":30},"gaze":{"headStrength":2}},
+                "mappings":{"idle":DEFAULT_IDLE_NAME,"click":["StarLiteHappyWave"]}
+            });
+            let temp = tempfile::tempdir().unwrap();
+            let source = temp.path().join("model.vrm");
+            let bytes = glb(value, vec![]);
+            fs::write(&source, &bytes).unwrap();
+            let prepared = inspect(&source, &[], None).unwrap();
+            let adjustments = prepared.default_adjustments.as_ref().unwrap();
+            assert_eq!(
+                adjustments.idle.as_ref().unwrap().wrist_lift_degrees,
+                Some(30.0)
+            );
+            assert_eq!(adjustments.gaze.as_ref().unwrap().head_strength, Some(2.0));
+            assert_eq!(prepared.default_mappings.idle, DEFAULT_IDLE_NAME);
+            assert_eq!(prepared.default_mappings.click, ["StarLiteHappyWave"]);
+            let (installed, _) = prepared.write(&temp.path().join("installed")).unwrap();
+            assert_eq!(fs::read(&source).unwrap(), bytes);
+            assert_eq!(fs::read(installed).unwrap(), bytes);
+        }
+    }
+    #[test]
+    fn rejects_invalid_embedded_adjustments_before_creating_installed_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("model.vrm");
+        for invalid in [
+            Value::Null,
+            json!([]),
+            json!({"unexpected":true}),
+            json!({"idle":{"unknownAngle":30}}),
+            json!({"idle":{"wristLiftDegrees":"30"}}),
+            json!({"idle":{"wristLiftDegrees":46}}),
+            json!({"gaze":{"headStrength":2.1}}),
+            json!({"gaze":{"eyeStrength":-1}}),
+            json!({"gaze":{"smoothingMs":0}}),
+        ] {
+            let mut value = model();
+            value["extras"]["starlite"]["adjustments"] = invalid.clone();
+            fs::write(&source, glb(value, vec![])).unwrap();
+            assert!(inspect(&source, &[], None).is_err(), "accepted {invalid}");
+            assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
+        }
     }
     fn animated_model() -> (Value, Vec<u8>) {
         let mut value = model();

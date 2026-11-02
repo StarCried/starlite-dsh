@@ -47,7 +47,7 @@ The companion connects to one Host. Closing the DSH desktop window with × only 
 
 ## Controls and bubbles
 
-Development builds offer **Display → Environment lighting** in the model's right-click menu and full settings. It is off by default, with an initial strength of 20%. Changes apply immediately without reloading the model. Sampling is local and low frequency; see the [data disclosure](network-and-storage.en.md#storage-and-processes).
+Development builds offer **Display → Environment lighting** in the model's right-click menu and full settings. It is off by default, with an initial strength of 20%. Nearby colors also gently adapt brightness: darker surroundings dim the lighting and brighter ones lift it. The target stays within 80%–110% of the original light intensities, blended according to strength; this is not a screen-pixel brightness guarantee. Zero strength or disabling the effect restores the original lighting. Changes apply immediately without reloading the model. Sampling is local and low frequency; see the [data disclosure](network-and-storage.en.md#storage-and-processes).
 
 - Drag the model's body to move it. Transparent surroundings pass clicks through. Right-click opens quick settings; use More settings or the tray for the library and license controls.
 - A single click while idle plays a mapped gesture and shows official DeepSeek billing. While working it only queries billing. A pending question is never replaced by the billing card.

@@ -92,7 +92,7 @@ export const EN: Readonly<Record<string, string>> = {
   "调节未保存，已恢复保存的设置。": "Could not save adjustments. Saved settings have been restored.",
   "正在检查模型能力…": "Checking model capabilities…",
   "无法检查模型能力，请收起后重新展开。": "Could not check capabilities. Collapse and reopen this section to retry.",
-  "姿态调节只作用于 StarLite 默认站姿，不改变其他动作。": "Pose adjustments apply only to the StarLite default idle, leaving other motions unchanged.",
+  "姿态调节用于 StarLite 默认站姿；三个内置互动动作会从调节后的站姿开始和结束。": "Pose adjustments calibrate the StarLite default idle. The three built-in gestures start and end in the adjusted pose.",
   "当前待机使用模型自带动作，保留原有姿态；视线仍可调节。": "This model uses its own idle pose. Tracking can still be adjusted.",
   "原动作": "Original motion",
   "展开后检查模型能力": "Expand this section to check capabilities",

@@ -106,7 +106,11 @@
 - `extras.starlite.adjustments` seeds a new import's model-local settings only.
   Validate it with `ModelAdjustments`; never reapply it on load, selection or
   upgrade, because clearing saved adjustments intentionally restores the program
-  baseline. Pose values apply only to `StarLiteIdle`, without rewriting mappings.
+  baseline. Pose values directly calibrate `StarLiteIdle`, without rewriting
+  mappings. The runtime's three generated gestures rebase to the selected Idle
+  reference pose, including calibration; model-authored or imported clips are
+  not rebased. Animated forearms and fingers retain their authored gesture
+  shape between corrected entry and exit poses.
 
 ## Commit discipline
 

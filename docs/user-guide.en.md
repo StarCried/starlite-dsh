@@ -71,7 +71,7 @@ Open settings and select a model card to switch. Each model retains its mappings
 
 Animation-free humanoid models receive the bundled idle. Optional bundled gestures and embedded standard glTF motions are available for event mapping. Blink and independent eye tracking require valid VRM bindings; missing optional capabilities do not reject a valid humanoid model. See [model import](model-import.en.md).
 
-**Pose and tracking** adjusts arms, symmetric palm rotation, wrist lift, hand curl, elbow bend, and independent head/eye sensitivity. Pose changes affect only the bundled idle. They do not modify the source or authored animations. Each control can be reset.
+**Pose and tracking** adjusts arms, symmetric palm rotation, wrist lift, hand curl, elbow bend, and independent head/eye sensitivity. Pose controls calibrate the bundled idle. The three built-in gestures start and end from the selected Idle pose, including its calibration when using the bundled idle. Source files, embedded motions, and imported animations remain unchanged. Each control can be reset.
 
 ## Billing
 

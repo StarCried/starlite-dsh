@@ -22,7 +22,7 @@ For a damaged program cache, fully exit DSH and StarLite, open `%LOCALAPPDATA%\S
 
 Open **Model information** for capabilities and resource counts. Triangle color is a single reference threshold, not an overall quality rank or measured FPS.
 
-Check actual VRM humanoid, blink, and lookAt bindings. Correct filenames or bone names alone are insufficient. Missing optional eyes/blinks disable only those behaviors. **Pose and tracking** can calibrate the bundled idle for a model's proportions; authored motions remain unchanged. Reset controls individually when needed.
+Check actual VRM humanoid, blink, and lookAt bindings. Correct filenames or bone names alone are insufficient. Missing optional eyes/blinks disable only those behaviors. **Pose and tracking** calibrates the bundled idle for a model's proportions. The three built-in gestures (`StarLiteCuriousPeek`, `StarLiteHappyWave`, `StarLiteSleepyStartle`) start and end from the selected Idle pose, including its calibration when using the bundled idle. The active wave retains its authored elbow and finger motion. Embedded and imported motions remain unchanged. Reset controls individually when needed.
 
 Only idle loops. Other gestures return to idle after one play; state changes can interrupt them. Click and ambient gestures are suppressed while working. Check mappings and Pause animation if a click shows billing but no motion.
 

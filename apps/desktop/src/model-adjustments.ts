@@ -142,7 +142,7 @@ export class ModelAdjustmentsPanel {
     const builtIn = model?.mappings.idle === "StarLiteIdle";
     const fingers = caps?.humanoid.optionalBones.filter(name => /(?:Thumb|Index|Middle|Ring|Little)(?:Metacarpal|Proximal|Intermediate|Distal)$/u.test(name)).length ?? 0;
     this.#title.textContent = model?.title ?? "";
-    this.#hint.textContent = builtIn ? t("姿态调节只作用于 StarLite 默认站姿，不改变其他动作。") : t("当前待机使用模型自带动作，保留原有姿态；视线仍可调节。");
+    this.#hint.textContent = builtIn ? t("姿态调节用于 StarLite 默认站姿；三个内置互动动作会从调节后的站姿开始和结束。") : t("当前待机使用模型自带动作，保留原有姿态；视线仍可调节。");
     for (const [field, row] of this.#rows) {
       const value = record(this.#draft, field.group)?.[field.key];
       row.input.value = String(value ?? field.initial);

@@ -42,7 +42,7 @@ VRM 0／1 的元数据、材质与物理由 VRM 后端读取。Blender 母版、
 
 程序提供一段基础待机 `StarLiteIdle`，采用当前微光已验收的放松站姿和轻呼吸。模型未指定基础动作时，优先选用名为 `Idle` 的模型动作，否则使用 `StarLiteIdle`；角色配置的有效 `neutralAnimation` 可指定模型的基础动作。明确提供的默认动作映射及用户保存的映射优先，可在设置中更换。
 
-该片段通过标准人形映射重定向，模型的身材、骨骼和权重仍会影响姿态，不能保证所有非标准身体都无穿模。限角头部跟随使用人形映射；自动眨眼和眼球跟随分别依赖有效 Blink 与 lookAt 配置。开发版还提供 `StarLiteCuriousPeek`（好奇探头，2.1 秒）、`StarLiteHappyWave`（开心招手，3.6 秒）、`StarLiteSleepyStartle`（困倦惊醒，5.5 秒），全部模型均可按需映射。现有映射保持不变；新导入普通模型的点击／偶发列表仍为空。
+该片段通过标准人形映射重定向，模型的身材、骨骼和权重仍会影响姿态，不能保证所有非标准身体都无穿模。限角头部跟随使用人形映射；自动眨眼和眼球跟随分别依赖有效 Blink 与 lookAt 配置。开发版还提供 `StarLiteCuriousPeek`（好奇探头，2.1 秒）、`StarLiteHappyWave`（开心招手，4.6 秒）、`StarLiteSleepyStartle`（困倦惊醒，5.5 秒），全部模型均可按需映射。现有映射保持不变；新导入普通模型的点击／偶发列表仍为空。
 
 基础待机的最终姿态和烘焙由 StarCried 制作，包含 Warudo `Human@SM Breathe` 呼吸层，不能称为完全原创。来源记录见 [default-idle.md](../apps/desktop/src-tauri/assets/default-idle.md)。
 

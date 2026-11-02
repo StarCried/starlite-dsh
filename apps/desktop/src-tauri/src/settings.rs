@@ -638,10 +638,10 @@ pub fn decode_settings(bytes: &[u8]) -> Result<DesktopSettings, String> {
                     .iter_mut()
                     .find(|item| item["name"] == clip["name"])
                 {
-                    // Migrate the known previous program wave duration only.
+                    // Migrate only the two known previous program wave durations.
                     // Other malformed catalog entries still fail validation.
                     if existing["name"] == "StarLiteHappyWave"
-                        && existing["durationMs"].as_f64() == Some(4500.0)
+                        && matches!(existing["durationMs"].as_f64(), Some(4500.0 | 3600.0))
                     {
                         existing["durationMs"] = clip["durationMs"].clone();
                     }
@@ -1389,43 +1389,51 @@ mod tests {
             .extend(crate::vrm::builtin_gesture_catalog());
         original.models[0].data.mappings.click = vec!["StarLiteHappyWave".into()];
         original.preferences.scale = 0.75;
-        let wave = original.models[0]
-            .data
-            .animations
-            .iter_mut()
-            .find(|clip| clip["name"] == "StarLiteHappyWave")
-            .unwrap();
-        wave["durationMs"] = 4500.0.into();
-        let restored = decode_settings(&serde_json::to_vec(&original).unwrap()).unwrap();
-        let updated = restored.models[0]
-            .data
-            .animations
-            .iter()
-            .find(|clip| clip["name"] == "StarLiteHappyWave")
-            .unwrap();
-        assert_eq!(updated["durationMs"], 3600.0);
-        assert_eq!(
-            restored.models[0].data.mappings.click,
-            ["StarLiteHappyWave"]
-        );
-        assert_eq!(restored.preferences.scale, 0.75);
-        assert_eq!(
-            restored.models[0].data.model_path,
-            original.models[0].data.model_path
-        );
-        let again = decode_settings(&settings_bytes(&restored).unwrap()).unwrap();
-        assert_eq!(
-            serde_json::to_value(&again).unwrap(),
-            serde_json::to_value(&restored).unwrap()
-        );
-        let wave = original.models[0]
-            .data
-            .animations
-            .iter_mut()
-            .find(|clip| clip["name"] == "StarLiteHappyWave")
-            .unwrap();
-        wave["durationMs"] = 1234.0.into();
-        assert!(decode_settings(&serde_json::to_vec(&original).unwrap()).is_err());
+        for previous_duration in [4500.0, 3600.0, 4600.0] {
+            let mut saved = serde_json::to_value(&original).unwrap();
+            let wave = saved["models"][0]["animations"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|clip| clip["name"] == "StarLiteHappyWave")
+                .unwrap();
+            wave["durationMs"] = previous_duration.into();
+            let restored = decode_settings(&serde_json::to_vec(&saved).unwrap()).unwrap();
+            let mut expected = original.clone();
+            expected.models[0]
+                .data
+                .animations
+                .iter_mut()
+                .find(|clip| clip["name"] == "StarLiteHappyWave")
+                .unwrap()["durationMs"] = 4600.0.into();
+            assert_eq!(
+                serde_json::to_value(&restored).unwrap(),
+                serde_json::to_value(&expected).unwrap()
+            );
+            let again = decode_settings(&settings_bytes(&restored).unwrap()).unwrap();
+            assert_eq!(
+                serde_json::to_value(&again).unwrap(),
+                serde_json::to_value(&restored).unwrap()
+            );
+        }
+        for invalid in [
+            serde_json::json!(1234.0),
+            serde_json::json!(3599.0),
+            serde_json::json!(3800.0),
+            serde_json::json!(4601.0),
+            serde_json::json!("3600"),
+            serde_json::Value::Null,
+        ] {
+            let mut saved = serde_json::to_value(&original).unwrap();
+            let wave = saved["models"][0]["animations"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|clip| clip["name"] == "StarLiteHappyWave")
+                .unwrap();
+            wave["durationMs"] = invalid;
+            assert!(decode_settings(&serde_json::to_vec(&saved).unwrap()).is_err());
+        }
     }
 
     #[test]

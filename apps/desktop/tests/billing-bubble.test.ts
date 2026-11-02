@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BillingSnapshot } from "@starcried/starlite-dsh-protocol";
 import { BillingBubble, renderBillingBubble, type BillingBubbleView } from "../src/billing-bubble.js";
 import { renderPlainBubble } from "../src/work-bubble.js";
+import { setUiLocale } from "../src/i18n.js";
+
+afterEach(() => setUiLocale("zh-CN"));
 
 const snapshot: BillingSnapshot = {
   billingVersion:1, checkedAt:1, balance:{status:"ready",balances:[{currency:"CNY",remaining:123.45}]},
@@ -70,16 +73,58 @@ describe("click fee bubble", () => {
 });
 
 describe("dedicated fee card", () => {
-  it("requires an official API Key rather than a signed-in desktop account", () => {
+  const account:BillingSnapshot={...snapshot,balance:{status:"ready",source:"deepseek-account",balances:[{currency:"CNY",remaining:109.89}],bonusBalances:[{currency:"CNY",remaining:.21}]},
+    today:{...snapshot.today,scope:"account",partial:true,pricedRequests:0,unpricedRequests:0,estimates:[]}};
+  it("shows recharge and bonus balances separately without inventing account prices", () => {
+    const output=document.createElement("output");
+    renderBillingBubble(output,{status:"ready",snapshot:account});
+    expect(output.querySelector(".billing-header")?.textContent).toContain("DeepSeek 登录账号");
+    expect(output.querySelector(".billing-wallet-recharge")?.textContent).toBe("充值余额¥109.89CNY");
+    expect(output.querySelector(".billing-wallet-bonus")?.textContent).toBe("赠金余额¥0.21CNY");
+    expect(output.textContent).toContain("账号费用以 DSH 用量页为准。");
+    expect(output.querySelector(".billing-today")).toBeNull();
+    expect(output.querySelector(".billing-period")).toBeNull();
+    expect(output.textContent).not.toMatch(/API|半价|110.10/);
+  });
+  it("keeps currencies separate, preserves negative values and does not turn an empty wallet into zero", () => {
+    const output=document.createElement("output");
+    renderBillingBubble(output,{status:"ready",snapshot:{...account,balance:{...account.balance,balances:[{currency:"USD",remaining:4.5},{currency:"CNY",remaining:-.25}],bonusBalances:[]}}});
+    expect(output.querySelector(".billing-wallet-recharge")?.textContent).toBe("充值余额¥-0.25CNY$4.50USD");
+    expect(output.querySelector(".billing-wallet-bonus")?.textContent).toBe("赠金余额暂无钱包记录");
+    renderBillingBubble(output,{status:"ready",snapshot:{...account,balance:{...account.balance,balances:[],bonusBalances:[]}}});
+    expect(output.querySelectorAll(".billing-wallet-empty")).toHaveLength(2);
+    expect(output.querySelector(".billing-amount")).toBeNull();
+    expect(output.textContent).not.toContain("暂时无法查询");
+  });
+  it("localizes the account card and keeps untrusted titles as plain text", () => {
+    setUiLocale("en");
+    const output=document.createElement("output");
+    const title='<img src=x onerror="alert(1)">';
+    renderBillingBubble(output,{status:"ready",snapshot:account},title);
+    expect(output.textContent).toContain("DeepSeek signed-in account");
+    expect(output.textContent).toContain("Recharge balance");
+    expect(output.textContent).toContain("Bonus balance");
+    expect(output.textContent).toContain("See DSH Usage for account charges.");
+    expect(output.textContent).not.toMatch(/\p{Script=Han}/u);
+    expect(output.querySelector(".bubble-title")?.textContent).toBe(title);
+    expect(output.querySelector("img")).toBeNull();
+    renderBillingBubble(output,{status:"ready",snapshot:{...account,balance:{status:"unavailable",source:"deepseek-account",balances:[]}}});
+    expect(output.textContent).toContain("Check your DSH account sign-in and connection");
+    expect(output.textContent).not.toMatch(/API|\p{Script=Han}/u);
+  });
+  it("explains both supported sign-in paths and gives source-appropriate recovery guidance", () => {
     const output=document.createElement("output");
     renderBillingBubble(output,{status:"ready",snapshot:{...snapshot,balance:{status:"unconfigured",balances:[]}}});
-    expect(output.querySelector(".billing-message")?.textContent).toBe("请先配置官方 DeepSeek API Key");
-    expect(output.querySelector(".billing-hint")?.textContent).toBe("在 DSH 的模型设置中配置官方 DeepSeek API Key。");
-    const failures:BillingBubbleView[]=[{status:"ready",snapshot:{...snapshot,balance:{status:"unavailable",balances:[]}}},{status:"error"}];
-    for(const view of failures){
+    expect(output.querySelector(".billing-message")?.textContent).toBe("登录 DSH 或配置 API Key");
+    expect(output.querySelector(".billing-hint")?.textContent).toBe("在 DSH 登录 DeepSeek 账号，或配置官方 API Key。");
+    const failures:[BillingBubbleView,string][]=[
+      [{status:"ready",snapshot:{...snapshot,balance:{status:"unavailable",balances:[]}}},"请检查官方 DeepSeek API Key 与网络，稍后再试。"],
+      [{status:"ready",snapshot:{...account,balance:{status:"unavailable",source:"deepseek-account",balances:[]}}},"请检查 DSH 账号登录状态与网络，稍后再试。"],
+      [{status:"error"},"请检查 DSH 登录状态、API Key 与网络，稍后再试。"],
+    ];
+    for(const [view,hint] of failures){
       renderBillingBubble(output,view);
-      expect(output.querySelector(".billing-hint")?.textContent).toBe("请检查官方 DeepSeek API Key 与网络，稍后再试。");
-      expect(output.textContent).not.toMatch(/配置官方账户|账户配置|登录/);
+      expect(output.querySelector(".billing-hint")?.textContent).toBe(hint);
     }
   });
 
@@ -93,7 +138,8 @@ describe("dedicated fee card", () => {
     expect(output.querySelector(".billing-status")?.textContent).toBe("默认官方配置");
     expect(Array.from(output.querySelectorAll(".billing-estimate"),item=>item.textContent)).toEqual(["¥0.1400–0.2800","$0.0200–0.0400"]);
     expect(output.querySelector(".billing-period")?.textContent).toBe("当前空闲时段（半价）");
-    expect(output.textContent).toContain("各官方模型用量区间估算 · 以账单为准");
+    expect(output.textContent).toContain("今日 API 用量估算");
+    expect(output.textContent).toContain("官方 API 用量区间估算 · 以账单为准");
     expect(output.querySelector(".bubble-content")).toBeNull();
   });
 
@@ -127,7 +173,7 @@ describe("dedicated fee card", () => {
     expect(output.querySelector(".bubble-title")?.textContent).toBe(title);expect(output.querySelector("img")).toBeNull();
     renderBillingBubble(output,{status:"ready",snapshot:{...snapshot,pricingPeriod:"peak",balance:{status:"unconfigured",balances:[]}}},title);
     expect(output.querySelectorAll(".billing-card")).toHaveLength(1);
-    expect(output.textContent).toContain("请先配置官方 DeepSeek");
+    expect(output.textContent).toContain("登录 DSH 或配置 API Key");
     expect(output.querySelector(".billing-period")?.textContent).toBe("当前高峰时段");
     renderBillingBubble(output,{status:"error"});
     expect(output.querySelector(".bubble-title")).toBeNull();

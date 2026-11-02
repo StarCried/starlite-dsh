@@ -1,5 +1,6 @@
 import {
   MAX_WIRE_BYTES,
+  BILLING_REQUEST_TIMEOUT_MS,
   parsePetConnectionUrl,
   parsePetSnapshotJson,
   parseBillingSnapshot,
@@ -103,7 +104,7 @@ export class StatusConnection {
   }
 
   async readBilling(): Promise<BillingSnapshot> {
-    return parseBillingSnapshot(await this.#request("/v1/billing",MAX_WIRE_BYTES));
+    return parseBillingSnapshot(await this.#request("/v1/billing",MAX_WIRE_BYTES,undefined,BILLING_REQUEST_TIMEOUT_MS));
   }
   async readInteraction(id:string):Promise<PetInteraction>{
     if(!isOpaqueRef(id))throw Error("invalid question reference");
@@ -120,11 +121,11 @@ export class StatusConnection {
     await this.#request("/v1/web/open",MAX_INTERACTION_BYTES,{});
   }
   #cancelRequests():void{for(const abort of this.#requests)abort.abort();this.#requests.clear();}
-  async #request(path:string,limit:number,body?:unknown):Promise<unknown>{
+  async #request(path:string,limit:number,body?:unknown,timeoutMs=10_000):Promise<unknown>{
     const descriptor = this.#descriptor;
     if (!descriptor || !this.#connected) throw new Error("companion disconnected");
     const abort = new AbortController(); this.#requests.add(abort);
-    const timer = this.#timers.setTimeout(() => abort.abort(), 10_000);
+    const timer = this.#timers.setTimeout(() => abort.abort(), timeoutMs);
     const request = this.#fetch;
     try {
       const jsonBody=body===undefined?undefined:JSON.stringify(body);

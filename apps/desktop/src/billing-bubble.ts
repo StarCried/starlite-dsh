@@ -39,7 +39,8 @@ export function renderBillingBubble(element: HTMLElement, view: BillingBubbleVie
   card.setAttribute("aria-label", t("DeepSeek 费用"));
   card.setAttribute("aria-busy", String(view.status === "loading"));
   const header = node("div", "billing-header");
-  header.append(node("span", "billing-label", t("DeepSeek 账户")));
+  const account = view.status === "ready" && view.snapshot.balance.source === "deepseek-account";
+  header.append(node("span", "billing-label", account ? t("DeepSeek 登录账号") : t("DeepSeek 账户")));
   card.append(header);
   if (view.status === "ready") {
     const snapshot = view.snapshot;
@@ -47,32 +48,52 @@ export function renderBillingBubble(element: HTMLElement, view: BillingBubbleVie
     const primary = balances[0];
     const sourceLabel = snapshot.balance.source === "deepseek-official" ? t("默认官方配置")
       : snapshot.balance.source === "deepseek" ? t("额外官方配置") : t("账户余额");
-    header.append(node("span", "billing-status", primary ? sourceLabel : t("查询提示")));
-    if (primary) {
+    header.append(node("span", "billing-status", snapshot.balance.status === "ready" ? sourceLabel : t("查询提示")));
+    if (account && snapshot.balance.status === "ready") {
+      for (const [kind, label, wallets] of [
+        ["recharge", t("充值余额"), balances],
+        ["bonus", t("赠金余额"), [...(snapshot.balance.bonusBalances ?? [])].sort((a, b) => Number(b.currency === "CNY") - Number(a.currency === "CNY"))],
+      ] as const) {
+        const group = node("div", `billing-wallet billing-wallet-${kind}`);
+        group.append(node("span", "billing-label", label));
+        if (!wallets.length) group.append(node("span", "billing-wallet-empty", t("暂无钱包记录")));
+        for (const wallet of wallets) {
+          const amount = node("div", "billing-wallet-amount");
+          amount.append(node("span", "billing-symbol", symbol(wallet.currency)), node("strong", "billing-amount", wallet.remaining.toFixed(2)), node("span", "billing-currency", wallet.currency));
+          group.append(amount);
+        }
+        card.append(group);
+      }
+    } else if (primary) {
       const remaining = node("div", "billing-balance");
       remaining.append(node("span", "billing-symbol", symbol(primary.currency)), node("strong", "billing-amount", primary.remaining.toFixed(2)), node("span", "billing-currency", primary.currency));
       card.append(remaining);
       if (balances.length > 1) card.append(node("div", "billing-secondary", balances.slice(1).map(item => `${item.currency} ${symbol(item.currency)}${item.remaining.toFixed(2)}`).join(" · ")));
     } else {
-      card.append(node("div", "billing-message", snapshot.balance.status === "unconfigured" ? t("请先配置官方 DeepSeek API Key") : t("暂时无法查询余额")));
-      card.append(node("p", "billing-hint", snapshot.balance.status === "unconfigured" ? t("在 DSH 的模型设置中配置官方 DeepSeek API Key。") : t("请检查官方 DeepSeek API Key 与网络，稍后再试。")));
+      card.append(node("div", "billing-message", snapshot.balance.status === "unconfigured" ? t("登录 DSH 或配置 API Key") : t("暂时无法查询余额")));
+      card.append(node("p", "billing-hint", snapshot.balance.status === "unconfigured" ? t("在 DSH 登录 DeepSeek 账号，或配置官方 API Key。")
+        : account ? t("请检查 DSH 账号登录状态与网络，稍后再试。") : t("请检查官方 DeepSeek API Key 与网络，稍后再试。")));
     }
-    const today = node("div", "billing-today");
-    today.append(node("span", "billing-label", t("今日 DSH 估算")));
-    const amounts = node("span", "billing-estimates");
-    const currencies: BillingCurrency[] = snapshot.today.estimates.length ? snapshot.today.estimates.map(item => item.currency) : [primary?.currency ?? "CNY"];
-    for (const currency of currencies) amounts.append(node("span", "billing-estimate", estimateText(snapshot, currency)));
-    today.append(amounts);card.append(today);
-    const notes = coverageNotes(snapshot);
-    card.append(node("p", "billing-hint", [...notes, t("各官方模型用量区间估算 · 以账单为准")].join(" · ")));
-    const footer = node("div", "billing-footer");
-    const period = node("span", "billing-period", periodText(snapshot));
-    period.dataset.period = snapshot.pricingPeriod ?? "unknown";
-    footer.append(period, node("span", "billing-timezone", t("北京时间")));card.append(footer);
+    if (account) {
+      card.append(node("p", "billing-hint billing-account-note", t("账号费用以 DSH 用量页为准。")));
+    } else {
+      const today = node("div", "billing-today");
+      today.append(node("span", "billing-label", t("今日 API 用量估算")));
+      const amounts = node("span", "billing-estimates");
+      const currencies: BillingCurrency[] = snapshot.today.estimates.length ? snapshot.today.estimates.map(item => item.currency) : [primary?.currency ?? "CNY"];
+      for (const currency of currencies) amounts.append(node("span", "billing-estimate", estimateText(snapshot, currency)));
+      today.append(amounts);card.append(today);
+      const notes = coverageNotes(snapshot);
+      card.append(node("p", "billing-hint", [...notes, t("官方 API 用量区间估算 · 以账单为准")].join(" · ")));
+      const footer = node("div", "billing-footer");
+      const period = node("span", "billing-period", periodText(snapshot));
+      period.dataset.period = snapshot.pricingPeriod ?? "unknown";
+      footer.append(period, node("span", "billing-timezone", t("北京时间")));card.append(footer);
+    }
   } else {
     header.append(node("span", "billing-status", view.status === "loading" ? t("查询中") : t("暂不可用")));
     card.append(node("div", "billing-message", view.status === "loading" ? t("正在查询余额与费用…") : t("费用暂时无法查询")));
-    card.append(node("p", "billing-hint", view.status === "loading" ? t("读取账户余额与今日 DSH 用量。") : t("请检查官方 DeepSeek API Key 与网络，稍后再试。")));
+    card.append(node("p", "billing-hint", view.status === "loading" ? t("读取账号余额，或官方 API 余额与用量。") : t("请检查 DSH 登录状态、API Key 与网络，稍后再试。")));
   }
   const heading = title ? node("span", "bubble-title", title) : undefined;
   element.replaceChildren(...(heading ? [heading, card] : [card]));

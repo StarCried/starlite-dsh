@@ -109,6 +109,14 @@ body {
 #bubble .billing-amount { font-size: 31px; font-weight: 650; letter-spacing: -.025em; }
 #bubble .billing-currency { margin-left: 4px; color: #7b8fa0; font-size: 11px; }
 #bubble .billing-secondary { margin: -2px 0 8px; color: #60758a; font-size: 11px; }
+#bubble .billing-wallet { margin-top: 10px; }
+#bubble .billing-wallet-amount { display: flex; align-items: baseline; gap: 3px; color: #23445d; line-height: 1.25; }
+#bubble .billing-wallet-bonus { padding: 7px 9px; border-radius: 8px; background: #eaf5f1; }
+#bubble .billing-wallet-bonus .billing-amount { font-size: 20px; }
+#bubble .billing-wallet-bonus .billing-symbol { font-size: 14px; }
+#bubble .billing-wallet-bonus .billing-wallet-amount { color: #356d61; }
+#bubble .billing-wallet-empty { display: block; margin-top: 3px; color: #7a8b9b; font-size: 11px; }
+#bubble .billing-account-note { padding-top: 8px; }
 #bubble .billing-today { align-items: baseline; border-top: 1px solid #e0eaf2; padding-top: 8px; }
 #bubble .billing-estimates { display: flex; flex-direction: column; align-items: flex-end; color: #355974; font-size: 12px; font-weight: 600; }
 #bubble .billing-estimate { white-space: nowrap; }

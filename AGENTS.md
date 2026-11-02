@@ -44,6 +44,12 @@
   agent control or intercept tool permission approvals.
 - Render bubble content as plain text. Do not persist or log bubble text or the
   bearer token.
+- Login-account billing consumes only `deepseekAccount.getState/getBalance/watch`.
+  Never resolve account tokens or parse credential files. Keep recharge and bonus
+  wallets separate, and never reuse API prices for account charges. Credential
+  changes must invalidate both cached and pending results, including same-status
+  account switches. Account queries need a dedicated timeout beyond the official
+  30-second balance request; navigation and question deadlines remain unchanged.
 - Treat VRM files, deep links, manifests, and status frames as untrusted.
   Invalid inputs fail closed without preventing DSH itself from starting.
 

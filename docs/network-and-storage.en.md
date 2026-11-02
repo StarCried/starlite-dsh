@@ -7,7 +7,8 @@ StarLite does not download example models during npm installation. The npm packa
 | Purpose | Trigger | Destination and data |
 | --- | --- | --- |
 | Selected example model | Startup with an example selected and its verified cache missing or invalid | HTTPS GET to a pinned GitHub Release URL; redirects to `release-assets.githubusercontent.com` are allowed. No cookies, API keys, or session content |
-| DeepSeek balance | Opening the billing card with a supported official account configured and an expired cache | GET `https://api.deepseek.com/user/balance`; the existing key is sent only to this endpoint, without redirects. Cached for 60 seconds |
+| Signed-in DeepSeek account balance | Opening the billing card while signed in, with an expired cache | Calls the official Host's `deepseekAccount.getBalance`; DSH queries `/api/v0/users/get_user_summary` on its configured Platform origin for recharge and bonus wallets. DSH handles the login token; StarLite and the companion do not receive it. Cached for 60 seconds |
+| DeepSeek API-key balance | Signed out or no account service, a supported official key configured, and the billing card opened with an expired cache | GET `https://api.deepseek.com/user/balance`; the existing API key is sent only to this endpoint, without redirects. Cached for 60 seconds |
 | Status and question answers | While the Host and companion run | An ephemeral IPv4 `127.0.0.1` port with an in-memory process token. Sanitized status/content and explicit answers stay on the local connection |
 
 This table covers the plugin, not the model/tool requests DSH makes for your tasks. StarLite has no telemetry or background update service. Opening a project link, browser, or DSH window is user-triggered navigation.

@@ -9,7 +9,8 @@ StarLite 不在 npm 安装阶段运行模型下载脚本。npm 包携带 Windows
 | 用途 | 何时发生 | 目标与数据 |
 | --- | --- | --- |
 | 示例模型 | 启动时选中了示例，且对应版本缓存缺失或校验失败 | 对程序清单中固定的 GitHub Release VRM 地址发送 HTTPS GET；允许跳转至 `release-assets.githubusercontent.com`。不携带 Cookie、API Key 或会话内容 |
-| DeepSeek 余额 | 用户打开费用卡，DSH 已配置支持的官方账户，且余额缓存过期 | GET `https://api.deepseek.com/user/balance`；仅向该官方端点发送 DSH 中已有的账户凭据，不允许重定向。余额缓存 60 秒 |
+| DeepSeek 登录账号余额 | 用户打开费用卡，DSH 账号已登录，且余额缓存过期 | 调用官方 Host 的 `deepseekAccount.getBalance`；由 DSH 向其配置的 Platform origin 的 `/api/v0/users/get_user_summary` 查询充值与赠金。登录令牌由 DSH 处理，不交给 StarLite 或桌宠。余额缓存 60 秒 |
+| DeepSeek API Key 余额 | 未登录／无账号服务，已配置支持的官方 API Key，用户打开费用卡且缓存过期 | GET `https://api.deepseek.com/user/balance`；仅向该官方端点发送 DSH 中已有的 API Key，不允许重定向。余额缓存 60 秒 |
 | 桌宠状态与答题 | DSH 与桌宠运行期间 | 本机 `127.0.0.1` 随机端口，进程级临时令牌认证；状态、受限文字及用户主动提交的回答留在本机链路 |
 
 这些是插件自身的行为，不涵盖 DSH 执行用户任务时产生的模型或工具请求。StarLite 没有遥测或后台检查更新服务。打开项目链接、外部浏览器或 DSH 界面属于用户触发的导航。

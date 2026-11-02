@@ -73,11 +73,13 @@ Animation-free humanoid models receive the bundled idle. Optional bundled gestur
 
 ## Billing
 
-Configure an official DeepSeek API key in DSH's model settings; no second key is required in StarLite. Supported API-key routes are `deepseek-official` and optional `deepseek`; the default official route takes precedence. A desktop account login token is not an API key and is not used for billing.
+Sign into DeepSeek in a DSH version that provides the account service, then click the model to check your balance. No API key is required. The card identifies the source and shows recharge and bonus wallets separately, without adding different currencies.
 
-The official read-only balance request is cached for 60 seconds and does not invoke model inference. Keys stay in the Host. Different official models on one account share its balance. With multiple accounts, the card identifies the selected configuration, but today's estimate covers available official usage in the current profile and is not an account-specific bill. Historical requests cannot be reliably reassigned after changing keys.
+The signed-in account takes priority. When signed out, or when an older DSH lacks the account service, StarLite uses an existing official API key (`deepseek-official` before optional `deepseek`). An account query failure never silently switches to a potentially different API account. Balances are cached for 60 seconds; login and credential changes invalidate the cache. Missing wallets and failed queries are not reported as zero. Account queries can take about 30 seconds and do not invoke paid inference.
 
-Unpriced models, unsupported gateways, and incomplete records are explicitly marked. The peak/off-peak badge uses China Standard Time; estimates are ranges, not authoritative bills. In-progress requests and other applications are excluded.
+For account charges, use DSH's usage page: StarLite does not apply API-key prices to account billing. The official Host service handles login credentials; StarLite consumes only the balance. Login tokens, API keys, and personal account details are never sent to the companion.
+
+API-key mode retains today's API usage estimate and the China Standard Time peak/off-peak badge. This estimate covers eligible official API requests in the current profile, not one account's authoritative bill. History cannot be reliably reassigned after changing keys. Unpriced models, gateways, and incomplete records are marked; in-progress requests, account-login requests, and other applications are excluded.
 
 ## Upgrade or uninstall
 

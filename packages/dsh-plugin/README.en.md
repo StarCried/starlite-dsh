@@ -49,7 +49,7 @@ npm installation runs no model-download script. On DSH startup, the selected exa
 
 Program/example cache: `%LOCALAPPDATA%\StarCried\StarLite\companions`. User models/preferences: `%APPDATA%\com.starcried.dsh-inochi2d-pet`. WSL uses the same Windows program and cache. Status and explicit answers travel only over token-authenticated local `127.0.0.1` connections. User prompts, tool arguments/results, real session IDs, and API keys are not sent to the companion.
 
-Opening billing with a supported official DeepSeek API key queries `https://api.deepseek.com/user/balance`, cached for 60 seconds. No paid inference request is made. There is no telemetry or background updater. Hide model or a custom model prevents subsequent default-example downloads; disabling the plugin stops it.
+Opening billing prefers DSH's official account service, which queries `/api/v0/users/get_user_summary` on DSH's Platform origin for recharge and bonus wallets. When signed out or no account service exists, an official API key queries `https://api.deepseek.com/user/balance`. Balances are cached for 60 seconds; no paid inference is requested and no login token or API key reaches the companion. Account charges belong to DSH's usage page; today's estimate applies only to API-key mode. There is no telemetry or background updater. Hide model or a custom model prevents subsequent default-example downloads; disabling the plugin stops it.
 
 [Full network disclosure and implementation references](https://github.com/StarCried/starlite-dsh/blob/main/docs/network-and-storage.en.md)
 

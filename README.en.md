@@ -39,7 +39,7 @@ To understand the project first, ask the Agent to read that guide and explain in
 
 ## Everyday use
 
-- **Click the body:** play an idle interaction and show official DeepSeek balance and estimated DSH usage.
+- **Click the body:** play an idle interaction and show DeepSeek balance through account login or an API key; API mode also shows estimated usage.
 - **Double-click:** open the displayed session, or DSH when no session is active. Desktop sessions open in the official app; CLI/Web sessions open in your browser.
 - **Drag the body:** move the character. Transparent areas let clicks reach the application behind it.
 - **Right-click:** change size, frame rate, tracking, and bubbles; restore position or open full settings.

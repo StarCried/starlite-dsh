@@ -22,6 +22,8 @@
   require the persisted opt-in and stop when paused, hidden or on a secure
   desktop. Return only reduced RGB, never pixels; do not write captures, upload
   them, hide the pet to sample, or exclude it from other applications' recordings.
+  New or omitted strength settings default to 1.0 (100%), with a 0–2 range;
+  preserve explicit saved strengths, and keep sampling disabled by default.
 - Keep `docs/network-and-storage.md` and the packaged README's download disclosure
   aligned with bootstrap, billing and launcher behavior. External directories may
   compare static call-pattern scans with runtime events; do not invent unsupported

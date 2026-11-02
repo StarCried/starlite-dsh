@@ -110,7 +110,7 @@ pub struct DesktopPreferences {
 }
 
 fn default_environment_lighting_strength() -> f64 {
-    0.2
+    1.0
 }
 
 fn enabled_by_default() -> bool {
@@ -405,9 +405,9 @@ pub fn validate_preferences(preferences: &DesktopPreferences) -> Result<(), Stri
         return Err("model scale must be between 0.25 and 3".into());
     }
     if !preferences.environment_lighting_strength.is_finite()
-        || !(0.0..=1.0).contains(&preferences.environment_lighting_strength)
+        || !(0.0..=2.0).contains(&preferences.environment_lighting_strength)
     {
-        return Err("environment lighting strength must be between 0 and 1".into());
+        return Err("environment lighting strength must be between 0 and 2".into());
     }
     Ok(())
 }
@@ -875,6 +875,10 @@ mod tests {
 
     #[test]
     fn environment_lighting_is_opt_in_and_patches_preserve_other_preferences() {
+        assert_eq!(
+            DesktopPreferences::default().environment_lighting_strength,
+            1.0
+        );
         let mut value = serde_json::to_value(DesktopSettings::default()).unwrap();
         value["preferences"]
             .as_object_mut()
@@ -887,20 +891,34 @@ mod tests {
         value["preferences"]["fps"] = 60.into();
         let decoded = decode_settings(&serde_json::to_vec(&value).unwrap()).unwrap();
         assert!(!decoded.preferences.environment_lighting_enabled);
-        assert_eq!(decoded.preferences.environment_lighting_strength, 0.2);
+        assert_eq!(decoded.preferences.environment_lighting_strength, 1.0);
+        // Saved explicit choices from the first implementation are not migrated
+        // to the new default; only absent fields get the current default.
+        value["preferences"]["environmentLightingStrength"] = 0.2.into();
+        let existing = decode_settings(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert_eq!(existing.preferences.environment_lighting_strength, 0.2);
+        assert!(!existing.preferences.environment_lighting_enabled);
         let patch: PreferencesPatch = serde_json::from_value(serde_json::json!({
-            "environmentLightingEnabled":true, "environmentLightingStrength":0.4
+            "environmentLightingEnabled":true, "environmentLightingStrength":2.0
         }))
         .unwrap();
         let next = patch.apply(&decoded.preferences).unwrap();
         assert!(next.environment_lighting_enabled);
-        assert_eq!(next.environment_lighting_strength, 0.4);
+        assert_eq!(next.environment_lighting_strength, 2.0);
         assert_eq!(next.fps, 60);
         let round_trip: DesktopPreferences =
             serde_json::from_slice(&serde_json::to_vec(&next).unwrap()).unwrap();
         assert!(round_trip.environment_lighting_enabled);
-        assert_eq!(round_trip.environment_lighting_strength, 0.4);
-        for invalid in [-0.1, 1.1, f64::INFINITY, f64::NAN] {
+        assert_eq!(round_trip.environment_lighting_strength, 2.0);
+        let zero: PreferencesPatch = serde_json::from_value(serde_json::json!({
+            "environmentLightingStrength":0.0
+        }))
+        .unwrap();
+        assert_eq!(
+            zero.apply(&next).unwrap().environment_lighting_strength,
+            0.0
+        );
+        for invalid in [-0.1, 2.01, f64::INFINITY, f64::NAN] {
             assert!(validate_preferences(&DesktopPreferences {
                 environment_lighting_strength: invalid,
                 ..DesktopPreferences::default()

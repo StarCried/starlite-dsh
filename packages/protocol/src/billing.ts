@@ -1,5 +1,11 @@
 /** Read-only financial summary. Never includes credentials or session identity. */
 export type BillingCurrency = "CNY" | "USD";
+export interface BillingWallet {
+  currency: BillingCurrency;
+  remaining: number;
+  /** Original bounded account decimal, for formatting without floating-point rounding. */
+  decimal?: string;
+}
 /** Allows the official account service's 30-second request to settle. */
 export const BILLING_REQUEST_TIMEOUT_MS = 35_000;
 export interface BillingSnapshot {
@@ -9,8 +15,8 @@ export interface BillingSnapshot {
   balance: {
     status: "ready" | "unconfigured" | "unavailable";
     source?: "deepseek-official" | "deepseek" | "deepseek-account";
-    balances: { currency: BillingCurrency; remaining: number }[];
-    bonusBalances?: { currency: BillingCurrency; remaining: number }[];
+    balances: BillingWallet[];
+    bonusBalances?: BillingWallet[];
   };
   today: {
     scope?: "api-key" | "account";
@@ -33,9 +39,9 @@ export function parseBillingSnapshot(value: unknown): BillingSnapshot {
     || today.timeZone !== "Asia/Shanghai" || typeof today.partial !== "boolean"
     || !date(today.date) || !date(today.pricingDate)
     || !count(today.pricedRequests) || !count(today.unpricedRequests)) throw new Error("invalid billing summary");
-  const balances = walletBalances(balance.balances);
   const account = balance.source === "deepseek-account";
-  const bonusBalances = balance.bonusBalances === undefined ? undefined : walletBalances(balance.bonusBalances);
+  const balances = walletBalances(balance.balances, account);
+  const bonusBalances = balance.bonusBalances === undefined ? undefined : walletBalances(balance.bonusBalances, account);
   if (account) {
     // An empty official wallet list is not evidence of a zero balance.
     if (balance.status !== "ready" && (balances.length || bonusBalances?.length)) throw new Error("invalid balance status");
@@ -67,10 +73,14 @@ export function parseBillingSnapshot(value: unknown): BillingSnapshot {
   };
 }
 
-function walletBalances(value: unknown): {currency: BillingCurrency; remaining: number}[] {
+function walletBalances(value: unknown, account: boolean): BillingWallet[] {
   return currencies(value).map(entry => {
     if (!signedAmount(entry.remaining)) throw new Error("invalid balance");
-    return {currency: entry.currency as BillingCurrency, remaining: entry.remaining as number};
+    if (entry.decimal !== undefined && (!account || typeof entry.decimal !== "string" || entry.decimal.length > 128
+      || !/^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/iu.test(entry.decimal)
+      || Number(entry.decimal) !== entry.remaining)) throw new Error("invalid exact balance");
+    return {currency: entry.currency as BillingCurrency, remaining: entry.remaining as number,
+      ...(entry.decimal === undefined ? {} : {decimal: entry.decimal as string})};
   });
 }
 

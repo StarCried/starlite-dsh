@@ -35,6 +35,15 @@ describe("billing boundary", () => {
       {...valid,today:{...valid.today,scope:"account"}},
     ]) expect(() => parseBillingSnapshot(value)).toThrow();
   });
+  it("preserves bounded exact account amounts and rejects mismatched or nonnumeric decimals", () => {
+    const exact = {...account,balance:{...account.balance,balances:[{currency:"CNY",remaining:109.899,decimal:"109.89900000000000"}],
+      bonusBalances:[{currency:"CNY",remaining:0,decimal:"1e-999"}]}};
+    expect(parseBillingSnapshot(exact)).toEqual(exact);
+    for (const decimal of ["109.89", "PRIVATE", "NaN", " 109.899", "109.899"+"0".repeat(129)]) {
+      expect(() => parseBillingSnapshot({...exact,balance:{...exact.balance,balances:[{currency:"CNY",remaining:109.899,decimal}]}})).toThrow();
+    }
+    expect(() => parseBillingSnapshot({...valid,balance:{...valid.balance,balances:[{currency:"CNY",remaining:123.45,decimal:"123.45"}]}})).toThrow();
+  });
   it("reconstructs only financial fields", () => {
     const parsed = parseBillingSnapshot({...valid, secret: "PRIVATE", balance: {...valid.balance, key: "PRIVATE"}});
     expect(parsed).toEqual(valid);

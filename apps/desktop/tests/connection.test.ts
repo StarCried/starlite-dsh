@@ -184,7 +184,7 @@ describe("single Host ownership",()=>{
     try{
       test.stream.error(Error("temporary disconnection"));
       await vi.waitFor(()=>expect(test.callbacks.onDisconnected).toHaveBeenCalledOnce());
-      expect(test.connection.connect(other)).toBe("conflict");expect(test.callbacks.onConflict).toHaveBeenCalledOnce();
+      expect(test.connection.connect(other)).toBe("conflict");expect(test.callbacks.onConflict).not.toHaveBeenCalled();
       expect(test.connection.connect(CONNECTION_URL)).toBe("unchanged");
       test.connection.stop();
       test.request.mockImplementation(async()=>new Response(new ReadableStream(),{headers:{"Content-Type":"text/event-stream"}}));
@@ -219,6 +219,45 @@ describe("single Host ownership",()=>{
     await vi.waitFor(()=>expect(test.callbacks.onConnected).toHaveBeenCalledOnce());
     test.connection.connect(other);test.connection.stop();
     expect(test.connection.connectPending()).toBe(false);
+  });
+
+  it("queues an offline restart silently while preserving recovered Host ownership and the first successor",async()=>{
+    vi.useFakeTimers();
+    const test=fixture();
+    const first=other.replace("45678","45679"),later=other.replace("45678","45680");
+    let recovered!:ReadableStreamDefaultController<Uint8Array>;
+    try {
+      test.connection.connect(CONNECTION_URL);
+      await vi.advanceTimersByTimeAsync(0);
+      test.stream.error(Error("Host stopped"));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(test.callbacks.onDisconnected).toHaveBeenCalledOnce();
+      expect(test.connection.connect(first)).toBe("conflict");
+      expect(test.connection.connect(later)).toBe("conflict");
+      expect(test.callbacks.onConflict).not.toHaveBeenCalled();
+      expect(test.request).toHaveBeenCalledOnce();
+
+      test.request.mockImplementation(async()=>new Response(new ReadableStream<Uint8Array>({
+        start(stream){recovered=stream;},
+      }),{headers:{"Content-Type":"text/event-stream"}}));
+      await vi.advanceTimersByTimeAsync(250);
+      expect(test.request.mock.calls.at(-1)![0]).toBe("http://127.0.0.1:45678/v1/events");
+      expect(test.callbacks.onConnected).toHaveBeenCalledTimes(2);
+      expect(test.connection.connectPending()).toBe(false);
+      expect(test.callbacks.onConflict).not.toHaveBeenCalled();
+
+      test.connection.connect(later);test.connection.connect(later);
+      expect(test.callbacks.onConflict).toHaveBeenCalledOnce();
+      recovered.error(Error("Host stopped again"));
+      await vi.advanceTimersByTimeAsync(0);
+      // The owner calls this only when its existing offline lease expires.
+      expect(test.connection.connectPending()).toBe(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(test.request.mock.calls.at(-1)![0]).toBe("http://127.0.0.1:45679/v1/events");
+      expect(test.callbacks.onConnected).toHaveBeenCalledTimes(3);
+      expect(test.connection.connectPending()).toBe(false);
+      expect(test.callbacks.onConflict).toHaveBeenCalledOnce();
+    } finally {test.connection.stop();vi.useRealTimers();}
   });
 
   it("does not accept late headers from a superseded Host",async()=>{

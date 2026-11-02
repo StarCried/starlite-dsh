@@ -66,7 +66,9 @@ export class StatusConnection {
       // A transient disconnection does not release this Host's ownership.
       // Retain only the first successor, without changing the current lease.
       this.#pendingDescriptor ??= descriptor;
-      if (!this.#conflictReported) {
+      // A new Host after disconnection is an ordinary restart candidate.
+      // Queue it under the same lease without presenting a live-Host warning.
+      if (this.#connected && !this.#conflictReported) {
         this.#conflictReported = true;
         this.#callbacks.onConflict?.();
       }

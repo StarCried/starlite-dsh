@@ -6,6 +6,9 @@
   WSL2 CLI/Web, native Windows CLI/Web, or the official Windows Desktop app.
   It is not a general desktop-pet framework. Do not silently replace a live
   Host connection when another profile or installation starts.
+- A new connection after the current stream disconnects queues silently under
+  the existing 60-second lease. Warn only for a live connected Host conflict;
+  preserve the first queued successor and never infer takeover from a restart.
 - Keep the Cordis bundle, cross-process protocol, and Tauri desktop app in this
   repository. Reusable Inochi2D/VRM rendering and model preparation stay in the
   StarLite component repository (`StarCried/starlite`). Local checkout paths use

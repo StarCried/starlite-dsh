@@ -43,7 +43,7 @@ describe("DeepSeek account billing", () => {
     try {
       const result = await f.source.read();
       expect(result.balance).toEqual({status: "ready", source: "deepseek-account",
-        balances: [{currency: "CNY", remaining: 109.89}], bonusBalances: [{currency: "CNY", remaining: .21}]});
+        balances: [{currency: "CNY", remaining: 109.89, decimal: "109.89"}], bonusBalances: [{currency: "CNY", remaining: .21, decimal: ".21"}]});
       expect(result.today).toMatchObject({scope: "account", partial: true, estimates: [], pricedRequests: 0, unpricedRequests: 0});
       expect(result.pricingPeriod).toBeUndefined();
       expect(f.account.getBalance).toHaveBeenCalledExactlyOnceWith({version: expect.stringMatching(/^\d+\.\d+\.\d+/u),
@@ -148,10 +148,21 @@ describe("DeepSeek account billing", () => {
     try {
       f.account.getBalance.mockResolvedValue({status: "ready", value: [{currency: "CNY", balance: "0E-16"}, {currency: "USD", balance: "-2.5e-1"}],
         bonusWallets: [{currency: "USD", balance: "5.0000000000000000"}]});
-      expect((await f.source.read()).balance).toMatchObject({balances: [{currency: "CNY", remaining: 0}, {currency: "USD", remaining: -.25}],
-        bonusBalances: [{currency: "USD", remaining: 5}]});
+      expect((await f.source.read()).balance).toMatchObject({balances: [{currency: "CNY", remaining: 0, decimal: "0E-16"}, {currency: "USD", remaining: -.25, decimal: "-2.5e-1"}],
+        bonusBalances: [{currency: "USD", remaining: 5, decimal: "5.0000000000000000"}]});
       f.account.getBalance.mockResolvedValue({status: "ready", value: [], bonusWallets: []}); await f.notify();
       expect((await f.source.read()).balance).toEqual({status: "ready", source: "deepseek-account", balances: [], bonusBalances: []});
+    } finally {f.source.close();}
+  });
+  it("preserves exact account decimals when numeric projection rounds or underflows", async () => {
+    const f = fixture();
+    try {
+      const exact = "109.899999999999999999999999999999999999";
+      f.account.getBalance.mockResolvedValue({status: "ready", value: [{currency: "CNY", balance: exact}],
+        bonusWallets: [{currency: "CNY", balance: "1e-999"}]});
+      expect((await f.source.read()).balance).toEqual({status: "ready", source: "deepseek-account",
+        balances: [{currency: "CNY", remaining: Number(exact), decimal: exact}],
+        bonusBalances: [{currency: "CNY", remaining: 0, decimal: "1e-999"}]});
     } finally {f.source.close();}
   });
   it.each(["NaN", "Infinity", "1e999", "1000000001", "0x10", "1,000", " ", "1".repeat(129)])("rejects malformed or unbounded account money %s", async amount => {

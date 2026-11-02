@@ -290,7 +290,7 @@ function accountWallets(value: unknown): BillingSnapshot["balance"]["balances"] 
       || entry.balance.length > 128 || !/^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(entry.balance)) throw new Error("invalid account wallet");
     const remaining = Number(entry.balance);
     if (!Number.isFinite(remaining) || Math.abs(remaining) > 1_000_000_000) throw new Error("invalid account amount");
-    return {currency: entry.currency as "CNY" | "USD", remaining};
+    return {currency: entry.currency as "CNY" | "USD", remaining, decimal: entry.balance};
   });
   if (new Set(wallets.map(wallet => wallet.currency)).size !== wallets.length) throw new Error("duplicate account currency");
   return wallets;

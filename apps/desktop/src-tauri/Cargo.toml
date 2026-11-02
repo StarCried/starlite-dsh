@@ -36,4 +36,4 @@ uuid = { version = "1.18.1", features = ["v4"] }
 tempfile = "3.23.0"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Graphics_Gdi", "Win32_System_StationsAndDesktops", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }

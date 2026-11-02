@@ -17,6 +17,11 @@
   scope change.
 - Model-only alpha hit testing and transparent background passthrough are approved.
   Keep cursor coordinates in memory; do not log or transmit desktop input.
+- Optional environment lighting samples at most eight 12x12 visible patches
+  outside the main window, at most four times a second. Native sampling must
+  require the persisted opt-in and stop when paused, hidden or on a secure
+  desktop. Return only reduced RGB, never pixels; do not write captures, upload
+  them, hide the pet to sample, or exclude it from other applications' recordings.
 - Keep `docs/network-and-storage.md` and the packaged README's download disclosure
   aligned with bootstrap, billing and launcher behavior. External directories may
   compare static call-pattern scans with runtime events; do not invent unsupported

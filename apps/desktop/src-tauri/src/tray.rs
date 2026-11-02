@@ -26,7 +26,7 @@ impl UiState {
         self.connected.lock().is_ok_and(|value| *value)
     }
 
-    fn paused(&self) -> bool {
+    pub(crate) fn paused(&self) -> bool {
         self.paused.lock().map_or(true, |value| *value)
     }
 

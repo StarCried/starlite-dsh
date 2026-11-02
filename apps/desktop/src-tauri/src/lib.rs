@@ -1,4 +1,5 @@
 mod default_model;
+mod environment;
 mod hit_test;
 mod locale;
 mod model;
@@ -208,6 +209,7 @@ pub fn run() {
         .manage(hit_test::HitTestState::default())
         .manage(model_viewport::ModelViewportState::default())
         .manage(settings::SettingsWriteState::default())
+        .manage(environment::EnvironmentSamplingState::default())
         .invoke_handler(tauri::generate_handler![
             get_ui_locale,
             get_settings,
@@ -237,8 +239,11 @@ pub fn run() {
             hit_test::begin_model_drag,
             hit_test::move_model_drag,
             hit_test::end_model_drag,
+            environment::sample_environment_color,
         ])
         .setup(|app| {
+            app.state::<environment::EnvironmentSamplingState>()
+                .configure(&settings::load(app.handle()).preferences);
             if let Some(window) = app.get_webview_window("settings") {
                 let _ = window.set_title(locale::text(
                     "StarLite for DSH 设置",

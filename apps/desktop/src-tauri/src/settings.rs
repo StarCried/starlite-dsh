@@ -103,6 +103,14 @@ pub struct DesktopPreferences {
     pub bubbles_visible: bool,
     #[serde(default = "enabled_by_default")]
     pub pointer_enabled: bool,
+    #[serde(default)]
+    pub environment_lighting_enabled: bool,
+    #[serde(default = "default_environment_lighting_strength")]
+    pub environment_lighting_strength: f64,
+}
+
+fn default_environment_lighting_strength() -> f64 {
+    0.2
 }
 
 fn enabled_by_default() -> bool {
@@ -121,6 +129,8 @@ pub struct PreferencesPatch {
     pub performance_overlay: Option<bool>,
     pub bubbles_visible: Option<bool>,
     pub pointer_enabled: Option<bool>,
+    pub environment_lighting_enabled: Option<bool>,
+    pub environment_lighting_strength: Option<f64>,
 }
 
 impl PreferencesPatch {
@@ -138,6 +148,12 @@ impl PreferencesPatch {
                 .unwrap_or(current.performance_overlay),
             bubbles_visible: self.bubbles_visible.unwrap_or(current.bubbles_visible),
             pointer_enabled: self.pointer_enabled.unwrap_or(current.pointer_enabled),
+            environment_lighting_enabled: self
+                .environment_lighting_enabled
+                .unwrap_or(current.environment_lighting_enabled),
+            environment_lighting_strength: self
+                .environment_lighting_strength
+                .unwrap_or(current.environment_lighting_strength),
         };
         validate_preferences(&next)?;
         Ok(next)
@@ -163,6 +179,8 @@ impl Default for DesktopPreferences {
             performance_overlay: false,
             bubbles_visible: true,
             pointer_enabled: true,
+            environment_lighting_enabled: false,
+            environment_lighting_strength: default_environment_lighting_strength(),
         }
     }
 }
@@ -385,6 +403,11 @@ pub fn validate_preferences(preferences: &DesktopPreferences) -> Result<(), Stri
     }
     if !preferences.scale.is_finite() || !(0.25..=3.0).contains(&preferences.scale) {
         return Err("model scale must be between 0.25 and 3".into());
+    }
+    if !preferences.environment_lighting_strength.is_finite()
+        || !(0.0..=1.0).contains(&preferences.environment_lighting_strength)
+    {
+        return Err("environment lighting strength must be between 0 and 1".into());
     }
     Ok(())
 }
@@ -674,7 +697,11 @@ pub fn store(app: &AppHandle, settings: &DesktopSettings) -> Result<(), String> 
     file.as_file()
         .sync_all()
         .map_err(|error| error.to_string())?;
-    file.commit().map_err(|error| error.to_string())
+    file.commit().map_err(|error| error.to_string())?;
+    if let Some(sampling) = app.try_state::<crate::environment::EnvironmentSamplingState>() {
+        sampling.configure(&settings.preferences);
+    }
+    Ok(())
 }
 
 fn settings_bytes(settings: &DesktopSettings) -> Result<Vec<u8>, String> {
@@ -844,6 +871,46 @@ mod tests {
         assert_eq!(round_trip.preferences.scale, 0.8);
         value["preferences"]["performanceOverlay"] = "true".into();
         assert!(decode_settings(&serde_json::to_vec(&value).unwrap()).is_err());
+    }
+
+    #[test]
+    fn environment_lighting_is_opt_in_and_patches_preserve_other_preferences() {
+        let mut value = serde_json::to_value(DesktopSettings::default()).unwrap();
+        value["preferences"]
+            .as_object_mut()
+            .unwrap()
+            .remove("environmentLightingEnabled");
+        value["preferences"]
+            .as_object_mut()
+            .unwrap()
+            .remove("environmentLightingStrength");
+        value["preferences"]["fps"] = 60.into();
+        let decoded = decode_settings(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(!decoded.preferences.environment_lighting_enabled);
+        assert_eq!(decoded.preferences.environment_lighting_strength, 0.2);
+        let patch: PreferencesPatch = serde_json::from_value(serde_json::json!({
+            "environmentLightingEnabled":true, "environmentLightingStrength":0.4
+        }))
+        .unwrap();
+        let next = patch.apply(&decoded.preferences).unwrap();
+        assert!(next.environment_lighting_enabled);
+        assert_eq!(next.environment_lighting_strength, 0.4);
+        assert_eq!(next.fps, 60);
+        let round_trip: DesktopPreferences =
+            serde_json::from_slice(&serde_json::to_vec(&next).unwrap()).unwrap();
+        assert!(round_trip.environment_lighting_enabled);
+        assert_eq!(round_trip.environment_lighting_strength, 0.4);
+        for invalid in [-0.1, 1.1, f64::INFINITY, f64::NAN] {
+            assert!(validate_preferences(&DesktopPreferences {
+                environment_lighting_strength: invalid,
+                ..DesktopPreferences::default()
+            })
+            .is_err());
+        }
+        assert!(serde_json::from_value::<PreferencesPatch>(
+            serde_json::json!({"environmentLightingEnabled":"true"})
+        )
+        .is_err());
     }
 
     #[test]

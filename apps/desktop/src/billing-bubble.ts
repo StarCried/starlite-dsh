@@ -9,6 +9,28 @@ function money(amount: number): string {
 
 function symbol(currency: BillingCurrency): string {return currency === "CNY" ? "¥" : "$";}
 
+/** Match DSH's wallet display without rounding the original decimal through a float. */
+function accountMoney(wallet: BillingSnapshot["balance"]["balances"][number]): {prefix: string; amount: string} {
+  const currency = symbol(wallet.currency);
+  // The protocol validates decimal syntax, length, finite range and equality to
+  // remaining. Older snapshots without the decimal still have a bounded number.
+  const [coefficient = "0", exponent = "0"] = (wallet.decimal ?? String(wallet.remaining)).toLowerCase().split("e");
+  const negative = coefficient.startsWith("-");
+  const [integer = "0", fraction = ""] = coefficient.replace(/^-/, "").split(".");
+  const digits = (integer + fraction).replace(/^0+/, "");
+  if (!digits) return {prefix: currency, amount: "0.00"};
+  const centLength = digits.length + Number(exponent) - fraction.length + 2;
+  // Handle underflow directly; never allocate padding based on an exponent.
+  if (centLength <= 0) return {prefix: `${negative ? "-" : "<"}${currency}`, amount: "0.01"};
+  let cents = digits.slice(0, centLength).padEnd(centLength, "0");
+  // Official DSH truncates positive credits, but rounds negative magnitudes
+  // half-up. Only at most 12 cent digits can pass the protocol's value limit.
+  if (negative && (digits[centLength] ?? "0") >= "5") cents = (BigInt(cents) + 1n).toString();
+  const padded = cents.padStart(3, "0");
+  const whole = padded.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/gu, ",");
+  return {prefix: `${negative ? "-" : ""}${currency}`, amount: `${whole}.${padded.slice(-2)}`};
+}
+
 function estimateText(snapshot: BillingSnapshot, currency: BillingCurrency): string {
   const estimate = snapshot.today.estimates.find(item => item.currency === currency);
   if (!estimate || !(snapshot.today.pricedRequests > 0 || (!snapshot.today.partial && snapshot.today.unpricedRequests === 0))) return t("暂不可用");
@@ -59,7 +81,8 @@ export function renderBillingBubble(element: HTMLElement, view: BillingBubbleVie
         if (!wallets.length) group.append(node("span", "billing-wallet-empty", t("暂无钱包记录")));
         for (const wallet of wallets) {
           const amount = node("div", "billing-wallet-amount");
-          amount.append(node("span", "billing-symbol", symbol(wallet.currency)), node("strong", "billing-amount", wallet.remaining.toFixed(2)), node("span", "billing-currency", wallet.currency));
+          const formatted = accountMoney(wallet);
+          amount.append(node("span", "billing-symbol", formatted.prefix), node("strong", "billing-amount", formatted.amount), node("span", "billing-currency", wallet.currency));
           group.append(amount);
         }
         card.append(group);

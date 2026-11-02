@@ -89,12 +89,30 @@ describe("dedicated fee card", () => {
   it("keeps currencies separate, preserves negative values and does not turn an empty wallet into zero", () => {
     const output=document.createElement("output");
     renderBillingBubble(output,{status:"ready",snapshot:{...account,balance:{...account.balance,balances:[{currency:"USD",remaining:4.5},{currency:"CNY",remaining:-.25}],bonusBalances:[]}}});
-    expect(output.querySelector(".billing-wallet-recharge")?.textContent).toBe("充值余额¥-0.25CNY$4.50USD");
+    expect(output.querySelector(".billing-wallet-recharge")?.textContent).toBe("充值余额-¥0.25CNY$4.50USD");
     expect(output.querySelector(".billing-wallet-bonus")?.textContent).toBe("赠金余额暂无钱包记录");
     renderBillingBubble(output,{status:"ready",snapshot:{...account,balance:{...account.balance,balances:[],bonusBalances:[]}}});
     expect(output.querySelectorAll(".billing-wallet-empty")).toHaveLength(2);
     expect(output.querySelector(".billing-amount")).toBeNull();
     expect(output.textContent).not.toContain("暂时无法查询");
+  });
+  it.each([
+    ["109.899", "¥109.89"], ["109.89", "¥109.89"], ["109.899999999999999999999999", "¥109.89"],
+    [".004", "<¥0.01"], ["-.004", "-¥0.01"], ["0E-16", "¥0.00"], ["-0.000", "¥0.00"],
+    ["1e-999", "<¥0.01"], ["-1e-999", "-¥0.01"], ["1.09899e2", "¥109.89"],
+    ["-1.09895e2", "-¥109.90"], ["-0.0149", "-¥0.01"], ["-0.015", "-¥0.02"],
+    ["1234.567", "¥1,234.56"], ["1e9", "¥1,000,000,000.00"], ["0e99999999999999999999", "¥0.00"],
+  ])("matches official decimal display for %s", (decimal, expected) => {
+    const output=document.createElement("output");
+    renderBillingBubble(output,{status:"ready",snapshot:{...account,balance:{...account.balance,
+      balances:[{currency:"CNY",remaining:Number(decimal),decimal}],bonusBalances:[{currency:"USD",remaining:Number(decimal),decimal}]}}});
+    expect(output.querySelector(".billing-wallet-recharge .billing-wallet-amount")?.textContent).toBe(`${expected}CNY`);
+    expect(output.querySelector(".billing-wallet-bonus .billing-wallet-amount")?.textContent).toBe(`${expected.replace("¥","$")}USD`);
+  });
+  it("preserves the existing API-key formatting without applying account rounding rules", () => {
+    const output=document.createElement("output");
+    renderBillingBubble(output,{status:"ready",snapshot:{...snapshot,balance:{status:"ready",source:"deepseek-official",balances:[{currency:"CNY",remaining:109.899}]}}});
+    expect(output.querySelector(".billing-balance")?.textContent).toBe("¥109.90CNY");
   });
   it("localizes the account card and keeps untrusted titles as plain text", () => {
     setUiLocale("en");

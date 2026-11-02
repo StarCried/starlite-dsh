@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { ServerResponse } from "node:http";
 import { PET_PROTOCOL_VERSION, type PetStateSource } from "@starcried/starlite-dsh-protocol";
 import { isBrowserSafePort, startStatusServer } from "../src/server.js";
 import {DshStateAggregator} from "../src/aggregator.js";
@@ -20,6 +21,46 @@ function idleSource(): PetStateSource {
 }
 
 describe("status SSE server", () => {
+  it("flushes one authenticated host-stopped event before EOF and drops teardown snapshots",async()=>{
+    let emit!:Parameters<PetStateSource["start"]>[0];
+    const stop=vi.fn(async()=>emit({protocolVersion:PET_PROTOCOL_VERSION,sequence:99,emittedAt:1,state:"error"}));
+    const server=await startStatusServer({async start(callback){emit=callback;await idleSource().start(callback);},stop});
+    const response=await fetch(`http://127.0.0.1:${server.port}/v1/events`,{
+      headers:{Authorization:`Bearer ${server.token}`},signal:AbortSignal.timeout(3000),
+    });
+    const reader=response.body!.getReader();
+    await reader.read();
+    try {
+      const closing=server.close();
+      expect(server.close()).toBe(closing);
+      let terminal="";
+      for(;;){const {done,value}=await reader.read();if(done)break;terminal+=new TextDecoder().decode(value);}
+      await closing;
+      expect(terminal).toBe("event: host-stopped\ndata: {}\n\n");
+      expect(stop).toHaveBeenCalledOnce();
+      await server.close();
+      expect(stop).toHaveBeenCalledOnce();
+    } finally {await reader.cancel().catch(()=>undefined);await server.close();}
+  });
+
+  it("bounds shutdown when an authenticated SSE writer cannot finish flushing",async()=>{
+    const server=await startStatusServer(idleSource());
+    const response=await fetch(`http://127.0.0.1:${server.port}/v1/events`,{
+      headers:{Authorization:`Bearer ${server.token}`},signal:AbortSignal.timeout(3000),
+    });
+    const reader=response.body!.getReader();await reader.read();
+    // Simulate a blocked transport after the actual authenticated HTTP handshake.
+    const end=vi.spyOn(ServerResponse.prototype,"end").mockImplementationOnce(function(this:ServerResponse){return this;});
+    try {
+      const started=performance.now();
+      const streamEnded=reader.read().then(()=>false,()=>true);
+      await server.close();
+      expect(performance.now()-started).toBeLessThan(1500);
+      expect(end).toHaveBeenCalledOnce();
+      expect(await streamEnded).toBe(true);
+    } finally {end.mockRestore();await reader.cancel().catch(()=>undefined);await server.close();}
+  });
+
   it("rejects malformed or oversized question responses without terminating the Host",async()=>{
     const source=new DshStateAggregator(),bridge=new QuestionBridge(source,async()=>undefined),server=await startStatusServer(source,{questions:bridge});
     const read=vi.spyOn(bridge,"read"),id="123e4567-e89b-42d3-a456-426614174001",headers={Authorization:`Bearer ${server.token}`};

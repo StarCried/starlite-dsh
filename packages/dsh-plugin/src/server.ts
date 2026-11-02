@@ -14,6 +14,8 @@ import type {QuestionBridge} from "./questions.js";
 const HEARTBEAT_MS = 15_000;
 const MAX_CLIENTS = 2;
 const MAX_LISTEN_ATTEMPTS = 16;
+const SHUTDOWN_FLUSH_MS = 250;
+const HOST_STOPPED_FRAME = "event: host-stopped\ndata: {}\n\n";
 // Fetch implementations reject these ports before a request reaches the
 // server. Port 0 can occasionally select one of them on hosts with a custom
 // ephemeral-port range, which would make an otherwise healthy bridge unusable.
@@ -44,6 +46,7 @@ export async function startStatusServer(source: PetStateSource, options: {billin
   const clients = new Set<ServerResponse>();
   let latest: PetSnapshot | undefined;
   let closed = false;
+  let closing: Promise<void> | undefined;
 
   const server = createServer((request, response) => {
     const origin = request.headers.origin;
@@ -62,6 +65,10 @@ export async function startStatusServer(source: PetStateSource, options: {billin
     }
     if (origin && !ALLOWED_ORIGINS.has(origin)) {
       reject(response, 403);
+      return;
+    }
+    if (closed) {
+      reject(response, 503);
       return;
     }
 
@@ -145,6 +152,7 @@ export async function startStatusServer(source: PetStateSource, options: {billin
 
   try {
     await source.start((snapshot) => {
+      if (closed) return;
       let canonical: PetSnapshot;
       try {
         // Reconstruct the allow-listed protocol object before serialization.
@@ -174,12 +182,15 @@ export async function startStatusServer(source: PetStateSource, options: {billin
   return {
     port: address.port,
     token,
-    async close() {
-      if (closed) return;
+    close() {
+      if (closing) return closing;
       closed = true;
-      options.billing?.close();
-      options.questions?.close();
-      await shutdown(server, clients, source, heartbeat);
+      closing = (async () => {
+        options.billing?.close();
+        options.questions?.close();
+        await shutdown(server, clients, source, heartbeat, true);
+      })();
+      return closing;
     },
   };
 }
@@ -219,11 +230,27 @@ async function shutdown(
   clients: Set<ServerResponse>,
   source: PetStateSource,
   heartbeat: ReturnType<typeof setInterval>,
+  notifyStopped = false,
 ): Promise<void> {
   clearInterval(heartbeat);
-  for (const client of clients) client.destroy();
-  clients.clear();
-  await Promise.allSettled([source.stop(), closeServer(server)]);
+  // Stop accepting new clients before flushing the terminal event to the
+  // already-authenticated streams. A slow reader must not delay Host shutdown.
+  const closing = closeServer(server);
+  const deadline = setTimeout(() => {
+    for (const client of clients) client.destroy();
+    server.closeAllConnections();
+  }, SHUTDOWN_FLUSH_MS);
+  for (const client of clients) {
+    if (notifyStopped && !client.destroyed && !client.writableEnded) {
+      client.end(HOST_STOPPED_FRAME);
+    } else client.destroy();
+  }
+  try {
+    await Promise.allSettled([Promise.resolve().then(() => source.stop()), closing]);
+  } finally {
+    clearTimeout(deadline);
+    clients.clear();
+  }
 }
 
 function closeServer(server: Server): Promise<void> {

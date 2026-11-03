@@ -16,13 +16,13 @@ describe("consumeSseFrames", () => {
       "event: ignored\ndata: secret\n\n" +
       "event: snap",
     );
-    expect(result.data).toEqual(['{"state":"idle"}']);
+    expect(result.events).toEqual([{event:"snapshot",data:'{"state":"idle"}'}]);
     expect(result.rest).toBe("event: snap");
   });
 
   it("supports CRLF and multi-line data", () => {
-    expect(consumeSseFrames("event: snapshot\r\ndata: one\r\ndata: two\r\n\r\n").data)
-      .toEqual(["one\ntwo"]);
+    expect(consumeSseFrames("event: snapshot\r\ndata: one\r\ndata: two\r\n\r\n").events)
+      .toEqual([{event:"snapshot",data:"one\ntwo"}]);
   });
 
   it("invokes browser fetch without binding the controller as this", async () => {
@@ -219,6 +219,70 @@ describe("single Host ownership",()=>{
     await vi.waitFor(()=>expect(test.callbacks.onConnected).toHaveBeenCalledOnce());
     test.connection.connect(other);test.connection.stop();
     expect(test.connection.connectPending()).toBe(false);
+  });
+
+  it("releases an explicitly stopped Host immediately and ignores its delayed launch link",async()=>{
+    vi.useFakeTimers();const test=fixture();
+    try {
+      test.connection.connect(CONNECTION_URL);await vi.advanceTimersByTimeAsync(0);
+      test.frame(8);await vi.advanceTimersByTimeAsync(0);
+      test.stream.enqueue(new TextEncoder().encode('event: host-stopped\ndata: {}\n\nevent: snapshot\ndata: {"protocolVersion":1,"sequence":9,"emittedAt":1,"state":"error"}\n\n'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(test.callbacks.onDisconnected).toHaveBeenCalledOnce();
+      expect(test.callbacks.onSnapshot.mock.calls.map(([snapshot])=>snapshot.sequence)).toEqual([8]);
+      expect(test.connection.connect(CONNECTION_URL)).toBe("unchanged");
+      expect(test.request).toHaveBeenCalledOnce();
+      test.request.mockImplementation(async()=>new Response(new ReadableStream({start(stream){stream.enqueue(new TextEncoder().encode('event: snapshot\ndata: {"protocolVersion":1,"sequence":0,"emittedAt":1,"state":"idle"}\n\n'));}}),{headers:{"Content-Type":"text/event-stream"}}));
+      expect(test.connection.connect(other)).toBe("accepted");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(test.callbacks.onConnected).toHaveBeenCalledTimes(2);
+      expect(test.callbacks.onConflict).not.toHaveBeenCalled();
+      expect(test.callbacks.onSnapshot.mock.calls.at(-1)![0]).toMatchObject({sequence:0,state:"idle"});
+      expect(test.request.mock.calls.at(-1)![1]!.signal!.aborted).toBe(false);
+    } finally {test.connection.stop();vi.useRealTimers();}
+  });
+
+  it("hands an explicitly stopped Host to the first waiting successor without advancing the lease timer",async()=>{
+    vi.useFakeTimers();const test=fixture();
+    try {
+      test.connection.connect(CONNECTION_URL);await vi.advanceTimersByTimeAsync(0);
+      const first=other.replace("45678","45679"),later=other.replace("45678","45680");
+      test.connection.connect(first);test.connection.connect(later);
+      test.request.mockImplementation(async()=>new Response(new ReadableStream(),{headers:{"Content-Type":"text/event-stream"}}));
+      // The terminal frame is split across transport chunks.
+      test.stream.enqueue(new TextEncoder().encode('event: host-stopped\ndata: {'));
+      await vi.advanceTimersByTimeAsync(0);expect(test.request).toHaveBeenCalledOnce();
+      test.stream.enqueue(new TextEncoder().encode('}\n\n'));await vi.advanceTimersByTimeAsync(0);
+      expect(test.callbacks.onDisconnected).toHaveBeenCalledOnce();
+      expect(test.callbacks.onConnected).toHaveBeenCalledTimes(2);
+      expect(test.request.mock.calls.at(-1)![0]).toBe("http://127.0.0.1:45679/v1/events");
+      expect(test.request.mock.calls[0]![1]!.signal!.aborted).toBe(true);
+      expect(test.connection.connectPending()).toBe(false);
+      expect(test.connection.connect(CONNECTION_URL)).toBe("unchanged");
+    } finally {test.connection.stop();vi.useRealTimers();}
+  });
+
+  it("keeps ownership on a malformed stop frame instead of trusting arbitrary stream data",async()=>{
+    vi.useFakeTimers();const test=fixture();
+    try {
+      test.connection.connect(CONNECTION_URL);await vi.advanceTimersByTimeAsync(0);
+      test.stream.enqueue(new TextEncoder().encode('event: host-stopped\ndata: {"force":true}\n\n'));await vi.advanceTimersByTimeAsync(0);
+      expect(test.callbacks.onDisconnected).toHaveBeenCalledOnce();
+      expect(test.connection.connect(other)).toBe("conflict");
+      expect(test.connection.connect(CONNECTION_URL)).toBe("unchanged");
+      expect(test.request).toHaveBeenCalledOnce();
+    } finally {test.connection.stop();vi.useRealTimers();}
+  });
+
+  it("honors an explicit stop during the shutdown callback instead of starting a queued Host",async()=>{
+    vi.useFakeTimers();const test=fixture();
+    try {
+      test.connection.connect(CONNECTION_URL);await vi.advanceTimersByTimeAsync(0);
+      test.connection.connect(other);test.callbacks.onDisconnected.mockImplementation(()=>test.connection.stop());
+      test.stream.enqueue(new TextEncoder().encode('event: host-stopped\ndata: {}\n\n'));await vi.advanceTimersByTimeAsync(0);
+      expect(test.callbacks.onDisconnected).toHaveBeenCalledOnce();
+      expect(test.request).toHaveBeenCalledOnce();expect(test.connection.connectPending()).toBe(false);
+    } finally {test.connection.stop();vi.useRealTimers();}
   });
 
   it("queues an offline restart silently while preserving recovered Host ownership and the first successor",async()=>{

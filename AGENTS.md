@@ -6,9 +6,12 @@
   WSL2 CLI/Web, native Windows CLI/Web, or the official Windows Desktop app.
   It is not a general desktop-pet framework. Do not silently replace a live
   Host connection when another profile or installation starts.
-- A new connection after the current stream disconnects queues silently under
-  the existing 60-second lease. Warn only for a live connected Host conflict;
-  preserve the first queued successor and never infer takeover from a restart.
+- An explicit `host-stopped` terminal event on the authenticated current SSE
+  stream releases ownership immediately and adopts the first queued successor.
+  Unexpected EOF/errors retain the 60-second lease; disconnected arrivals queue
+  silently, and only a live connected Host conflict warns. Never infer shutdown
+  from a timeout. Pause the retained renderer while offline and reuse it on
+  reconnect instead of remounting the model.
 - Keep the Cordis bundle, cross-process protocol, and Tauri desktop app in this
   repository. Reusable Inochi2D/VRM rendering and model preparation stay in the
   StarLite component repository (`StarCried/starlite`). Local checkout paths use

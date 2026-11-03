@@ -275,8 +275,25 @@ describe("desktop hidden-window startup", () => {
     expect(hide).toHaveBeenCalledTimes(previousHides);expect(native.mountModel).toHaveBeenCalledTimes(previousMounts);
     expect(bubble.hidden).toBe(false);expect(bubble.textContent).toBe("Original Host");expect(controller.status).toBe("running");
     expect(vi.getTimerCount()).toBe(0);
-    if(admission==="conflict")expect(native.message).toHaveBeenCalledWith(expect.stringContaining("无需重新启动 DSH"),expect.objectContaining({kind:"info"}));
+    if(admission==="conflict")expect(native.message).toHaveBeenCalledWith(expect.stringContaining("正常退出后会立即接管"),expect.objectContaining({kind:"info"}));
     else expect(native.message).not.toHaveBeenCalled();
+  });
+  it("pauses immediately while offline and reuses the mounted model when the Host returns",async()=>{
+    const ready=startPet();
+    await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    const callbacks=native.connection.mock.calls[0]![0] as ConnectionCallbacks;
+    // WebView visibility notifications may arrive after the Host has stopped.
+    native.getCurrentWindow.mock.results[0]!.value.hide.mockImplementation(async()=>undefined);
+    const destroyed=vi.mocked(controller.destroy).mock.calls.length;
+    callbacks.onDisconnected();
+    expect(document.visibilityState).toBe("visible");expect(controller.status).toBe("paused");
+    await vi.advanceTimersByTimeAsync(100);
+    callbacks.onConnected();
+    await vi.waitFor(()=>expect(controller.status).toBe("running"));
+    expect(native.mountModel).toHaveBeenCalledOnce();expect(controller.destroy).toHaveBeenCalledTimes(destroyed);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(native.invoke).not.toHaveBeenCalledWith("exit_app");
   });
   it("does not extend the original Host's reconnect period for a refused launch",async()=>{
     const ready=startPet();

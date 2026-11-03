@@ -197,7 +197,7 @@ export async function startPet(): Promise<void> {
   });
 
   const syncRendering = () => {
-    const paused = !modelAvailable() || !ui.visible || pausedByTray || document.visibilityState !== "visible";
+    const paused = !connected || !modelAvailable() || !ui.visible || pausedByTray || document.visibilityState !== "visible";
     animator?.setPaused(paused);
     if (paused) controller?.pause();
     else controller?.resume();
@@ -216,6 +216,7 @@ export async function startPet(): Promise<void> {
     fees.cancel();
     cancelClick();workBubble.clear();
     animator?.disconnected();
+    syncRendering();
     void invoke("set_connection_state", { connected: false });
     bubble.hidden = true;
     void window.hide();
@@ -370,7 +371,7 @@ export async function startPet(): Promise<void> {
       beginOfflineCountdown();
     },
     onConflict() {
-      void message(t("桌宠已连接另一个 DSH Host，当前不会切换。\n\n已保留第一个等待连接的 Host。原 Host 停止且 60 秒重连期结束后会自动连接，无需重新启动 DSH；原 Host 恢复则继续使用原连接。停滞连接最多需要 45 秒检测。后续启动不会覆盖等待中的 Host。"), {title:t("StarLite for DSH · 等待连接"),kind:"info"}).catch(()=>{});
+      void message(t("桌宠已连接另一个 DSH Host，当前不会切换。\n\n已保留第一个等待连接的 Host。原 Host 正常退出后会立即接管；异常断线则保留 60 秒重连期。原 Host 恢复时继续使用原连接。停滞连接最多需要 45 秒检测。后续启动不会覆盖等待中的 Host。"), {title:t("StarLite for DSH · 等待连接"),kind:"info"}).catch(()=>{});
     },
   });
 

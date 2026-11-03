@@ -41,6 +41,7 @@ export class StatusConnection {
   readonly #timers: ConnectionTimers;
   #descriptor: PetConnectionDescriptor | undefined;
   #pendingDescriptor: PetConnectionDescriptor | undefined;
+  #retiredDescriptor: PetConnectionDescriptor | undefined;
   #abort: AbortController | undefined;
   readonly #requests = new Set<AbortController>();
   #connected = false;
@@ -60,9 +61,10 @@ export class StatusConnection {
 
   connect(rawUrl: string): ConnectionAdmission {
     const descriptor = parsePetConnectionUrl(rawUrl);
+    if (this.#retiredDescriptor && sameConnection(this.#retiredDescriptor, descriptor)) return "unchanged";
     if (this.#descriptor) {
       const current = this.#descriptor;
-      if (current.instanceId === descriptor.instanceId && current.port === descriptor.port && current.token === descriptor.token) return "unchanged";
+      if (sameConnection(current, descriptor)) return "unchanged";
       // A transient disconnection does not release this Host's ownership.
       // Retain only the first successor, without changing the current lease.
       this.#pendingDescriptor ??= descriptor;
@@ -87,7 +89,9 @@ export class StatusConnection {
   }
 
   #start(descriptor: PetConnectionDescriptor): void {
+    const retired = this.#retiredDescriptor;
     this.stop();
+    this.#retiredDescriptor = retired;
     this.#descriptor = descriptor;
     this.#lastSequence = -1;
     const run = ++this.#run;
@@ -100,6 +104,7 @@ export class StatusConnection {
     this.#abort = undefined;
     this.#descriptor = undefined;
     this.#pendingDescriptor = undefined;
+    this.#retiredDescriptor = undefined;
     this.#connected = false;
     this.#conflictReported = false;
     this.#cancelRequests();
@@ -161,7 +166,7 @@ export class StatusConnection {
       const abort = new AbortController();
       this.#abort = abort;
       try {
-        await this.#readOnce(descriptor, abort, () => {
+        const stopped = await this.#readOnce(descriptor, abort, () => {
           attempt = 0;
           if (!wasConnected) {
             wasConnected = true;
@@ -169,6 +174,18 @@ export class StatusConnection {
             this.#callbacks.onConnected();
           }
         });
+        if (stopped) {
+          // Only the terminal frame on this authenticated, still-current stream
+          // releases ownership early. EOF/errors retain the offline lease.
+          if (run !== this.#run || this.#descriptor !== descriptor) return;
+          const pending = this.#pendingDescriptor;
+          this.stop();
+          this.#retiredDescriptor = descriptor;
+          const releasedRun = this.#run;
+          this.#callbacks.onDisconnected();
+          if (pending && releasedRun === this.#run) this.#start(pending);
+          return;
+        }
       } catch {
         // Disconnection details can contain addresses and platform errors; they
         // are intentionally not logged or sent back to DSH.
@@ -190,7 +207,7 @@ export class StatusConnection {
     descriptor: PetConnectionDescriptor,
     abort: AbortController,
     onOpen: () => void,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const endpoint = `http://127.0.0.1:${descriptor.port}/v1/events`;
     // Calling a browser native as a private-field method binds `this` to the
     // StatusConnection instance and fails with "Illegal invocation" in
@@ -232,8 +249,12 @@ export class StatusConnection {
         if (new TextEncoder().encode(buffer).byteLength > MAX_SSE_TAIL_BYTES) {
           throw new Error("status stream frame exceeds the buffer limit");
         }
-        for (const data of parsed.data) {
-          const snapshot = parsePetSnapshotJson(data);
+        for (const frame of parsed.events) {
+          if (frame.event === "host-stopped") {
+            if (frame.data.trim() !== "{}") throw new Error("invalid Host shutdown frame");
+            return true;
+          }
+          const snapshot = parsePetSnapshotJson(frame.data);
           // A disconnect clears the consumer's animation state. Each new stream
           // must restore it from the Host's cached snapshot, even if no event
           // advanced its sequence while offline. Older frames remain invalid.
@@ -257,11 +278,11 @@ export class StatusConnection {
   }
 }
 
-export function consumeSseFrames(input: string): { data: string[]; rest: string } {
+export function consumeSseFrames(input: string): { events: {event:"snapshot"|"host-stopped";data:string}[]; rest: string } {
   const normalized = input.replace(/\r\n/gu, "\n");
   const frames = normalized.split("\n\n");
   const rest = frames.pop() ?? "";
-  const data: string[] = [];
+  const events: {event:"snapshot"|"host-stopped";data:string}[] = [];
   for (const frame of frames) {
     let event = "message";
     const dataLines: string[] = [];
@@ -270,9 +291,13 @@ export function consumeSseFrames(input: string): { data: string[]; rest: string 
       if (line.startsWith("event:")) event = line.slice(6).trimStart();
       if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
     }
-    if (event === "snapshot" && dataLines.length > 0) data.push(dataLines.join("\n"));
+    if ((event === "snapshot" || event === "host-stopped") && dataLines.length > 0) events.push({event,data:dataLines.join("\n")});
   }
-  return { data, rest };
+  return { events, rest };
+}
+
+function sameConnection(left: PetConnectionDescriptor, right: PetConnectionDescriptor): boolean {
+  return left.instanceId === right.instanceId && left.port === right.port && left.token === right.token;
 }
 
 function wait(delayMs: number, timers: ConnectionTimers, signal: AbortSignal): Promise<void> {

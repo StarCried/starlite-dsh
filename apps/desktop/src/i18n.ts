@@ -160,7 +160,7 @@ export const EN: Readonly<Record<string, string>> = {
   "{title}使用许可": "License for {title}",
   "{title} · 使用许可": "{title} · License",
   "模型运行时加载失败，请打开设置检查模型。": "Could not load the model. Open settings to inspect it.",
-  "桌宠已连接另一个 DSH Host，当前不会切换。\n\n已保留第一个等待连接的 Host。原 Host 停止且 60 秒重连期结束后会自动连接，无需重新启动 DSH；原 Host 恢复则继续使用原连接。停滞连接最多需要 45 秒检测。后续启动不会覆盖等待中的 Host。": "StarLite is connected to another DSH Host.\n\nThe first waiting Host is queued. It will connect automatically after the original Host stops and its 60-second reconnect period ends. If the original Host returns, its connection is retained. Detecting a stalled connection can take up to 45 seconds. Later Hosts do not replace the queued Host.",
+  "桌宠已连接另一个 DSH Host，当前不会切换。\n\n已保留第一个等待连接的 Host。原 Host 正常退出后会立即接管；异常断线则保留 60 秒重连期。原 Host 恢复时继续使用原连接。停滞连接最多需要 45 秒检测。后续启动不会覆盖等待中的 Host。": "StarLite is connected to another DSH Host.\n\nThe first waiting Host is queued. It connects immediately after the original Host shuts down normally. An unexpected disconnection retains the 60-second reconnect period; if the original Host recovers, it keeps the connection. Detecting a stalled connection can take up to 45 seconds. Later Hosts do not replace the queued Host.",
   "StarLite for DSH · 等待连接": "StarLite for DSH · Waiting for connection",
   "暂时无法打开 DSH 会话": "Could not open the DSH session",
   "暂时无法打开 DSH": "Could not open DSH",

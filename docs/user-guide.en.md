@@ -43,7 +43,7 @@ Weiguang is selected initially. Using an example means accepting its separate li
 
 Only start DSH for daily use. The desktop app starts from its normal shortcut; CLI/Web uses `dsh --profile web`. The companion appears after connecting. Starting the cached companion directly opens settings but does not start DSH. It does not update itself in the background.
 
-The companion connects to one Host. Closing the DSH desktop window with × only hides it; use its tray to exit. A second Host is queued rather than taking over. StarLite warns while the original Host is still connected; after detecting disconnection, it queues a restarted DSH silently. It allows 60 seconds for reconnection, then adopts the first waiting Host or exits. If the original Host recovers, it keeps the connection. A stalled connection can take another 45 seconds to detect. You do not need to restart DSH again to recover the companion.
+The companion connects to one Host. Closing the DSH desktop window with × only hides it; use its tray to exit. A normal shutdown tells StarLite to release the connection immediately, so reopening DSH does not wait for the 60-second reconnect period. The companion hides and pauses, keeping its loaded model for up to 60 seconds for a quick restart, then exits if no Host connects. Another live Host cannot take over; only the first waiting Host is queued. Unexpected disconnections still allow 60 seconds for the original Host to recover before adopting the queued Host. A stalled connection can take another 45 seconds to detect.
 
 ## Controls and bubbles
 

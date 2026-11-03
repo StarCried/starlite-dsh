@@ -6,7 +6,7 @@ StarLite does not download example models during npm installation. The npm packa
 
 | Purpose | Trigger | Destination and data |
 | --- | --- | --- |
-| Selected example model | Startup with an example selected and its verified cache missing or invalid | HTTPS GET to a pinned GitHub Release URL; redirects to `release-assets.githubusercontent.com` are allowed. No cookies, API keys, or session content |
+| Selected example model | Startup with an example selected that has not yet been imported, and its download cache missing or invalid | HTTPS GET to a pinned GitHub Release URL; redirects to `release-assets.githubusercontent.com` are allowed. No cookies, API keys, or session content |
 | Signed-in DeepSeek account balance | Opening the billing card while signed in, with an expired cache | Calls the official Host's `deepseekAccount.getBalance`; DSH queries `/api/v0/users/get_user_summary` on its configured Platform origin for recharge and bonus wallets. DSH handles the login token; StarLite and the companion do not receive it. Cached for 60 seconds |
 | DeepSeek API-key balance | Signed out or no account service, a supported official key configured, and the billing card opened with an expired cache | GET `https://api.deepseek.com/user/balance`; the existing API key is sent only to this endpoint, without redirects. Cached for 60 seconds |
 | Status and question answers | While the Host and companion run | An ephemeral IPv4 `127.0.0.1` port with an in-memory process token. Sanitized status/content and explicit answers stay on the local connection |
@@ -25,7 +25,7 @@ The packaged `assets/windows-x64/manifest.json` pins URL, byte length, and SHA-2
 
 Development builds offer optional **Environment lighting**, disabled by default. When enabled, the Windows companion samples small screen patches around its window at up to about four times per second and passes only the average color to its local renderer. It does not save, log, upload, or send screen images to DSH. Sampling stops while hidden, paused, or locked; unavailable samples restore the original lighting. This approximates nearby colors, does not reveal the layer hidden by the model, and does not exclude the companion from screenshots or recordings.
 
-- Program and example cache: `%LOCALAPPDATA%\StarCried\StarLite\companions\<version-hash>\`. Cached bytes are checked before reuse. A new program or source may require restaging.
+- Program and example cache: `%LOCALAPPDATA%\StarCried\StarLite\companions\<version-hash>\`. Cached bytes are checked before reuse. A new program or source may require restaging the program. Already imported examples load from the user's model directory and are not downloaded again during program upgrades.
 - User models, mappings, and preferences: `%APPDATA%\com.starcried.dsh-inochi2d-pet\`. The legacy identifier preserves user data; it does not enable Inochi2D.
 - The plugin starts its verified Windows EXE. WSL2 uses the same Windows runtime and cache through Windows interoperability.
 - Removing a model preserves its original source VRM. Do not clear AppData during upgrades.

@@ -8,7 +8,7 @@ StarLite 不在 npm 安装阶段运行模型下载脚本。npm 包携带 Windows
 
 | 用途 | 何时发生 | 目标与数据 |
 | --- | --- | --- |
-| 示例模型 | 启动时选中了示例，且对应版本缓存缺失或校验失败 | 对程序清单中固定的 GitHub Release VRM 地址发送 HTTPS GET；允许跳转至 `release-assets.githubusercontent.com`。不携带 Cookie、API Key 或会话内容 |
+| 示例模型 | 启动时选中的示例尚未导入模型列表，且下载缓存缺失或校验失败 | 对程序清单中固定的 GitHub Release VRM 地址发送 HTTPS GET；允许跳转至 `release-assets.githubusercontent.com`。不携带 Cookie、API Key 或会话内容 |
 | DeepSeek 登录账号余额 | 用户打开费用卡，DSH 账号已登录，且余额缓存过期 | 调用官方 Host 的 `deepseekAccount.getBalance`；由 DSH 向其配置的 Platform origin 的 `/api/v0/users/get_user_summary` 查询充值与赠金。登录令牌由 DSH 处理，不交给 StarLite 或桌宠。余额缓存 60 秒 |
 | DeepSeek API Key 余额 | 未登录／无账号服务，已配置支持的官方 API Key，用户打开费用卡且缓存过期 | GET `https://api.deepseek.com/user/balance`；仅向该官方端点发送 DSH 中已有的 API Key，不允许重定向。余额缓存 60 秒 |
 | 桌宠状态与答题 | DSH 与桌宠运行期间 | 本机 `127.0.0.1` 随机端口，进程级临时令牌认证；状态、受限文字及用户主动提交的回答留在本机链路 |
@@ -27,7 +27,7 @@ https://github.com/StarCried/starlite/releases/download/weiguang-v3.0.0-starlite
 
 开发版的「环境补光」默认关闭。开启后，Windows 桌宠每秒最多约四次读取窗口周边的小块屏幕颜色，仅将平均颜色传给本机渲染器；不保存、记录或上传屏幕图像，也不发送给 DSH。隐藏、暂停、锁屏时停止取色，取色不可用时恢复原灯光。它近似周边环境，不能读取被模型遮住的下一层画面，也不改变桌宠的截图／录屏可见性。
 
-- Windows 程序与示例下载缓存：`%LOCALAPPDATA%\StarCried\StarLite\companions\<版本号-哈希>\`。缓存经过长度与 SHA-256 校验后复用；程序版本或来源变化可能需要重新准备。
+- Windows 程序与示例下载缓存：`%LOCALAPPDATA%\StarCried\StarLite\companions\<版本号-哈希>\`。缓存经过长度与 SHA-256 校验后复用；程序版本或来源变化可能需要重新准备程序。已经导入的示例直接从用户模型目录加载，升级程序不会重新下载它。
 - 用户导入模型、映射和偏好：`%APPDATA%\com.starcried.dsh-inochi2d-pet\`。标识沿用旧版以保留用户数据，不表示当前启用 Inochi2D。
 - 插件会启动随包提供并校验的 Windows 桌宠 EXE。WSL2 使用 Windows 桌宠和 Windows 缓存，需要 WSL／Windows 互操作；无需第二套渲染程序。
 - 用户删除模型不会删除源 VRM。勿为升级清空 AppData；清理步骤见[升级与排错](upgrade.md)。

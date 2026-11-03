@@ -92,6 +92,12 @@
   Catalog licenses must be readable without downloading model bytes. The model
   terms in `docs/` mirror the same documents in the StarLite component repository;
   keep those texts synchronized without changing the program's BSD license.
+- Acquisition must mirror native `needs_default`: a selected example already
+  present in the user's model library needs no download. Program cache keys
+  include the EXE hash, so checking that cache alone causes needless downloads
+  and a 30-second launch delay after upgrades when GitHub is unavailable.
+  Keep model path/content validation in the native loader; the Host only reads
+  the bounded selection/library metadata and does not follow model paths.
 
 ## Validation
 

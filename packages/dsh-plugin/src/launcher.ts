@@ -67,7 +67,7 @@ export async function launchWindowsPet(connection: PetConnection, options: Launc
     const localCache = host === "windows" ? windowsCache : (await execFileText("wslpath", ["-u", windowsCache], options.signal)).trim();
     const roaming = host === "windows" ? windowsDirectories[1]! : (await execFileText("wslpath", ["-u", windowsDirectories[1]!], options.signal)).trim();
     if (host === "wsl" && (!validPosixDirectory(localCache) || !validPosixDirectory(roaming))) throw new Error("invalid Windows application directories");
-    const defaultModelId = await selectedDefaultModel(paths.join(roaming, "com.starcried.dsh-inochi2d-pet", "settings.json"));
+    const defaultModelId = await defaultModelToAcquire(paths.join(roaming, "com.starcried.dsh-inochi2d-pet", "settings.json"));
     const metadata: unknown = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
     if (typeof metadata !== "object" || metadata === null || !("version" in metadata) || typeof metadata.version !== "string") {
       throw new Error("invalid StarLite plugin package version");
@@ -120,8 +120,8 @@ function validPosixDirectory(path: string): boolean {
   return posix.isAbsolute(path) && !/[\p{Cc}]/u.test(path) && !path.split("/").some(part => part === "." || part === "..");
 }
 
-/** Read only the selected-model policy; never transfer or log companion settings. */
-export async function selectedDefaultModel(path: string): Promise<DefaultModelId | null> {
+/** Read only acquisition policy; native import/loading owns model validation. */
+export async function defaultModelToAcquire(path: string): Promise<DefaultModelId | null> {
   const maximum = 4 * 1024 * 1024;
   try {
     const info = await lstat(path);
@@ -137,7 +137,15 @@ export async function selectedDefaultModel(path: string): Promise<DefaultModelId
       if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
       if (!("schemaVersion" in value)) return null;
       if (value.schemaVersion === 4) {
-        return "activeModelId" in value && isDefaultModelId(value.activeModelId) ? value.activeModelId : null;
+        if (!("activeModelId" in value) || !isDefaultModelId(value.activeModelId)) return null;
+        // Match native needs_default: an installed example is already in the
+        // user's model library. A new EXE cache must not download it again or
+        // delay every launch until the network request times out. Do not follow
+        // paths from this metadata; the desktop validates files when loading.
+        if ("models" in value && Array.isArray(value.models) && value.models.some(model =>
+          typeof model === "object" && model !== null && !Array.isArray(model)
+          && "id" in model && model.id === value.activeModelId)) return null;
+        return value.activeModelId;
       }
       if (![1, 2, 3].includes(value.schemaVersion as number)) return null;
       const preferences = "preferences" in value ? value.preferences : undefined;

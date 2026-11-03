@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { assertWindowsGuiExecutable, parseCompanionManifest, prepareEmbeddedCompanion } from "../src/bootstrap.js";
+import { defaultModelToAcquire } from "../src/launcher.js";
 
 const VERSION = "0.1.0-alpha.0";
 const EXE = "dsh-inochi2d-pet.exe";
@@ -97,6 +98,25 @@ describe("independent default VRM catalog", () => {
 });
 
 describe("embedded Windows companion and separate character bootstrap", () => {
+  it("starts after an EXE upgrade without networking when the selected example is already imported", async () => {
+    const f = await fixture();
+    const settings = join(f.root,"settings.json");
+    await writeFile(settings,JSON.stringify({schemaVersion:4,activeModelId:"weiguang-default",
+      models:[{id:"weiguang-default",backend:"vrm",modelPath:"native-owned/model.vrm"}]}));
+    f.request.mockRejectedValue(new Error("network must not be needed for an installed model"));
+    const prepare = async () => prepareEmbeddedCompanion({...f.options,defaultModelId:await defaultModelToAcquire(settings)});
+    const first = await prepare();
+    // A changed EXE creates a different cache with no downloaded model file.
+    const upgradedExe = Buffer.from(f.executable);upgradedExe[upgradedExe.length-1] = 1;
+    await writeFile(join(f.assets,EXE),upgradedExe);
+    await writeFile(join(f.assets,"manifest.json"),JSON.stringify({...f.manifest,
+      executable:{...f.manifest.executable,sha256:sha(upgradedExe)}}));
+    const upgraded = await prepare(), restarted = await prepare();
+    expect(upgraded.executable).not.toBe(first.executable);
+    expect(restarted.executable).toBe(upgraded.executable);
+    expect(await readdir(join(upgraded.executable,".."))).not.toContain("default-model.vrm");
+    expect(f.request).not.toHaveBeenCalled();
+  });
   it("prepares the program without requesting character assets while the model is disabled", async () => {
     const f = await fixture();
     const disabled = await prepareEmbeddedCompanion({...f.options,defaultModelId:null});

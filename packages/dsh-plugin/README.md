@@ -65,7 +65,7 @@ dsh --profile web
 <details>
 <summary>模型下载、联网与存储</summary>
 
-安装阶段没有模型下载脚本。启动 DSH 时，插件按需从 `github.com/StarCried/starlite/releases/download/` 下载所选示例，允许 GitHub 跳转至 `release-assets.githubusercontent.com`。下载不携带 API Key、Cookie 或会话内容；URL、长度及 SHA-256 固定在随包的 `assets/windows-x64/manifest.json` 中，有效缓存直接复用。
+安装阶段没有模型下载脚本。启动 DSH 时，所选示例尚未导入且没有有效下载缓存时，插件从 `github.com/StarCried/starlite/releases/download/` 获取，允许 GitHub 跳转至 `release-assets.githubusercontent.com`。已导入的模型直接复用，升级程序不会重复下载。下载不携带 API Key、Cookie 或会话内容；URL、长度及 SHA-256 固定在随包的 `assets/windows-x64/manifest.json` 中。
 
 程序和下载缓存位于 `%LOCALAPPDATA%\StarCried\StarLite\companions`，导入模型与偏好位于 `%APPDATA%\com.starcried.dsh-inochi2d-pet`。插件启动随包的 Windows EXE，DSH 与桌宠通过有临时令牌认证的本机 `127.0.0.1` 随机端口通信。WSL 也使用 Windows 程序和缓存。
 

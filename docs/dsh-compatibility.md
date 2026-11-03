@@ -1,6 +1,26 @@
 # DSH 兼容性与发布验收
 
-`0.1.0-alpha.2` 已于 2026-10-22 发布到 npm alpha 渠道及 GitHub 预发行。维护、模型诊断、性能与安装依据见 [本地稳定化验收](stabilization.md)。本页公开下载与早期设备手验保留各自的源码、哈希和范围。
+`0.1.0` 已于 2026-11-03 发布到 npm `latest` 渠道及 GitHub 正式发行。维护、模型诊断、性能与安装依据见 [本地稳定化验收](stabilization.md)。本页公开下载与早期设备手验保留各自的源码、哈希和范围。
+
+## 公开发行 0.1.0（2026-11-03）
+
+[`dsh-starlite@0.1.0`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0) 与 [Release `v0.1.0`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0) 已公开，Release 不是草稿或预发行。发行 tag 和 `SOURCE_REVISION` 均指向 [`d55e2de`](https://github.com/StarCried/starlite-dsh/commit/d55e2de1981f10c69f317d59c163a95cd4498877)，共享运行时固定到 [`63e0718`](https://github.com/StarCried/starlite/commit/63e07182948d88aca6b8c30ab459547a4a19c858)，provenance 为 `dirty: false`。后续文档提交不移动发行 tag，也不替换已公开文件。
+
+- 精确发行源码的[主 CI](https://github.com/StarCried/starlite-dsh/actions/runs/41593377888)、[依赖审计](https://github.com/StarCried/starlite-dsh/actions/runs/41593377781)和 [DSH latest 兼容检查](https://github.com/StarCried/starlite-dsh/actions/runs/41593628500)全部通过。主 CI 包含 Windows 原生构建和隔离安装器生命周期；本地通过 648 项 JavaScript 测试、14 项审计测试、Rust 90 项测试、fmt、debug／release Clippy 和正式发布门。通常忽略的私有模型导入用例另行运行并通过，不把忽略计为已测试。
+- 六个包的公共 registry 验证中，`dsh-starlite` 的 `latest` 为 `0.1.0`，旧 `alpha` 保持 `0.1.0-alpha.2`。匿名下载的插件归档与最终本地文件逐字节相同，字节数、SHA-256 和 registry SHA-512/SRI 均一致；归档符合 12 文件白名单，不含模型资源。
+- 另在隔离 profile 中直接安装 registry 规格 `dsh-starlite@0.1.0`，而不是以本地 tarball 替代安装命令：Windows 和 WSL2 的官方 DSH 均为 `0.2.1-rc.5`，分别使用 Node 24.15.0、22.22.1。实际安装、认证首页、适配失败不阻塞 DSH、退出回收均通过。测试没有发送付费模型请求、启动实际桌宠或修改日常 profile。
+- GitHub 的七个程序附件全部匿名重新下载；长度、SHA-256、公开 tag、`SOURCE_REVISION` 和平铺的 `SHA256SUMS` 逐项通过。公开安装器使用连字符文件名，校验和对应最终公开名称。
+- 微光与[蓝色大肥鱼](https://github.com/StarCried/starlite/releases/tag/bluefish-v1.0.0-starlite.1)仍是独立授权资源。分别用空缓存从正式 HTTPS 地址获取，仅下载所选模型，并验证大小、哈希和离线缓存复用。微光为 10,907,568 字节、SHA-256 `0c24f9e785b3184936ae40fcdf6231c84d91de9d3c62fae107e79a24b1150999`；蓝鱼为 10,427,496 字节、SHA-256 `896b9013642af427b475c4cd559ff9eb570a4cd543cc92e5418778560603e20b`。
+
+| 公开程序附件 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| `dsh-starlite-0.1.0.tgz` | 4,197,168 | `0ffc326c5f4821d65504662e1e143f7b9e52c4550da3242f43a280de2a790494` |
+| `StarLite-for-DSH_0.1.0_x64-setup.exe` | 2,875,298 | `5bc7d8cbe1777c952ca02597d126ceec5fbf184262db770961413bbf3647c987` |
+| `StarLite-for-DSH_0.1.0_x64-portable.zip` | 4,092,017 | `8a9511adafe8e7ec3fdd8692f9ca9c0894266862e6aefaf806abed07e637201b` |
+
+其他附件为 `SHA256SUMS`、`SOURCE_REVISION`、`sbom.cdx.json` 和 `THIRD_PARTY_LICENSES.txt`。完整匿名下载和安装证据保留在本机忽略目录 `release-output/stable-20261103/` 的 `registry-proof.json`、`github-proof.json`、`ci-proof.json`、`dsh-registry-windows.log`、`dsh-registry-wsl.log` 及 `default-download-validation.json`。
+
+发布前的日常候选已由用户确认：正常退出 DSH 后快速重新打开可很快恢复且只出现一只桌宠；蓝鱼可以直接切换，站姿／手腕调校与新版点击动作正常；环境补光已开启、强度 100%。这些是该候选的人工验收，发布后隔离安装不冒充重新手验。既有 DPI、睡眠及长期性能记录保留原版本和设备范围，本轮没有重做长期 CPU／GPU／内存测量。Windows 程序仍未代码签名；依赖审计保留已审查的维护／非 Windows 告警，详见[依赖维护](dependency-audit.md)。
 
 ## 公开发行 0.1.0-alpha.2（2026-10-22）
 

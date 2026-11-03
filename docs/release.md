@@ -1,14 +1,14 @@
 # StarLite for DSH 发布检查
 
-`0.1.0-alpha.2` 已于 2026-10-22 公开，包含右键快捷菜单、按模型保存的姿态与跟随调节、动作过渡修复、性能参数、模型信息界面及 Vite／Vitest 安全补丁；见 [版本变化](../CHANGELOG.md)。本页保留构建与发布流程，公开来源和精确下载校验结果见 [发布验收](dsh-compatibility.md#公开发行-010-alpha22026-10-22)。
+`0.1.0` 已于 2026-11-03 发布到 npm `latest` 和 [GitHub 正式发行](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0)，包括统一插件、Windows 安装器和免安装版；蓝鱼另行发布为独立模型资源。变化见 [版本变化](../CHANGELOG.md)，精确源码、公开下载与实际 registry 安装结果见 [发布验收](dsh-compatibility.md#公开发行-0102026-11-03)。本页保留后续构建流程和历史发行证据。
 
 ## 0.1.0 发行范围（2026-11-03）
 
 本版统一源码、npm 与 Windows 发行物版本为 0.1.0，npm 使用 latest。共享运行时以 release/starlite.rev 的精确源码构建；蓝鱼以独立模型发行物提供，微光仍为初始默认。新版本包含账号余额、默认环境补光、中文／英文界面、已调校的通用动作，以及正常退出重连和重复示例下载修复。
 
-模型与动作、启动重连、蓝鱼调校和环境补光已由用户验收；本次重新进行自动化检查、实际打包安装、公开下载及完整性验证。公开校验结果另记于兼容性记录，既有 alpha 的结果保留原版本身份。Windows 安装器和免安装程序仍未代码签名。
+发布前的模型与动作、启动重连、蓝鱼调校和环境补光候选已由用户验收。本次已完成自动化检查、Windows／WSL2 官方 DSH 的实际 registry 安装、公开下载及完整性验证，详见[兼容性记录](dsh-compatibility.md#公开发行-0102026-11-03)。未把既有 DPI、睡眠或长期性能结果改记为新包全面复验。Windows 安装器和免安装程序仍未代码签名。
 
-## 本次公开发行 alpha.2
+## 历史公开发行 alpha.2
 
 安装使用 [`dsh-starlite@alpha`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.2)，当时 `alpha` 为 alpha.2，`latest` 保留 alpha.0。发行源码为 [`80f9220`](https://github.com/StarCried/starlite-dsh/commit/80f92200393b58f617864af5b2fb910171b8347a)，共享运行时为 [`f83a4ec`](https://github.com/StarCried/starlite/commit/f83a4ec0f795a14f36d6724465e3a89f9c1e8529)。该精确源码的[主 CI](https://github.com/StarCried/starlite-dsh/actions/runs/39753442237)、[依赖审计](https://github.com/StarCried/starlite-dsh/actions/runs/39753442269) 与 [DSH latest 兼容检查](https://github.com/StarCried/starlite-dsh/actions/runs/39753656026) 全部成功。
 
@@ -26,7 +26,7 @@
 
 `dsh-starlite@0.1.0-alpha.0` 已发布到 [npm alpha 渠道](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.0)，[软件 Release `v0.1.0-alpha.0`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.0) 对应源码 `ee86d3984d300621812f16016b08450ec860ec13`。从公开 registry 全新下载的 tarball 与正式包完全一致，并通过官方 npm DSH `0.2.1-alpha.2` 的隔离安装和 fail-open 检查，详见[发布验收](dsh-compatibility.md)。
 
-以下流程用于后续版本。统一插件包含 Windows 程序、通知及下载清单；开发版程序内嵌已批准的基础待机和三个通用动作，微光角色及其专属动作仍作为独立授权的单文件 VRM 下载。本地脚本只构建和校验，不自动推送、发布或部署博客。
+以下流程用于后续版本。统一插件包含 Windows 程序、通知及下载清单；程序内嵌已批准的基础待机和三个通用动作，微光角色及其专属动作仍作为独立授权的单文件 VRM 下载。本地脚本只构建和校验，不自动推送、发布或部署博客。
 
 ## 构建来源
 
@@ -87,6 +87,8 @@ npm publish packages/dsh-plugin/.pack/dsh-starlite-0.1.0.tgz --tag latest --acce
 ```
 
 发布后核对 `npm view dsh-starlite version` 为 `0.1.0`，验证 registry tarball 与本地包一致，并在隔离 profile 安装 `dsh-starlite`。这些是发布后的验证步骤，不以文档中的安装命令代替实际结果。npm 发布指定 `latest` 标签；升级必须使用新版本。Windows Release 随附匹配的安装器、可选免安装包、SHA256SUMS、SBOM 和依赖许可；微光作为独立授权资产分发，不夹进程序包。没有公开模型来源时仍只能验证本地候选。
+
+公开附件采用连字符文件名，例如 `StarLite-for-DSH_0.1.0_x64-setup.exe`。GitHub 上传会将文件名中的空格替换为点，不能直接沿用构建目录中的空格名称生成公开校验和；先确定最终附件名称，再生成平铺的 `SHA256SUMS`，上传后逐项核对名称、大小和哈希，并匿名重新下载验证。
 
 首次发行的实际标签（2026-10-15）：`alpha` 和 `latest` 均指向 `0.1.0-alpha.0`。npm 对新包首次发布会额外创建 `latest`，即使指定其他标签，见[上游记录](https://github.com/npm/cli/issues/8490)。本次删除 `latest` 返回 HTTP 400，保留现状，不重复删除或通过新增版本绕过。此前没有稳定版本，未覆盖已有稳定版的 `latest`；当时安装明确使用 `dsh-starlite@alpha`。本段为历史记录，0.1.0 使用 latest。
 

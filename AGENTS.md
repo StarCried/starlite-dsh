@@ -86,6 +86,9 @@
 - Creating a remote repository, pushing, publishing npm, publishing a Windows
   installer, and releasing a model each require separate approval.
 - Windows installers currently remain unsigned, including 0.1.0; document SmartScreen without asking users to disable system protections.
+- Use hyphens in public release asset filenames. GitHub changes uploaded spaces
+  to dots; generate flat `SHA256SUMS` against the final public names, then verify
+  every uploaded name, size and digest and the anonymously downloaded bytes.
 - Default examples remain separate VRMs. The launcher accepts legacy schema 2
   Weiguang descriptors and schema 3 metadata catalogs with `weiguang-default`
   and optional `bluefish-default`; acquire only the selected ID. Never add an

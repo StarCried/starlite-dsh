@@ -1,6 +1,6 @@
 {
   "name": "@starcried/starlite-dsh-protocol",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "license": "BSD-2-Clause",
@@ -12,7 +12,9 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

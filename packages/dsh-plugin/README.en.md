@@ -4,16 +4,16 @@
 
 A lightweight VRM companion for DeepSeek Harness. Install one plugin, start DSH, and the Weiguang example is prepared automatically. Bring your own model whenever you like.
 
-Alpha `0.1.0-alpha.2`. Requires Windows 11 x64 and WebView2. Supports official Windows Desktop, native Windows CLI/Web, and WSL2 DSH.
+Release `0.1.0`. Requires Windows 11 x64 and WebView2. Supports official Windows Desktop, native Windows CLI/Web, and WSL2 DSH.
 
 ## Install
 
-**Windows Desktop:** open **Plugins → Add plugin**, enter `dsh-starlite@alpha`, install, and enable. Fully exit through the DSH tray before restarting when requested.
+**Windows Desktop:** open **Plugins → Add plugin**, enter `dsh-starlite`, install, and enable. Fully exit through the DSH tray before restarting when requested.
 
 **CLI/Web, in Windows or WSL:**
 
 ```sh
-dsh plugin --profile web add dsh-starlite@alpha
+dsh plugin --profile web add dsh-starlite
 dsh --profile web
 ```
 
@@ -25,7 +25,7 @@ Using Weiguang means accepting its [separate license](https://github.com/StarCri
 
 ```text
 Read https://github.com/StarCried/starlite-dsh/blob/main/docs/user-guide.en.md
-and install the published dsh-starlite@alpha into my existing DeepSeek Harness.
+and install the published dsh-starlite into my existing DeepSeek Harness.
 Identify my Desktop, native CLI/Web, or WSL2 installation and actual profile first.
 Keep my models and preferences. Do not upgrade DSH or start a second Host.
 Verify locally without paid model API calls, then explain startup and settings.
@@ -39,7 +39,7 @@ Click the body for an idle gesture and billing; double-click opens the current s
 
 Import a standard humanoid `.vrm` through **Add VRM model**. The Import guide explains bones, blink, and lookAt requirements. Changes save automatically. User models and source files are preserved when upgrading; removing a library model does not delete its source.
 
-The English interface and additional bundled gestures on the main branch are development changes pending the next release. Published alpha.2 retains its original default-idle behavior. The development UI follows Windows display language; user content and model-authored names are preserved.
+Release 0.1.0 includes English controls, three optional bundled gestures and the separately licensed BlueFish example. The UI follows Windows display language; user content and model-authored names are preserved.
 
 [Full installation and usage guide](https://github.com/StarCried/starlite-dsh/blob/main/docs/user-guide.en.md) · [Models and motions](https://github.com/StarCried/starlite-dsh/blob/main/docs/model-import.en.md) · [Upgrade and troubleshoot](https://github.com/StarCried/starlite-dsh/blob/main/docs/upgrade.en.md)
 
@@ -55,4 +55,4 @@ Opening billing prefers DSH's official account service, which queries `/api/v0/u
 
 [Full network disclosure and implementation references](https://github.com/StarCried/starlite-dsh/blob/main/docs/network-and-storage.en.md)
 
-Program code uses BSD-2-Clause. Example artwork has separate terms and is not included in the npm package. Windows alpha binaries are unsigned.
+Program code uses BSD-2-Clause. Example artwork has separate terms and is not included in the npm package. Windows binaries are unsigned.

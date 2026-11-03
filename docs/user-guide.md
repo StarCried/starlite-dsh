@@ -4,20 +4,20 @@
 
 需要 Windows 11 x64、WebView2，以及以下任一种 DSH：官方 Windows 桌面版、Windows 原生 CLI/Web、WSL2 CLI/Web。只安装一个 `dsh-starlite` 插件：桌宠由插件准备和启动，不需要安装器、管理员权限或手动设置 EXE 路径。
 
-本文对应 `0.1.0-alpha.2`。安装使用 alpha 渠道 `dsh-starlite@alpha`；需要固定版本时可换为 `dsh-starlite@0.1.0-alpha.2`。[版本变化](../CHANGELOG.md) · [兼容性与验收](dsh-compatibility.md) · [升级与排错](upgrade.md)
+本文对应正式版 `0.1.0`。安装 `dsh-starlite` 默认使用 `latest`；需要固定版本时可换为 `dsh-starlite@0.1.0`。[版本变化](../CHANGELOG.md) · [兼容性与验收](dsh-compatibility.md) · [升级与排错](upgrade.md)
 
 ## 安装
 
 ### 官方 Windows 桌面版
 
-在侧栏打开「插件 → 添加插件」，输入 `dsh-starlite@alpha`，点击安装并启用。若提示需要重启，从 DSH 托盘完全退出后重新启动。桌面版自带运行时和包管理器，不要求另外安装 Node.js 或 pnpm。
+在侧栏打开「插件 → 添加插件」，输入 `dsh-starlite`，点击安装并启用。若提示需要重启，从 DSH 托盘完全退出后重新启动。桌面版自带运行时和包管理器，不要求另外安装 Node.js 或 pnpm。
 
 桌面版使用独立的 `desktop` profile。CLI/Web 或 WSL 中已安装的插件不会自动出现在桌面版，需要在桌面版再安装一次；两边沿用同一 Windows 用户的 StarLite 模型与偏好。Windows 与 WSL 的 DSH 主目录通常也不同，不会自动同步会话或凭据。
 
 若通过命令行管理桌面插件，先启动一次 Desktop 初始化 profile，再完全退出 Desktop。使用 Desktop「管理 dsh 命令」注册的内置命令：
 
 ```powershell
-dsh plugin --profile desktop add dsh-starlite@alpha
+dsh plugin --profile desktop add dsh-starlite
 ```
 
 安装后重新打开 Desktop。独立 npm 安装的 `dsh` 不能管理受管 `desktop` profile，也不能用 `dsh --profile desktop` 启动桌面应用。
@@ -27,7 +27,7 @@ dsh plugin --profile desktop add dsh-starlite@alpha
 在 PowerShell 为日常 profile 安装插件，再启动：
 
 ```powershell
-dsh plugin --profile web add dsh-starlite@alpha
+dsh plugin --profile web add dsh-starlite
 dsh --profile web
 ```
 
@@ -36,7 +36,7 @@ dsh --profile web
 在 WSL 终端安装并启动：
 
 ```bash
-dsh plugin --profile web add dsh-starlite@alpha
+dsh plugin --profile web add dsh-starlite
 dsh --profile web
 ```
 
@@ -60,7 +60,7 @@ dsh plugin --profile web remove dsh-inochi2d-pet
 
 已经配置的 VRM 模型、映射、显示、隐私和气泡偏好保留。当前版本关闭 Inochi2D 导入与显示；旧模型文件和偏好保留，微光准备成功后可使用默认微光。
 
-程序和微光独立授权、独立传输；npm 插件不包含微光角色外观。公开 alpha.2 自带基础待机，当前开发版另提供三个可选通用动作。Windows 程序使用系统 WebView2，不打包浏览器。目前程序未签名；单独下载 Windows 程序时请核对项目 Release 来源与 SHA-256，不关闭系统防护。
+程序和微光独立授权、独立传输；npm 插件不包含微光角色外观。本版自带基础待机和三个可选通用动作，蓝色大肥鱼可在模型列表中选择获取。Windows 程序使用系统 WebView2，不打包浏览器。目前程序未签名；单独下载 Windows 程序时请核对项目 Release 来源与 SHA-256，不关闭系统防护。
 
 日常只需：
 

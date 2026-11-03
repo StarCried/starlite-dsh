@@ -6,16 +6,16 @@ Bring your own VRM character to DeepSeek Harness. StarLite quietly shows task pr
 
 **[Try a model in your browser](https://starcried.github.io/)** before installing. The blog demo uses Weiguang; DSH task updates and question bubbles require the plugin below.
 
-Alpha `0.1.0-alpha.2`. Requires **Windows 11 x64 and WebView2**. Supports the official Windows desktop app, native Windows CLI/Web, and WSL2 DSH.
+Release `0.1.0`. Requires **Windows 11 x64 and WebView2**. Supports the official Windows desktop app, native Windows CLI/Web, and WSL2 DSH.
 
 ## Install and try Weiguang
 
-**Official Windows desktop app:** open **Plugins → Add plugin**, enter `dsh-starlite@alpha`, install, and enable it. If DSH requests a restart, fully exit from its tray before reopening.
+**Official Windows desktop app:** open **Plugins → Add plugin**, enter `dsh-starlite`, install, and enable it. If DSH requests a restart, fully exit from its tray before reopening.
 
 **CLI/Web, on Windows or WSL2:** install into the profile you actually use, then start DSH:
 
 ```sh
-dsh plugin --profile web add dsh-starlite@alpha
+dsh plugin --profile web add dsh-starlite
 dsh --profile web
 ```
 
@@ -29,7 +29,7 @@ Give an Agent with local computer access this prompt:
 
 ```text
 Read https://github.com/StarCried/starlite-dsh/blob/main/docs/user-guide.en.md
-and install the published npm package dsh-starlite@alpha into my existing DeepSeek Harness.
+and install the published npm package dsh-starlite into my existing DeepSeek Harness.
 Identify my Windows Desktop, native CLI/Web, or WSL2 installation and actual profile first.
 Preserve my models and preferences; do not upgrade DSH or start a second Host.
 Verify locally without a paid model API call, then explain how to start it and open settings.
@@ -49,7 +49,7 @@ The interface follows the Windows display language: Chinese for Chinese Windows,
 
 ## Customize
 
-The additional bundled gestures and English UI are development changes pending the next release. The install command above targets the currently published alpha channel.
+Release 0.1.0 includes English controls, three optional bundled gestures and the separately licensed BlueFish example.
 
 [Install, use, and uninstall](docs/user-guide.en.md) · [Models and motions](docs/model-import.en.md) · [Downloads and local storage](docs/network-and-storage.en.md) · [Upgrade and troubleshoot](docs/upgrade.en.md)
 
@@ -57,4 +57,4 @@ Import a standard humanoid VRM through **Add VRM model**. Models without animati
 
 One companion connects to one DSH Host at a time. When switching, stop the original Host; the waiting Host connects after the reconnect period.
 
-Program code: [BSD-2-Clause](LICENSE). Example artwork is separately licensed and downloaded separately. Windows alpha binaries are unsigned and use the system WebView2 runtime. Read the [network disclosure](docs/network-and-storage.en.md) before use.
+Program code: [BSD-2-Clause](LICENSE). Example artwork is separately licensed and downloaded separately. Windows binaries are unsigned and use the system WebView2 runtime. Read the [network disclosure](docs/network-and-storage.en.md) before use.

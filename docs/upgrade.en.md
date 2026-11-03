@@ -5,7 +5,7 @@
 ## Upgrade safely
 
 1. Fully exit the DSH Host. For Desktop, use the tray; × only hides its window.
-2. Quit StarLite, update `dsh-starlite@alpha` in the same profile, then start DSH again.
+2. Quit StarLite, update `dsh-starlite` in the same profile, then start DSH again.
 3. Confirm your selected model, motion mappings, privacy settings, size, and bubbles are preserved.
 
 The plugin prepares its matching Windows program automatically. User data is separate from the program cache. No installer, administrator permission, Rust toolchain, or manual EXE path is needed. Existing Inochi2D data is preserved but disabled in this release.

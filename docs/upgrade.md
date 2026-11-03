@@ -2,7 +2,7 @@
 
 简体中文 · [English](upgrade.en.md)
 
-StarLite for DSH 目前处于 alpha。只维护最新已公开 alpha；安装使用 `dsh-starlite@alpha`，精确版本与来源查看 [npm](https://www.npmjs.com/package/dsh-starlite) 和 [Releases](https://github.com/StarCried/starlite-dsh/releases)。本文介绍 `0.1.0-alpha.2`；源码版本和本地构建不等于 registry 已公开版本，发行状态见 [兼容性记录](dsh-compatibility.md)。
+本文介绍 StarLite for DSH 正式版 `0.1.0`。安装 `dsh-starlite` 使用 `latest`；精确版本与来源查看 [npm](https://www.npmjs.com/package/dsh-starlite) 和 [Releases](https://github.com/StarCried/starlite-dsh/releases)。旧 alpha 记录保留在[兼容性记录](dsh-compatibility.md)。
 
 支持 Windows 11 x64 + WebView2，Host 可以是同机的官方 Windows DSH 桌面版、Windows 原生 CLI/Web 或 WSL2 CLI/Web。不同 Host／profile 要分别安装插件，但使用同一 Windows 用户的模型和偏好；一次只连接一个 Host。支持范围与实测 DSH 版本见 [兼容性记录](dsh-compatibility.md)。
 
@@ -14,17 +14,17 @@ StarLite for DSH 目前处于 alpha。只维护最新已公开 alpha；安装使
 
 官方 Windows 桌面版使用侧栏「插件」中的更新或重新安装入口，按 DSH 提示重启。若通过命令行管理，使用桌面版注册的内置 `dsh` 和其受管 `desktop` profile；独立 npm CLI 不能替代它。详见 [桌面版安装说明](user-guide.md#官方-windows-桌面版)。
 
-CLI/Web 在原来的 Windows 或 WSL 终端操作；将 `web` 换成实际 profile。若 DSH 版本没有更新入口，可以先移除同名插件，再安装 alpha：
+CLI/Web 在原来的 Windows 或 WSL 终端操作；将 `web` 换成实际 profile。若 DSH 版本没有更新入口，可以先移除同名插件，再安装正式版：
 
 ```sh
 dsh plugin --profile web remove dsh-starlite
-dsh plugin --profile web add dsh-starlite@alpha
+dsh plugin --profile web add dsh-starlite
 dsh --profile web
 ```
 
 移除插件不会删除 Windows 端已导入的模型、动作映射或显示／隐私／气泡偏好。新版程序随插件准备，系统 WebView2 沿用现有安装；不要通过删除 AppData 来升级。已有微光可以复用本机缓存，独立模型版本是否更新以发行说明为准。不要同时保留旧名 `dsh-inochi2d-pet` 桥接和 `dsh-starlite`。
 
-若需固定已公开版本，将安装命令中的 `@alpha` 换成该版本号；不要把本地候选当作 npm 已发布包。旧版本不保证读取未来格式的设置，降级前先核对发行说明，不要删除模型或设置来绕过错误。
+若需固定已公开版本，在包名后添加 `@版本号`；不要把本地候选当作 npm 已发布包。旧版本不保证读取未来格式的设置，降级前先核对发行说明，不要删除模型或设置来绕过错误。
 
 ## 升级后检查
 

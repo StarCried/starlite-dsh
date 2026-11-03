@@ -1,18 +1,16 @@
-# StarLite for DSH alpha 发布检查
+# StarLite for DSH 发布检查
 
 `0.1.0-alpha.2` 已于 2026-10-22 公开，包含右键快捷菜单、按模型保存的姿态与跟随调节、动作过渡修复、性能参数、模型信息界面及 Vite／Vitest 安全补丁；见 [版本变化](../CHANGELOG.md)。本页保留构建与发布流程，公开来源和精确下载校验结果见 [发布验收](dsh-compatibility.md#公开发行-010-alpha22026-10-22)。
 
-## 当前源码检查（2026-10-31，尚未发行）
+## 0.1.0 发行范围（2026-11-03）
 
-当前源码增加英文界面与文档，并将基础 Idle 和三个可选通用动作接入模型目录；既有映射和偏好保持不变。共享运行时固定为 `c4a7d46d19942d779fb2a55e45dcf54cb15735e5`。这些改动未发布到 npm，不改变下方 alpha.2 的发行身份。
+本版统一源码、npm 与 Windows 发行物版本为 0.1.0，npm 使用 latest。共享运行时以 release/starlite.rev 的精确源码构建；蓝鱼以独立模型发行物提供，微光仍为初始默认。新版本包含账号余额、默认环境补光、中文／英文界面、已调校的通用动作，以及正常退出重连和重复示例下载修复。
 
-本地 `pnpm check` 通过 569 项测试及 14 项依赖审计策略测试、lint、类型检查与构建；Rust fmt、debug/release Clippy、81 项普通测试及单独启用的新版微光导入测试通过。最终 Tauri 构建包含前端资源，实际打包插件在隔离的官方 Windows DSH `0.2.1-rc.2` profile 中通过安装、认证首页、fail-open 和退出回收，不调用付费模型 API、不启动日常桌宠。
-
-英文设置、动作映射、模型信息、快捷菜单和气泡已进行真实 Chromium 页面检查，使用模拟原生 IPC；这不等同于英文 Windows 上的原生 GUI 人工验收。新模型及其画面检查留在本机，未上传角色资源；候选包使用无角色、不可下载的本机测试来源，不能作为公开发行包。
+模型与动作、启动重连、蓝鱼调校和环境补光已由用户验收；本次重新进行自动化检查、实际打包安装、公开下载及完整性验证。公开校验结果另记于兼容性记录，既有 alpha 的结果保留原版本身份。Windows 安装器和免安装程序仍未代码签名。
 
 ## 本次公开发行 alpha.2
 
-安装使用 [`dsh-starlite@alpha`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.2)，`alpha` 为 alpha.2，`latest` 保留 alpha.0。发行源码为 [`80f9220`](https://github.com/StarCried/starlite-dsh/commit/80f92200393b58f617864af5b2fb910171b8347a)，共享运行时为 [`f83a4ec`](https://github.com/StarCried/starlite/commit/f83a4ec0f795a14f36d6724465e3a89f9c1e8529)。该精确源码的[主 CI](https://github.com/StarCried/starlite-dsh/actions/runs/39753442237)、[依赖审计](https://github.com/StarCried/starlite-dsh/actions/runs/39753442269) 与 [DSH latest 兼容检查](https://github.com/StarCried/starlite-dsh/actions/runs/39753656026) 全部成功。
+安装使用 [`dsh-starlite@alpha`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.2)，当时 `alpha` 为 alpha.2，`latest` 保留 alpha.0。发行源码为 [`80f9220`](https://github.com/StarCried/starlite-dsh/commit/80f92200393b58f617864af5b2fb910171b8347a)，共享运行时为 [`f83a4ec`](https://github.com/StarCried/starlite/commit/f83a4ec0f795a14f36d6724465e3a89f9c1e8529)。该精确源码的[主 CI](https://github.com/StarCried/starlite-dsh/actions/runs/39753442237)、[依赖审计](https://github.com/StarCried/starlite-dsh/actions/runs/39753442269) 与 [DSH latest 兼容检查](https://github.com/StarCried/starlite-dsh/actions/runs/39753656026) 全部成功。
 
 匿名公开 npm tarball 为 4,040,458 字节，SHA-256 `51641fd8539568f9d305c985ba35d89ca52734639b30003925ba55973f171bc7`，SHA-512/SRI 也与 registry 一致。这个真正公开下载的包已在 Windows DSH `0.2.1-rc.2`／Node 24.15.0 和 WSL2 DSH `0.2.0-rc.2`／Node 22.22.1 通过隔离安装、认证首页、fail-open 与退出回收；没有调用付费 API、启动桌宠或修改日常 profile。
 
@@ -45,11 +43,11 @@
 5. 保持 workspace、desktop、protocol、plugin、Cargo、Tauri 版本一致。正式升级使用新版本。
 
 ```powershell
-pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.2_x64-setup.exe"
+pnpm release:metadata -- "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0_x64-setup.exe"
 pnpm stage:plugin -- release-output/default-model.json
 pnpm pack:plugin
 pnpm check:release
-pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.2.tgz "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0-alpha.2_x64-setup.exe"
+pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0.tgz "apps/desktop/src-tauri/target/release/bundle/nsis/StarLite for DSH_0.1.0_x64-setup.exe"
 ```
 
 旧单模型资源描述包含 `title`、固定 HTTPS `url`、VRM 的 `sha256` 和 `bytes`；程序清单 schema 2 的 `defaultModel` 继续兼容。两个示例使用 schema 3 的 `defaultModels` 数组，每项另有固定 `id` 和完整 `license: { title, text }`，由 staging 原样验证。保留微光为初始默认，只获取当前选择。程序包可包含条款元数据，不包含模型、贴图或角色工程。正式发布门逐项拒绝本机来源；蓝鱼只有取得实际发布文件的地址、字节数和 SHA-256 后才能加入公开目录。本地目录的准备方法见 [开发说明](development.md)。首次元数据命令提供 staging 所需的依赖通知，打包后再生成最终 SHA256SUMS、CycloneDX SBOM 和第三方许可证。
@@ -85,16 +83,18 @@ pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.2.tg
 先公开并验证固定 pin 的共享源码，单独发布获准分发的微光 VRM 与许可，再核验固定 HTTPS 来源的全新缓存下载和离线复用。推送同版本 DSH 源码并确认 CI，通过默认发布门后发布已校验的 tarball：
 
 ```sh
-npm publish packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.2.tgz --tag alpha --access public
+npm publish packages/dsh-plugin/.pack/dsh-starlite-0.1.0.tgz --tag latest --access public
 ```
 
-发布后核对 `npm view dsh-starlite@alpha version` 为 `0.1.0-alpha.2`，验证 registry tarball 与本地包一致，并在隔离 profile 安装 `dsh-starlite@alpha`。这些是发布后的验证步骤，不以文档中的安装命令代替实际结果。npm 发布指定 `alpha` 标签；升级必须使用新版本。Windows Release 随附匹配的安装器、可选免安装包、SHA256SUMS、SBOM 和依赖许可；微光作为独立授权资产分发，不夹进程序包。没有公开模型来源时仍只能验证本地候选。
+发布后核对 `npm view dsh-starlite version` 为 `0.1.0`，验证 registry tarball 与本地包一致，并在隔离 profile 安装 `dsh-starlite`。这些是发布后的验证步骤，不以文档中的安装命令代替实际结果。npm 发布指定 `latest` 标签；升级必须使用新版本。Windows Release 随附匹配的安装器、可选免安装包、SHA256SUMS、SBOM 和依赖许可；微光作为独立授权资产分发，不夹进程序包。没有公开模型来源时仍只能验证本地候选。
 
-首次发行的实际标签（2026-10-15）：`alpha` 和 `latest` 均指向 `0.1.0-alpha.0`。npm 对新包首次发布会额外创建 `latest`，即使指定其他标签，见[上游记录](https://github.com/npm/cli/issues/8490)。本次删除 `latest` 返回 HTTP 400，保留现状，不重复删除或通过新增版本绕过。此前没有稳定版本，未覆盖已有稳定版的 `latest`；安装继续明确使用 `dsh-starlite@alpha`。
+首次发行的实际标签（2026-10-15）：`alpha` 和 `latest` 均指向 `0.1.0-alpha.0`。npm 对新包首次发布会额外创建 `latest`，即使指定其他标签，见[上游记录](https://github.com/npm/cli/issues/8490)。本次删除 `latest` 返回 HTTP 400，保留现状，不重复删除或通过新增版本绕过。此前没有稳定版本，未覆盖已有稳定版的 `latest`；当时安装明确使用 `dsh-starlite@alpha`。本段为历史记录，0.1.0 使用 latest。
 
 安装见 [用户指南](user-guide.md)，模型约定见 [模型导入](model-import.md)。发布检查失败不得阻止 DSH 本身运行。
 
 ## 依赖审计记录
+
+2026-11-03：正式版重新审计，更新已撤回的 async-executor 1.14.0 至兼容补丁 1.14.1。JavaScript 未报告漏洞，Rust 未报告漏洞或撤回版本；原有精确的维护／非 Windows 告警规则保留，未新增例外。RustSec 数据库 revision 为 `263a4d951a0867d4bddc29dddd6d59427c78f9a7`。
 
 2026-10-22 已更新 Vite 8.2.4 和 Vitest 4.1.12，修复新披露的开发服务器公告。完整在线审计未报告 JavaScript 或 Rust 漏洞；既有 Rust 维护与非 Windows 警告保留到期复核规则，并重新核对 Windows 依赖树。精确数据库 revision、范围和例外见[依赖维护](dependency-audit.md)。以下日期记录只代表各次扫描，不替代每次发行前的最新检查。
 

@@ -85,7 +85,7 @@
   keep mappings/resources unchanged and still reject malformed catalog values.
 - Creating a remote repository, pushing, publishing npm, publishing a Windows
   installer, and releasing a model each require separate approval.
-- Alpha Windows installers remain unsigned and must document SmartScreen.
+- Windows installers currently remain unsigned, including 0.1.0; document SmartScreen without asking users to disable system protections.
 - Default examples remain separate VRMs. The launcher accepts legacy schema 2
   Weiguang descriptors and schema 3 metadata catalogs with `weiguang-default`
   and optional `bluefish-default`; acquire only the selected ID. Never add an

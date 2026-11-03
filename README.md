@@ -2,22 +2,22 @@
 
 简体中文 · [English](README.en.md)
 
-让微光陪你使用 DeepSeek Harness：安静待机，用动作和气泡显示工作状态，也能直接回答会话里的选择题。
+把自己的 VRM 角色带到 DeepSeek Harness：安静待机，用动作和气泡显示工作状态，也能直接回答会话里的选择题。
 
 **[先看模型效果](https://starcried.github.io/)**：无需安装，用桌面浏览器体验博客中的微光；DSH 的工作状态与问答气泡需安装下方插件。
 
-Alpha `0.1.0-alpha.2`，需要 **Windows 11 x64 + WebView2**。支持官方 Windows 桌面版、Windows 原生 CLI/Web 和 WSL2 DSH。[版本变化](CHANGELOG.md)
+正式版 `0.1.0`，需要 **Windows 11 x64 + WebView2**。支持官方 Windows 桌面版、Windows 原生 CLI/Web 和 WSL2 DSH。[版本变化](CHANGELOG.md)
 
 **快速开始**：[自己安装](#安装并体验微光) · [让 Agent 安装](#让-agent-帮你)
 
 ## 安装并体验微光
 
-**官方 Windows 桌面版**：打开侧栏「插件 → 添加插件」，填入 `dsh-starlite@alpha`，安装后启用；如 DSH 提示需要重启，请从托盘退出后重新打开。
+**官方 Windows 桌面版**：打开侧栏「插件 → 添加插件」，填入 `dsh-starlite`，安装后启用；如 DSH 提示需要重启，请从托盘退出后重新打开。
 
 **CLI/Web（Windows 或 WSL2）**：给平时使用的 DSH profile 安装插件，然后启动：
 
 ```sh
-dsh plugin --profile web add dsh-starlite@alpha
+dsh plugin --profile web add dsh-starlite
 dsh --profile web
 ```
 
@@ -33,7 +33,7 @@ dsh --profile web
 
 ```text
 请阅读 https://github.com/StarCried/starlite-dsh/blob/main/docs/user-guide.md
-为我正在使用的 DeepSeek Harness 安装 npm 已发布的 dsh-starlite@alpha。
+为我正在使用的 DeepSeek Harness 安装 npm 已发布的 dsh-starlite。
 先识别 Windows 桌面版、Windows CLI/Web 或 WSL2 及实际 profile，使用对应安装入口。
 保留模型和偏好，不升级 DSH、不另开第二个 Host。
 完成不调用付费模型 API 的本地检查，告诉我如何启动和打开设置。
@@ -64,6 +64,6 @@ dsh --profile web
 
 添加自己的标准人形 VRM：无动作时使用自带的基础待机，有动作时自动列出供映射。眨眼和眼球跟随按模型能力启用，缺少对应配置仍可使用；不再需要的模型可在卡片上移除，源文件保留。
 
-一次连接一个 DSH Host。切换时停止原 Host（桌面版从 DSH 托盘退出），桌宠会在重连期结束后连接等待者。
+一次连接一个 DSH Host。切换时停止原 Host（桌面版从 DSH 托盘退出），正常退出会立即释放连接，快速重启复用模型；异常断线才保留重连期。
 
-程序采用 [BSD-2-Clause](LICENSE)。微光是独立授权、单独下载的 VRM，不包含在 npm 程序包内。
+程序采用 [BSD-2-Clause](LICENSE)。微光与蓝色大肥鱼均为独立授权、单独下载的 VRM，不包含在 npm 程序包内。

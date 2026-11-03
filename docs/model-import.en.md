@@ -2,7 +2,7 @@
 
 [简体中文](model-import.md) · English · [User guide](user-guide.en.md)
 
-The bundled gestures and dual-example catalog below are development features pending the next release. Published alpha.2 retains its original default-idle behavior.
+Release 0.1.0 includes English controls, three optional bundled gestures and the separately licensed BlueFish example.
 
 ## Add a model
 

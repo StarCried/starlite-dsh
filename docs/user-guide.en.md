@@ -2,18 +2,18 @@
 
 [简体中文](user-guide.md) · English · [README](../README.en.md)
 
-Requires Windows 11 x64, WebView2, and one supported DSH Host: official Windows Desktop, native Windows CLI/Web, or WSL2 CLI/Web. This guide covers `0.1.0-alpha.2`; the install channel is `dsh-starlite@alpha`. Pin `dsh-starlite@0.1.0-alpha.2` when reproducibility is required.
+Requires Windows 11 x64, WebView2, and one supported DSH Host: official Windows Desktop, native Windows CLI/Web, or WSL2 CLI/Web. This guide covers `0.1.0`; the install channel is `dsh-starlite`. Pin `dsh-starlite@0.1.0` when reproducibility is required.
 
 ## Install
 
-For **official Windows Desktop**, open **Plugins → Add plugin**, install `dsh-starlite@alpha`, and enable it. Fully exit DSH through its tray if a restart is requested. The desktop app provides its own runtime and package manager.
+For **official Windows Desktop**, open **Plugins → Add plugin**, install `dsh-starlite`, and enable it. Fully exit DSH through its tray if a restart is requested. The desktop app provides its own runtime and package manager.
 
 Desktop uses a managed `desktop` profile. A plugin installed in CLI/Web or WSL is not automatically installed there. Model preferences belong to the Windows user and can be shared, but DSH sessions and credentials in separate homes/profiles are not synchronized.
 
 For **native Windows CLI/Web**, run in PowerShell; for **WSL2**, run in the WSL terminal:
 
 ```sh
-dsh plugin --profile web add dsh-starlite@alpha
+dsh plugin --profile web add dsh-starlite
 dsh --profile web
 ```
 
@@ -22,7 +22,7 @@ Replace `web` with the actual profile. WSL requires Windows interoperability. Do
 For command-line management of Desktop, initialize it once, fully exit it, and use the **bundled command registered by Desktop**:
 
 ```powershell
-dsh plugin --profile desktop add dsh-starlite@alpha
+dsh plugin --profile desktop add dsh-starlite
 ```
 
 Reopen the desktop app afterward. A separately installed npm `dsh` cannot manage this managed profile, and `dsh --profile desktop` is not a desktop-app launcher.
@@ -63,7 +63,7 @@ The interface follows the Windows display language: Chinese for Chinese Windows,
 
 ## Models and motions
 
-The additional bundled gestures and dual-example catalog are development features pending the next release. Published alpha.2 retains its original default-idle behavior.
+Release 0.1.0 includes English controls, three optional bundled gestures and the separately licensed BlueFish example.
 
 Open settings and select a model card to switch. Each model retains its mappings and pose adjustments. **Add VRM model** imports a single `.vrm`, validates it, then selects it automatically. Changes save automatically. **Import guide** explains required humanoid mappings and optional blink/look-at capabilities.
 
@@ -93,4 +93,4 @@ dsh plugin --profile web remove dsh-starlite
 
 Desktop users can disable/remove it in Plugins, or fully exit Desktop and use its bundled `dsh plugin --profile desktop remove dsh-starlite`. Quit StarLite from the Windows tray. Removing the plugin does not delete user models or preferences.
 
-See [upgrade and troubleshooting](upgrade.en.md) for cache repair. Do not clear AppData as an upgrade step. Windows alpha binaries are unsigned; verify the official release and SHA-256 rather than disabling Windows protection.
+See [upgrade and troubleshooting](upgrade.en.md) for cache repair. Do not clear AppData as an upgrade step. Windows binaries are unsigned; verify the official release and SHA-256 rather than disabling Windows protection.

@@ -14,15 +14,19 @@ it("offers only approved quick controls and keeps application actions outside in
   expect(items.map(item=>item.id)).toEqual(["size","reset-size","position","fps","performance","environment-lighting","environment-strength","pointer","bubbles","pause","hide","bubble-mode","privacy","open-dsh","settings"]);
   expect(items.some(item=>/偶发|点击回应|查看费用/u.test(item.label))).toBe(false);
 });
-it("defaults environment lighting off and only writes its dedicated preference",async()=>{
+it("defaults environment lighting on and preserves an explicit disabled preference",async()=>{
   const f=fixture(),items=f.menu.tabs[0]!.items;
   const toggle=items.find(item=>item.id==="environment-lighting")!,strength=items.find(item=>item.id==="environment-strength")!;
   if(toggle.kind!=="toggle"||strength.kind!=="range")throw Error("expected lighting controls");
-  expect(toggle.value).toBe(false);expect(toggle.description).toContain("不保存或上传");
-  expect(strength.value).toBe(1);expect(strength.disabled).toBe(true);
+  expect(toggle.value).toBe(true);expect(toggle.description).toContain("不保存或上传");
+  expect(strength.value).toBe(1);expect(strength.disabled).toBe(false);
   expect(strength.min).toBe(0);expect(strength.max).toBe(2);
-  await toggle.onChange(true);
-  expect(f.actions.patch).toHaveBeenCalledExactlyOnceWith({environmentLightingEnabled:true});
+  await toggle.onChange(false);
+  expect(f.actions.patch).toHaveBeenCalledExactlyOnceWith({environmentLightingEnabled:false});
+  const disabled=fixture({...settings,preferences:{...settings.preferences,environmentLightingEnabled:false}});
+  const disabledToggle=disabled.menu.tabs[0]!.items.find(item=>item.id==="environment-lighting")!;
+  expect(disabledToggle.kind==="toggle"&&disabledToggle.value).toBe(false);
+  expect(disabled.menu.tabs[0]!.items.find(item=>item.id==="environment-strength")!.disabled).toBe(true);
   const saved=fixture({...settings,preferences:{...settings.preferences,environmentLightingEnabled:true,environmentLightingStrength:.35}});
   const enabled=saved.menu.tabs[0]!.items.find(item=>item.id==="environment-strength")!;
   if(enabled.kind!=="range")throw Error("expected strength range");

@@ -103,11 +103,11 @@ function edit(id:string,value:string) {
 }
 
 describe("settings model library",() => {
- it("defaults local environment sampling off and preserves its strength across unrelated preference edits",async()=>{
+ it("defaults local environment sampling on and preserves its strength across unrelated preference edits",async()=>{
   await launch();
   const toggle=document.getElementById("environment-lighting") as HTMLInputElement;
   const strength=document.getElementById("environment-strength") as HTMLInputElement;
-  expect(toggle.checked).toBe(false);expect(strength.value).toBe("100");expect(strength.disabled).toBe(true);
+  expect(toggle.checked).toBe(true);expect(strength.value).toBe("100");expect(strength.disabled).toBe(false);
   expect(strength.max).toBe("200");
   toggle.checked=true;toggle.dispatchEvent(new Event("change",{bubbles:true}));
   await vi.waitFor(()=>expect(current.preferences.environmentLightingEnabled).toBe(true));

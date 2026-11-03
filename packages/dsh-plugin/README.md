@@ -69,6 +69,8 @@ dsh --profile web
 
 程序和下载缓存位于 `%LOCALAPPDATA%\StarCried\StarLite\companions`，导入模型与偏好位于 `%APPDATA%\com.starcried.dsh-inochi2d-pet`。插件启动随包的 Windows EXE，DSH 与桌宠通过有临时令牌认证的本机 `127.0.0.1` 随机端口通信。WSL 也使用 Windows 程序和缓存。
 
+环境补光默认开启，可在右键菜单或设置中关闭，已有关闭设置会保留。它只在本机低频读取角色周边的小块颜色，不保存或上传图像；隐藏、暂停或锁屏时停止取色。
+
 打开费用卡时优先通过 DSH 官方账号服务查询充值余额和赠金，由 DSH 请求其 Platform origin 的 `/api/v0/users/get_user_summary`；未登录或无账号服务时，使用已配置的官方 API Key 查询 `https://api.deepseek.com/user/balance`。余额缓存 60 秒，不发起付费模型请求；登录令牌和 API Key 不交给桌宠。账号费用以 DSH 用量页为准，今日估算仅用于 API Key 模式。没有遥测或后台更新检查。选择「不显示模型」或自定义模型后，后续启动不获取默认示例；停用插件可停止其运行。
 
 [完整联网说明与源码核对入口](https://github.com/StarCried/starlite-dsh/blob/main/docs/network-and-storage.md)

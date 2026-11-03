@@ -103,7 +103,7 @@ pub struct DesktopPreferences {
     pub bubbles_visible: bool,
     #[serde(default = "enabled_by_default")]
     pub pointer_enabled: bool,
-    #[serde(default)]
+    #[serde(default = "enabled_by_default")]
     pub environment_lighting_enabled: bool,
     #[serde(default = "default_environment_lighting_strength")]
     pub environment_lighting_strength: f64,
@@ -179,7 +179,7 @@ impl Default for DesktopPreferences {
             performance_overlay: false,
             bubbles_visible: true,
             pointer_enabled: true,
-            environment_lighting_enabled: false,
+            environment_lighting_enabled: true,
             environment_lighting_strength: default_environment_lighting_strength(),
         }
     }
@@ -882,7 +882,8 @@ mod tests {
     }
 
     #[test]
-    fn environment_lighting_is_opt_in_and_patches_preserve_other_preferences() {
+    fn environment_lighting_defaults_on_and_preserves_explicit_preferences() {
+        assert!(DesktopPreferences::default().environment_lighting_enabled);
         assert_eq!(
             DesktopPreferences::default().environment_lighting_strength,
             1.0
@@ -898,11 +899,12 @@ mod tests {
             .remove("environmentLightingStrength");
         value["preferences"]["fps"] = 60.into();
         let decoded = decode_settings(&serde_json::to_vec(&value).unwrap()).unwrap();
-        assert!(!decoded.preferences.environment_lighting_enabled);
+        assert!(decoded.preferences.environment_lighting_enabled);
         assert_eq!(decoded.preferences.environment_lighting_strength, 1.0);
         // Saved explicit choices from the first implementation are not migrated
         // to the new default; only absent fields get the current default.
         value["preferences"]["environmentLightingStrength"] = 0.2.into();
+        value["preferences"]["environmentLightingEnabled"] = false.into();
         let existing = decode_settings(&serde_json::to_vec(&value).unwrap()).unwrap();
         assert_eq!(existing.preferences.environment_lighting_strength, 0.2);
         assert!(!existing.preferences.environment_lighting_enabled);
@@ -910,7 +912,7 @@ mod tests {
             "environmentLightingEnabled":true, "environmentLightingStrength":2.0
         }))
         .unwrap();
-        let next = patch.apply(&decoded.preferences).unwrap();
+        let next = patch.apply(&existing.preferences).unwrap();
         assert!(next.environment_lighting_enabled);
         assert_eq!(next.environment_lighting_strength, 2.0);
         assert_eq!(next.fps, 60);

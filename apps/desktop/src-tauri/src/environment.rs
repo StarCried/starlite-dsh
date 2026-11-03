@@ -60,7 +60,7 @@ pub async fn sample_environment_color(
     if window.label() != "main" {
         return Err("environment sampling belongs to the pet window".into());
     }
-    // The opt-in comes from successfully stored native preferences, not an
+    // The enabled state comes from native preferences, not an
     // untrusted webview parameter. There is no arbitrary screen rectangle API.
     let state = app.state::<EnvironmentSamplingState>();
     if !state.enabled.load(Ordering::SeqCst) {
@@ -528,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn cache_rate_limit_and_opt_in_reset_do_not_keep_a_previous_color() {
+    fn cache_rate_limit_and_disable_reset_do_not_keep_a_previous_color() {
         let state = EnvironmentSamplingState::default();
         assert!(!state.enabled.load(Ordering::SeqCst));
         let mut preferences = crate::settings::DesktopPreferences {

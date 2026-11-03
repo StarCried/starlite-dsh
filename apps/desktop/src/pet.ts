@@ -201,7 +201,7 @@ export async function startPet(): Promise<void> {
     animator?.setPaused(paused);
     if (paused) controller?.pause();
     else controller?.resume();
-    environmentLighting.configure(controller,settings.preferences.environmentLightingEnabled===true,settings.preferences.environmentLightingStrength??1,!paused&&connected&&!closing);
+    environmentLighting.configure(controller,settings.preferences.environmentLightingEnabled!==false,settings.preferences.environmentLightingStrength??1,!paused&&connected&&!closing);
     if(document.visibilityState!=="visible")quickMenu?.close();
     syncInputAvailable();updateRegion();updateMenuRegion();
   };

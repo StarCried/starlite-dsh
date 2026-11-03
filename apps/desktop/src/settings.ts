@@ -354,9 +354,9 @@ function populatePreferences(preferences: DesktopPreferences): void {
   requiredElement<HTMLInputElement>("performance-overlay").checked = preferences.performanceOverlay;
   requiredElement<HTMLInputElement>("pointer-enabled").checked = preferences.pointerEnabled !== false;
   requiredElement<HTMLInputElement>("bubbles-visible").checked = preferences.bubblesVisible !== false;
-  requiredElement<HTMLInputElement>("environment-lighting").checked = preferences.environmentLightingEnabled === true;
+  requiredElement<HTMLInputElement>("environment-lighting").checked = preferences.environmentLightingEnabled !== false;
   requiredElement<HTMLInputElement>("environment-strength").value = String(Math.round((preferences.environmentLightingStrength ?? 1) * 100));
-  requiredElement<HTMLInputElement>("environment-strength").disabled = preferences.environmentLightingEnabled !== true;
+  requiredElement<HTMLInputElement>("environment-strength").disabled = preferences.environmentLightingEnabled === false;
 }
 
 function readPreferences(): DesktopPreferences {
@@ -365,7 +365,7 @@ function readPreferences(): DesktopPreferences {
   if (!Number.isFinite(maxDevicePixelRatio) || maxDevicePixelRatio < 1 || maxDevicePixelRatio > 1.5) throw new Error(t("DPR 上限必须在 1 到 1.5 之间。"));
   if (!Number.isFinite(scale) || scale < 0.25 || scale > 3) throw new Error(t("模型缩放必须在 0.25 到 3 之间。"));
   if (typeof environmentLightingStrength !== "number" || !Number.isFinite(environmentLightingStrength) || environmentLightingStrength < 0 || environmentLightingStrength > 2) throw new Error(t("补光强度必须在 0% 到 200% 之间。"));
-  return {fps,maxDevicePixelRatio,scale,privacyMode,bubbleMode,performanceOverlay,pointerEnabled:pointerEnabled!==false,bubblesVisible:bubblesVisible!==false,environmentLightingEnabled:environmentLightingEnabled===true,environmentLightingStrength};
+  return {fps,maxDevicePixelRatio,scale,privacyMode,bubbleMode,performanceOverlay,pointerEnabled:pointerEnabled!==false,bubblesVisible:bubblesVisible!==false,environmentLightingEnabled:environmentLightingEnabled!==false,environmentLightingStrength};
 }
 
 function readUncheckedPreferences(): DesktopPreferences {

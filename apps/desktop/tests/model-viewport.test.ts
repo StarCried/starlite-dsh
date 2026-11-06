@@ -63,6 +63,18 @@ it("changes the real display area only for an explicit size change and keeps tex
   expect(send).toHaveBeenCalledTimes(2);await bridge.destroy();
 });
 
+it("reserves the fixed visitor toolbar after a large portrait is shrunk without moving its native origin",async()=>{
+  const send=vi.fn(async()=>{}),bridge=new ModelViewportBridge(host,anchor,send,vi.fn(),vi.fn(),vi.fn(),bubble);
+  await bridge.configure(true,1.5);
+  const portrait=bridge.modelRect,toolbar={left:portrait.left+portrait.width/2-76,top:portrait.top+portrait.height+10,width:152,height:42};
+  const origin=bridge.hostPosition({x:400,y:200},1.5);
+  await bridge.reserveToolbarSpace(toolbar);expect(send).toHaveBeenCalledOnce();
+  await bridge.configure(true,.5);
+  expect(send).toHaveBeenLastCalledWith(expect.objectContaining({width:456,height:1316,baseWidth:160,baseHeight:240}));
+  expect(bridge.hostPosition({x:400,y:200},1.5)).toEqual(origin);
+  await bridge.destroy();
+});
+
 it("reserves a stable menu surface before opening and does not shrink it during a slider drag",async()=>{
   const send=vi.fn<(value:ModelViewport|null)=>Promise<void>>(async()=>{}),bridge=new ModelViewportBridge(host,anchor,send,vi.fn(),vi.fn(),vi.fn(),bubble);
   await bridge.configure(true,.67);

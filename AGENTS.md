@@ -38,6 +38,11 @@
 - Bubble placement uses the runtime's cached reference-pose `getBubbleAnchor()`
   in host CSS pixels (no DPR or canvas padding). Reproject after resize, clear on
   model replacement, and never resize the native window from animated bounds.
+- Visitor controls use shared `createVisitorToolbar` and `isModelDrag` exports.
+  Keep the toolbar's CSS size and initial portrait anchor fixed during scaling.
+  Toolbar and context menu are mutually exclusive and share the native menu
+  region; never union their rectangles across transparent space. The shared
+  drag threshold is strictly greater than six CSS pixels, including native DPI conversion.
 - Resolve UI locale from the native Windows display language before importing
   label modules; pass it explicitly to shared controls and VRM. Translate only
   application-owned text, never session content or arbitrary model metadata.

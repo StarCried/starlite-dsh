@@ -34,6 +34,7 @@ export class ModelViewportBridge {
   #vrm = false;
   #scale = 1;
   #menuScale: number | undefined;
+  #toolbarExtent: {right:number;bottom:number} | undefined;
   #viewport = BASE;
   #screenSpace: number | undefined;
   #bubbleAnchor: ModelBubbleAnchor | undefined;
@@ -80,12 +81,19 @@ export class ModelViewportBridge {
     return this.#tail;
   }
 
+  /** Preserve the fixed toolbar anchor even when its portrait is made smaller. */
+  reserveToolbarSpace(rect: {left:number;top:number;width:number;height:number}): Promise<void> {
+    this.#toolbarExtent={right:Math.ceil(rect.left+rect.width+12),bottom:Math.ceil(rect.top+rect.height+12)};
+    if(this.#vrm&&(this.#toolbarExtent.right>this.#viewport.width||this.#toolbarExtent.bottom>this.#viewport.height))this.#updateViewport();
+    return this.#tail;
+  }
+
   #updateViewport(): void {
     const baseWidth = Math.round(BASE.width * this.#scale), baseHeight = Math.round(BASE.height * this.#scale);
     const envelope = Math.max(this.#scale, this.#menuScale ?? this.#scale);
     this.#apply(this.#vrm ? {...FIXED, baseWidth, baseHeight,
-      width:Math.round(BASE.width * envelope) + VRM_VIEWPORT_PADDING.left + VRM_VIEWPORT_PADDING.right,
-      height:Math.round(BASE.height * envelope) + VRM_VIEWPORT_PADDING.top + VRM_VIEWPORT_PADDING.bottom + RESERVE} : null);
+      width:Math.max(this.#toolbarExtent?.right??0,Math.round(BASE.width * envelope) + VRM_VIEWPORT_PADDING.left + VRM_VIEWPORT_PADDING.right),
+      height:Math.max(this.#toolbarExtent?.bottom??0,Math.round(BASE.height * envelope) + VRM_VIEWPORT_PADDING.top + VRM_VIEWPORT_PADDING.bottom + RESERVE)} : null);
   }
 
   hostPosition(position: {x:number;y:number}, scale: number): {x:number;y:number} {

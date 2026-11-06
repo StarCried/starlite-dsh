@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { DesktopSettings } from "./types.js";
-import type { ModelCore, ModelModule, ModelSlot, WidgetController, QuickMenu, QuickMenuOptions } from "./vendor-types.js";
+import type { ModelCore, ModelModule, ModelSlot, WidgetController, QuickMenu, QuickMenuOptions, VisitorToolbar, VisitorToolbarOptions } from "./vendor-types.js";
 import { VRM_VIEWPORT_PADDING } from "./model-viewport.js";
 import { selectedModel } from "./model-selection.js";
 import { uiLocale } from "./i18n.js";
@@ -14,6 +14,12 @@ export async function createModelSlot(): Promise<ModelSlot> {
 export async function createQuickMenu(options: QuickMenuOptions): Promise<QuickMenu> {
   const { QuickSettingsMenu } = await loadCore();
   return new QuickSettingsMenu(options);
+}
+export async function createVisitorToolbar(options: VisitorToolbarOptions): Promise<VisitorToolbar> {
+  return (await loadCore()).createVisitorToolbar(options);
+}
+export async function loadModelDragGesture(): Promise<ModelCore["isModelDrag"]> {
+  return (await loadCore()).isModelDrag;
 }
 export function modelConfig(settings: DesktopSettings): Record<string, unknown> {
   const model = selectedModel(settings);

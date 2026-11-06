@@ -67,9 +67,28 @@ export interface ModelSlot {
   destroy(): void;
 }
 export interface ModelCore {
+  isModelDrag(dx:number,dy:number):boolean;
+  createVisitorToolbar(options: VisitorToolbarOptions): VisitorToolbar;
   QuickSettingsMenu: new (options: QuickMenuOptions) => QuickMenu;
   ModelMountSlot: new () => ModelSlot;
   mountModelWidget(host: HTMLElement, config: Record<string, unknown>, modules: Record<ModelBackend, () => Promise<ModelModule>>, options?: {signal?: AbortSignal}): Promise<WidgetController>;
+}
+
+export interface VisitorToolbarOptions {
+  locale?: "zh-CN" | "en";
+  onSmaller(): void | Promise<void>;
+  onLarger(): void | Promise<void>;
+  onBubbles(): void | Promise<void>;
+  onHide(): void | Promise<void>;
+}
+export interface VisitorToolbar {
+  readonly element: HTMLElement;
+  readonly dimensions: {width: number; height: number};
+  update(state: {scale:number;minScale:number;maxScale:number;bubbles:boolean;bubblesAllowed:boolean;enabled?:boolean}): void;
+  show(visible: boolean): void;
+  place(centerX: number, topY: number, zIndex: number): void;
+  reattach(): void;
+  destroy(): void;
 }
 
 export type QuickSettingItem = {id:string;label:string;disabled?:boolean;description?:string} & (

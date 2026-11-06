@@ -1,4 +1,4 @@
-import { t } from "./i18n.js";
+import { t, uiLocale } from "./i18n.js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -15,7 +15,8 @@ import {parsePetConnectionUrl} from "@starcried/starlite-dsh-protocol";
 import type { PetSnapshot, WidgetController } from "./vendor-types.js";
 import type { DesktopSettings, ModelAdjustments } from "./types.js";
 import { StatusConnection } from "./connection.js";
-import { createModelSlot, createQuickMenu, mountModel } from "./renderer.js";
+import { createModelSlot, createQuickMenu, createVisitorToolbar, loadModelDragGesture, mountModel } from "./renderer.js";
+import {PetVisitorToolbar, portraitWithToolbar, steppedPetScale} from "./visitor-toolbar.js";
 import {createPetQuickMenu, type PetUiState, type PetQuickMenu} from "./quick-settings.js";
 import {menuWorkArea} from "./menu-placement.js";
 import { renderingIdentity, selectedModel } from "./model-selection.js";
@@ -66,6 +67,8 @@ export async function startPet(): Promise<void> {
   let pausedByTray = false;
   let ui:PetUiState={paused:false,visible:true,clickThrough:false};
   let quickMenu:PetQuickMenu|undefined;
+  let visitorToolbar:PetVisitorToolbar|undefined;
+  let toolbarReferenceReady=false;
   let menuOpenGeneration=0;
   let connected = false;
   let connection: StatusConnection | undefined;
@@ -93,15 +96,19 @@ export async function startPet(): Promise<void> {
   };
   let menuRegionPending:Region|undefined,menuRegionSending=false;
   const updateMenuRegion=()=>{
-    const rect=quickMenu?.element.getBoundingClientRect();
-    const left=Math.max(0,rect?.left??0),top=Math.max(0,rect?.top??0),right=Math.min(innerWidth,rect?.right??0),bottom=Math.min(innerHeight,rect?.bottom??0);
-    menuRegionPending=quickMenu?.isOpen&&document.visibilityState==="visible"&&right>left&&bottom>top
+    // Toolbar and full menu are mutually exclusive; never bridge their empty
+    // surroundings with one oversized native rectangle.
+    const visible=ui.visible&&!ui.clickThrough&&!viewport.pending&&(quickMenu?.isOpen||visitorToolbar?.visible);
+    const rect=quickMenu?.isOpen?quickMenu.element.getBoundingClientRect():visitorToolbar?.rect;
+    const bounds=rect?{left:rect.left,top:rect.top,right:rect.left+rect.width,bottom:rect.top+rect.height}:undefined;
+    const left=Math.max(0,bounds?.left??0),top=Math.max(0,bounds?.top??0),right=Math.min(innerWidth,bounds?.right??0),bottom=Math.min(innerHeight,bounds?.bottom??0);
+    menuRegionPending=visible&&document.visibilityState==="visible"&&right>left&&bottom>top
       ?{left,top,width:right-left,height:bottom-top,viewportWidth:innerWidth,viewportHeight:innerHeight}:null;
     if(menuRegionSending)return;
     menuRegionSending=true;
     void (async()=>{
       try{while(menuRegionPending!==undefined){const region=menuRegionPending;menuRegionPending=undefined;await geometryInvoke("set_menu_interaction_region",{region});}}
-      catch{quickMenu?.close();}
+      catch{quickMenu?.close();visitorToolbar?.clear();}
       finally{menuRegionSending=false;}
     })();
   };
@@ -178,6 +185,7 @@ export async function startPet(): Promise<void> {
   host.addEventListener("model-viewport-change",syncBubbleAnchor);
   await listen<{x: number; y: number}>("pet-cursor", ({payload}) => {
     controller?.setPointerPosition(payload.x, payload.y);
+    visitorToolbar?.pointer(payload.x,payload.y,viewport.modelRect);
   });
   const stopMovement = await window.onMoved(() => {
     void hostPosition.sync().catch(()=>{});
@@ -203,7 +211,14 @@ export async function startPet(): Promise<void> {
     else controller?.resume();
     environmentLighting.configure(controller,settings.preferences.environmentLightingEnabled!==false,settings.preferences.environmentLightingStrength??1,!paused&&connected&&!closing);
     if(document.visibilityState!=="visible")quickMenu?.close();
+    syncVisitorToolbar();
     syncInputAvailable();updateRegion();updateMenuRegion();
+  };
+  const syncVisitorToolbar=()=>{
+    const p=settings.preferences;
+    const enabled=!closing&&connected&&modelAvailable()&&Boolean(controller)&&ui.visible&&!ui.clickThrough&&document.visibilityState==="visible"&&!quickMenu?.isOpen;
+    visitorToolbar?.toolbar.update({scale:p.scale,minScale:Math.min(.5,p.scale),maxScale:Math.max(1.5,p.scale),bubbles:p.bubblesVisible!==false,bubblesAllowed:true,enabled});
+    visitorToolbar?.configure(enabled);
   };
   // A fast initial connection can show the hidden window before later native
   // subscriptions resolve. Observe that first visibility change before mount.
@@ -235,6 +250,7 @@ export async function startPet(): Promise<void> {
     const model = selectedModel(next);
     const enabled = model?.backend === "vrm";
     fees.cancel(); cancelClick(); workBubble.clear(); bubble.hidden = true;
+    visitorToolbar?.configure(false);
     animator?.disconnected(); animator = undefined;
     environmentLighting.configure(undefined,false,next.preferences.environmentLightingStrength??1,false);
     slot.destroy(); controller = undefined;
@@ -243,6 +259,11 @@ export async function startPet(): Promise<void> {
     if (!enabled) void window.hide();
     await viewport.configure(enabled,next.preferences.scale);
     if(generation!==mountGeneration)return;
+    if(enabled&&visitorToolbar&&!toolbarReferenceReady){
+      visitorToolbar.setReference(viewport.modelRect);toolbarReferenceReady=true;
+      await viewport.reserveToolbarSpace(visitorToolbar.rect);
+      if(generation!==mountGeneration)return;
+    }
     host.replaceChildren(); empty.hidden = !enabled || Boolean(model);
     syncInputAvailable();
     if (!enabled || !model) return;
@@ -279,12 +300,13 @@ export async function startPet(): Promise<void> {
   const syncMenuSurface=()=>{
     const open=quickMenu?.isOpen===true;
     if(!open)++menuOpenGeneration;
+    syncVisitorToolbar();
     void viewport.reserveMenuSpace(open).then(()=>{controller?.refreshInteractionMask?.();updateMenuRegion();}).catch(()=>{});
     updateMenuRegion();
   };
-  const closeQuickMenu=()=>{++menuOpenGeneration;quickMenu?.close();syncMenuSurface();};
+  const closeQuickMenu=()=>{++menuOpenGeneration;quickMenu?.close();visitorToolbar?.clear();cancelClick();syncMenuSurface();};
   globalThis.addEventListener("blur",closeQuickMenu);
-  globalThis.addEventListener("pagehide", () => { closing=true; environmentLighting.destroy(); if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu);host.removeEventListener("model-viewport-change",syncBubbleAnchor); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { closing=true; environmentLighting.destroy(); if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu);host.removeEventListener("model-viewport-change",syncBubbleAnchor); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();visitorToolbar?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
   let preparing = true;
   await listen<{modelId: string; adjustments: ModelAdjustments}>("model-adjustments-preview", ({payload}) => {
@@ -422,7 +444,7 @@ export async function startPet(): Promise<void> {
     patch:async patch=>{await invoke("patch_preferences",{patch});},
     pause:async paused=>{await invoke("set_pet_paused",{paused});},
     hide:async()=>{await invoke("set_pet_visible",{visible:false});},
-    restorePosition:async()=>{await geometryTask(()=>invoke("restore_default_position",{modelRect:viewport.modelRect}));void hostPosition.sync().catch(()=>{});},
+    restorePosition:async()=>{await geometryTask(()=>invoke("restore_default_position",{modelRect:portraitWithToolbar(viewport.modelRect,visitorToolbar?.rect)}));void hostPosition.sync().catch(()=>{});},
     openSettings:async()=>{await invoke("open_settings");},
     openDsh:async()=>{if(connection&&connected)await openDisplayedDsh(connection,latestSnapshot?.session?.ref);},
     selectModel:async modelId=>{await invoke("select_model",{modelId});},
@@ -430,6 +452,16 @@ export async function startPet(): Promise<void> {
   quickMenu.element.addEventListener("starlite-menu-change",syncMenuSurface);
   menuResize.observe(quickMenu.element);
   menuMutation.observe(quickMenu.element,{attributes:true,childList:true,subtree:true});
+  visitorToolbar=new PetVisitorToolbar(await createVisitorToolbar({
+    locale:uiLocale(),
+    onSmaller:async()=>{await invoke("patch_preferences",{patch:{scale:steppedPetScale(settings.preferences.scale,-1)}});},
+    onLarger:async()=>{await invoke("patch_preferences",{patch:{scale:steppedPetScale(settings.preferences.scale,1)}});},
+    onBubbles:async()=>{await invoke("patch_preferences",{patch:{bubblesVisible:settings.preferences.bubblesVisible===false}});},
+    onHide:async()=>{visitorToolbar?.clear();await invoke("set_pet_visible",{visible:false});},
+  }),viewport.modelRect,updateMenuRegion);
+  toolbarReferenceReady=modelAvailable();
+  await viewport.reserveToolbarSpace(visitorToolbar.rect);
+  syncVisitorToolbar();
   cancelClick=installPointerBehavior(host, {
     begin: (x, y) => invoke("begin_model_drag",{x,y}),
     move: () => invoke("move_model_drag"),
@@ -437,7 +469,8 @@ export async function startPet(): Promise<void> {
       try{return await invoke("end_model_drag");}
       finally{void hostPosition.sync().catch(()=>{});}
     },
-  }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), (x,y) => {
+  }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), await loadModelDragGesture(), (x,y) => {
+    visitorToolbar?.clear();
     const generation=++menuOpenGeneration;
     void viewport.reserveMenuSpace(true).then(async()=>{
       // Native set_size acknowledges before WebView layout necessarily catches
@@ -469,16 +502,18 @@ export function installPointerBehavior(
   drag: {begin: (x: number, y: number) => Promise<unknown>; move: () => Promise<unknown>; end: () => Promise<unknown>},
   click: () => void | Promise<void>,
   hitTest: (x: number, y: number) => boolean,
+  isModelDrag: (dx:number,dy:number) => boolean,
   openSettings?: (x:number,y:number) => void,
   doubleClick?: () => void | Promise<void>,
 ): () => void {
-  let gesture: {id: number; x: number; y: number; moved: boolean; queued: boolean; chain: Promise<unknown>} | undefined;
+  type Gesture={id:number;x:number;y:number;clientX:number;clientY:number;moved:boolean;started:boolean;cancelled:boolean;queued:boolean;chain:Promise<unknown>};
+  let gesture: Gesture | undefined;
   let dragTail:Promise<unknown>=Promise.resolve();
   let clickEpoch=0;
   let clickTimer:ReturnType<typeof setTimeout>|undefined;
   let firstClick:{x:number;y:number;ready:Promise<unknown>}|undefined;
   const clearClick=()=>{if(clickTimer)clearTimeout(clickTimer);clickTimer=undefined;firstClick=undefined;};
-  const cancel=()=>{++clickEpoch;clearClick();};
+  const cancelClick=()=>{++clickEpoch;clearClick();};
   const whenReady=(ready:Promise<unknown>,action:()=>void|Promise<void>,epoch:number)=>{
     void ready.then(async()=>{if(epoch===clickEpoch)await action();}).catch(()=>{});
   };
@@ -493,35 +528,46 @@ export function installPointerBehavior(
     cancel();
     event.preventDefault(); openSettings(event.clientX,event.clientY);
   });
+  const begin=(current:Gesture)=>{
+    if(current.started)return;
+    current.started=true;
+    current.chain=current.chain.then(()=>{if(!current.cancelled)return drag.begin(current.clientX,current.clientY);});
+    void current.chain.catch(()=>{});
+  };
   const finish = (event: PointerEvent, cancelled: boolean) => {
     const current = gesture;
     if (!current || event.pointerId !== current.id) return;
     gesture = undefined;
-    current.moved ||= Math.hypot(event.screenX-current.x,event.screenY-current.y)>=5;
+    current.cancelled=cancelled;
+    if(!cancelled)current.moved ||= isModelDrag(event.screenX-current.x,event.screenY-current.y);
     if (element.hasPointerCapture(current.id)) element.releasePointerCapture(current.id);
-    if(current.moved||cancelled)cancel();else completeClick(event,current.chain);
-    dragTail = current.chain.then(async () => {
-      if (current.moved && !cancelled) await drag.move();
+    if(current.moved||cancelled)cancelClick();else completeClick(event,current.chain);
+    if(current.moved&&!cancelled)begin(current);
+    if(current.started)dragTail = current.chain.then(async () => {
+      if (!cancelled) await drag.move();
     }).finally(() => drag.end()).catch(() => {});
+  };
+  const cancel=()=>{
+    cancelClick();
+    if(gesture)finish({pointerId:gesture.id} as PointerEvent,true);
   };
   element.addEventListener("pointerdown", (event) => {
     if (gesture || event.button !== 0 || !hitTest(event.clientX, event.clientY)) return;
-    gesture = {id:event.pointerId,x:event.screenX,y:event.screenY,moved:false,queued:false,chain:dragTail.then(()=>drag.begin(event.clientX,event.clientY))};
-    // Attach rejection handling immediately while retaining the rejected chain.
-    void gesture.chain.catch(() => {});
-    element.setPointerCapture(event.pointerId);
+    gesture = {id:event.pointerId,x:event.screenX,y:event.screenY,clientX:event.clientX,clientY:event.clientY,moved:false,started:false,cancelled:false,queued:false,chain:dragTail};
+    try{element.setPointerCapture(event.pointerId);}catch{cancel();}
   });
   element.addEventListener("pointermove", (event) => {
     const current=gesture;
     if (!current || event.pointerId !== current.id || current.queued) return;
-    if (!current.moved && Math.hypot(event.screenX-current.x,event.screenY-current.y)<5) return;
+    if (!current.moved && !isModelDrag(event.screenX-current.x,event.screenY-current.y)) return;
     current.moved=true;current.queued=true;
-    cancel();
-    current.chain=current.chain.then(()=>drag.move()).finally(()=>{current.queued=false});
+    cancelClick();begin(current);
+    current.chain=current.chain.then(()=>{if(!current.cancelled)return drag.move();}).finally(()=>{current.queued=false});
     void current.chain.catch(() => {});
   });
   element.addEventListener("pointerup", event=>finish(event,false));
   element.addEventListener("pointercancel", event=>finish(event,true));
+  element.addEventListener("lostpointercapture", event=>finish(event,true));
   return cancel;
 }
 

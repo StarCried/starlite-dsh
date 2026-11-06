@@ -214,7 +214,7 @@ impl DragOrigin {
     fn destination(&self, x: f64, y: f64) -> Option<tauri::PhysicalPosition<i32>> {
         let dx = x - self.x;
         let dy = y - self.y;
-        if !dx.is_finite() || !dy.is_finite() || dx.hypot(dy) < self.threshold {
+        if !dx.is_finite() || !dy.is_finite() || dx.hypot(dy) <= self.threshold {
             return None;
         }
         Some(tauri::PhysicalPosition::new(
@@ -260,7 +260,7 @@ pub fn begin_model_drag(
         x: f64::from(origin.x) + px,
         y: f64::from(origin.y) + py,
         position,
-        threshold: 5.0 * f64::from(size.width) / mask.viewport_width,
+        threshold: 6.0 * f64::from(size.width) / mask.viewport_width,
     });
     Ok(())
 }
@@ -556,6 +556,19 @@ mod tests {
             tauri::PhysicalPosition::new(-50, 200)
         );
         assert!(d.destination(f64::NAN, 400.0).is_none());
+    }
+    #[test]
+    fn drag_threshold_matches_the_shared_six_css_pixel_boundary() {
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let d = DragOrigin {
+                x: 0.0,
+                y: 0.0,
+                position: tauri::PhysicalPosition::new(100, 200),
+                threshold: 6.0 * scale,
+            };
+            assert!(d.destination(6.0 * scale, 0.0).is_none());
+            assert!(d.destination(6.01 * scale, 0.0).is_some());
+        }
     }
     fn mask() -> HitMask {
         HitMask {

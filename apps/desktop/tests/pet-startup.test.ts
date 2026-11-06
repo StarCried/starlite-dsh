@@ -1,14 +1,14 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopSettings, ModelAdjustments } from "../src/types.js";
-import type { WidgetController } from "../src/vendor-types.js";
+import type { WidgetController, VisitorToolbar, VisitorToolbarOptions } from "../src/vendor-types.js";
 import type {PetUiState} from "../src/quick-settings.js";
 import { startPet } from "../src/pet.js";
 
 const native = vi.hoisted(() => ({
   invoke: vi.fn(), listen: vi.fn(), getCurrent: vi.fn(), onOpenUrl: vi.fn(),
   getCurrentWindow: vi.fn(), availableMonitors: vi.fn(), primaryMonitor: vi.fn(),
-  createModelSlot: vi.fn(), createQuickMenu:vi.fn(), mountModel: vi.fn(), connection: vi.fn(), message: vi.fn(),
+  createModelSlot: vi.fn(), createQuickMenu:vi.fn(), createVisitorToolbar:vi.fn(), loadModelDragGesture:vi.fn(), mountModel: vi.fn(), connection: vi.fn(), message: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/core", () => ({invoke: native.invoke}));
 vi.mock("@tauri-apps/api/event", () => ({listen: native.listen}));
@@ -18,7 +18,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 vi.mock("@tauri-apps/plugin-deep-link", () => ({getCurrent: native.getCurrent, onOpenUrl: native.onOpenUrl}));
 vi.mock("@tauri-apps/plugin-dialog", () => ({message:native.message}));
-vi.mock("../src/renderer.js", () => ({createModelSlot: native.createModelSlot,createQuickMenu:native.createQuickMenu, mountModel: native.mountModel}));
+vi.mock("../src/renderer.js", () => ({createModelSlot: native.createModelSlot,createQuickMenu:native.createQuickMenu, createVisitorToolbar:native.createVisitorToolbar, loadModelDragGesture:native.loadModelDragGesture, mountModel: native.mountModel}));
 vi.mock("../src/connection.js", () => ({StatusConnection: class {
   constructor(callbacks: unknown) { return native.connection(callbacks); }
 }}));
@@ -43,6 +43,7 @@ let settingsListener: ((event: {payload: DesktopSettings}) => void) | undefined;
 let adjustmentListener: ((event: {payload: {modelId: string; adjustments: ModelAdjustments}}) => void) | undefined;
 let uiListener: ((event:{payload:PetUiState})=>void)|undefined;
 let deepLinkListener: ((urls:string[])=>void) | undefined;
+let cursorListener: ((event:{payload:{x:number;y:number}})=>void)|undefined;
 const INITIAL_URL = `dsh-inochi2d-pet://connect?port=41234&token=${"a".repeat(43)}&instance=12345678-1234-4234-8234-123456789abc`;
 
 function changeVisibility(value: DocumentVisibilityState) {
@@ -72,6 +73,8 @@ beforeEach(() => {
     outerSize: vi.fn(async () => ({width: 320, height: 480})), setPosition: vi.fn(async () => undefined),
   });
   native.invoke.mockImplementation(async command => command === "get_settings" || command === "prepare_model" ? structuredClone(settings) : command === "get_initial_connection" ? INITIAL_URL : command === "get_pet_ui_state" ? {paused:false,visible:true,clickThrough:false}:undefined);
+  native.createVisitorToolbar.mockResolvedValue({element:document.createElement("aside"),dimensions:{width:152,height:42},update:vi.fn(),show:vi.fn(),place:vi.fn(),reattach:vi.fn(),destroy:vi.fn()});
+  native.loadModelDragGesture.mockResolvedValue((dx:number,dy:number)=>Number.isFinite(dx)&&Number.isFinite(dy)&&Math.hypot(dx,dy)>6);
   native.createQuickMenu.mockResolvedValue({element:document.createElement("aside"),isOpen:false,open:vi.fn(),close:vi.fn(),update:vi.fn(),destroy:vi.fn()});
   native.listen.mockImplementation(async (event, listener) => {
     if (event === "tray-action") {
@@ -81,6 +84,7 @@ beforeEach(() => {
     if (event === "settings-changed") settingsListener = listener;
     if (event === "model-adjustments-preview") adjustmentListener = listener;
     if (event === "pet-ui-state") uiListener = listener;
+    if (event === "pet-cursor") cursorListener = listener;
     return () => undefined;
   });
   native.getCurrent.mockResolvedValue([INITIAL_URL]);
@@ -111,6 +115,34 @@ afterEach(async () => {
 });
 
 describe("desktop hidden-window startup", () => {
+  it("shares visible toolbar coverage, persisted controls and paused hot resizing without remounting",async()=>{
+    vi.stubGlobal("innerWidth",576);vi.stubGlobal("innerHeight",1204);
+    try{
+      const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+      await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+      const toolbar=await native.createVisitorToolbar.mock.results[0]!.value as VisitorToolbar;
+      const options=native.createVisitorToolbar.mock.calls[0]![0] as VisitorToolbarOptions;
+      const region={left:159,top:864,width:152,height:42,viewportWidth:576,viewportHeight:1204};
+      expect(toolbar.show).toHaveBeenLastCalledWith(false);
+      cursorListener!({payload:{x:160,y:600}});
+      await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("set_menu_interaction_region",{region}));
+      uiListener!({payload:{paused:true,visible:true,clickThrough:false}});
+      await options.onLarger();expect(native.invoke).toHaveBeenCalledWith("patch_preferences",{patch:{scale:.77}});
+      const next=structuredClone(settings);next.preferences.scale=.77;settingsListener!({payload:next});
+      await vi.waitFor(()=>expect(controller.setDisplaySize).toHaveBeenCalledWith(246.4,369.6));
+      globalThis.dispatchEvent(new Event("resize"));
+      await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("set_menu_interaction_region",{region}));
+      expect(toolbar.place).toHaveBeenLastCalledWith(235,864,1000);
+      expect(controller.status).toBe("paused");expect(native.mountModel).toHaveBeenCalledOnce();
+      await options.onBubbles();expect(native.invoke).toHaveBeenCalledWith("patch_preferences",{patch:{bubblesVisible:false}});
+      globalThis.dispatchEvent(new Event("blur"));
+      await vi.waitFor(()=>expect(native.invoke.mock.calls.filter(([command])=>command==="set_menu_interaction_region").at(-1)).toEqual(["set_menu_interaction_region",{region:null}]));
+      cursorListener!({payload:{x:160,y:600}});expect(toolbar.show).toHaveBeenLastCalledWith(false);
+      cursorListener!({payload:{x:161,y:600}});expect(toolbar.show).toHaveBeenLastCalledWith(true);
+      await options.onHide();expect(native.invoke).toHaveBeenCalledWith("set_pet_visible",{visible:false});
+      expect(toolbar.show).toHaveBeenLastCalledWith(false);
+    }finally{vi.unstubAllGlobals();}
+  });
   it("hides work and question bubbles without remounting or intercepting DSH input",async()=>{
     const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
     await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;

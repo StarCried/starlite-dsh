@@ -8,6 +8,7 @@ export class EnvironmentLightingBridge {
   #controller: LightingController | undefined;
   #active = false;
   #strength = 1;
+  #lastColor: string | undefined;
   #generation = 0;
   #pending = false;
   #destroyed = false;
@@ -23,9 +24,11 @@ export class EnvironmentLightingBridge {
     ++this.#generation;
     this.#clearTimer();
     if (this.#controller && (controller !== this.#controller || !eligible)) this.#controller.setEnvironmentLighting?.(null);
+    if (controller !== this.#controller || !eligible) this.#lastColor = undefined;
     this.#controller = controller;
     this.#active = eligible;
     this.#strength = safeStrength;
+    if (eligible && this.#lastColor) this.#controller?.setEnvironmentLighting?.({color:this.#lastColor,strength:safeStrength});
     if (eligible && !this.#pending) void this.#poll();
   }
 
@@ -36,6 +39,7 @@ export class EnvironmentLightingBridge {
     this.#clearTimer();
     this.#controller?.setEnvironmentLighting?.(null);
     this.#controller = undefined;
+    this.#lastColor = undefined;
     this.#active = false;
   }
 
@@ -49,11 +53,14 @@ export class EnvironmentLightingBridge {
     this.#pending = true;
     const generation = this.#generation;
     let sample: EnvironmentColor | null = null;
-    try { sample = await this.sample(); } catch { /* Capture unavailable: recover to the original lighting. */ }
+    try { sample = await this.sample(); } catch { /* A transient capture failure keeps the last valid lighting. */ }
     try {
       if (this.#destroyed || generation !== this.#generation || !this.#active) return;
       const color = typeof sample?.color === "string" && /^#[\da-f]{6}$/iu.test(sample.color) ? sample.color : undefined;
-      this.#controller?.setEnvironmentLighting?.(color ? {color, strength:this.#strength} : null);
+      if (color) {
+        this.#lastColor = color;
+        this.#controller?.setEnvironmentLighting?.({color,strength:this.#strength});
+      }
     } finally {
       this.#pending = false;
       // Schedule from completion, never overlap or catch up after sleep. A

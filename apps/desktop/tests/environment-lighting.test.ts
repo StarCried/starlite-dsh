@@ -69,8 +69,8 @@ it.each(["disabled","paused"] as const)("stops on %s and does not apply a pendin
   bridge.destroy();
 });
 
-it("discards old-strength results and restores neutral after unavailable or malformed samples",async()=>{
-  const first=pending(),read=vi.fn().mockReturnValueOnce(first.promise).mockResolvedValueOnce({color:"#abcdef"}).mockRejectedValueOnce(Error("unavailable")).mockResolvedValueOnce({color:"red"}).mockResolvedValue(null);
+it("discards old-strength results and retains lighting across unavailable or malformed samples",async()=>{
+  const first=pending(),read=vi.fn().mockReturnValueOnce(first.promise).mockResolvedValueOnce({color:"#abcdef"}).mockRejectedValueOnce(Error("unavailable")).mockResolvedValueOnce({color:"red"}).mockResolvedValueOnce(null).mockResolvedValue({color:"#123456"});
   const bridge=new EnvironmentLightingBridge(read),target=controller();
   bridge.configure(target,true,.2,true);
   bridge.configure(target,true,.6,true);
@@ -78,7 +78,42 @@ it("discards old-strength results and restores neutral after unavailable or malf
   await vi.advanceTimersByTimeAsync(1);
   expect(target.setEnvironmentLighting).toHaveBeenCalledExactlyOnceWith({color:"#abcdef",strength:.6});
   await vi.advanceTimersByTimeAsync(750);
-  expect(target.setEnvironmentLighting.mock.calls.slice(1)).toEqual([[null],[null],[null]]);
+  expect(target.setEnvironmentLighting).toHaveBeenCalledOnce();
+  await vi.advanceTimersByTimeAsync(250);
+  expect(target.setEnvironmentLighting).toHaveBeenLastCalledWith({color:"#123456",strength:.6});
+  bridge.destroy();
+});
+
+it("changes strength while retaining the last color until another valid sample arrives",async()=>{
+  const next=pending(),read=vi.fn().mockResolvedValueOnce({color:"#abcdef"}).mockReturnValueOnce(next.promise).mockResolvedValue(null);
+  const bridge=new EnvironmentLightingBridge(read),target=controller();
+  bridge.configure(target,true,1,true);
+  await vi.advanceTimersByTimeAsync(250);
+  bridge.configure(target,true,1.5,true);
+  expect(target.setEnvironmentLighting).toHaveBeenLastCalledWith({color:"#abcdef",strength:1.5});
+  expect(read).toHaveBeenCalledTimes(2);
+  next.resolve({color:"#ffffff"});
+  await vi.advanceTimersByTimeAsync(1);
+  expect(target.setEnvironmentLighting).toHaveBeenLastCalledWith({color:"#abcdef",strength:1.5});
+  bridge.destroy();
+});
+
+it.each(["disabled","paused","replaced"] as const)("does not carry retained color across %s",async reason=>{
+  const read=vi.fn().mockResolvedValueOnce({color:"#112233"}).mockResolvedValue(null);
+  const bridge=new EnvironmentLightingBridge(read),old=controller(),next=reason==="replaced"?controller():old;
+  bridge.configure(old,true,1,true);
+  await vi.advanceTimersByTimeAsync(0);
+  if(reason==="replaced")bridge.configure(next,true,1,true);
+  else {
+    bridge.configure(old,reason!=="disabled",1,reason!=="paused");
+    bridge.configure(old,true,1,true);
+  }
+  expect(old.setEnvironmentLighting).toHaveBeenLastCalledWith(null);
+  const calls=next.setEnvironmentLighting.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(250);
+  bridge.configure(next,true,.5,true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(next.setEnvironmentLighting).toHaveBeenCalledTimes(calls);
   bridge.destroy();
 });
 

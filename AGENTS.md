@@ -31,6 +31,11 @@
   New or omitted strength settings default to 1.0 (100%), with a 0–2 range;
   preserve explicit saved strengths and disabled choices. New or omitted enabled
   settings default to true; the user approved default-on environment lighting.
+- Temporary sampling failure retains the last valid color only for the current
+  active controller. Clear it on disable, pause, model replacement and destroy;
+  generation checks must run before storing or applying an asynchronous result.
+  Window movement alone must not discard the whole sample. Keep each captured
+  patch associated with its rectangle when filtering possible self-overlap.
 - Keep `docs/network-and-storage.md` and the packaged README's download disclosure
   aligned with bootstrap, billing and launcher behavior. External directories may
   compare static call-pattern scans with runtime events; do not invent unsupported

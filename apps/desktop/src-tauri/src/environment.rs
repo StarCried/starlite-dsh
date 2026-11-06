@@ -1,5 +1,5 @@
-//! Optional, local-only sampling of small visible patches outside the pet window.
-//! Pixels never leave this module: only an averaged RGB color reaches the webview.
+//! Local-only sampling near the visible model, excluding this window's own UI.
+//! Pixels never leave this module: only reduced RGB and patch geometry do.
 
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
@@ -7,22 +7,68 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-use serde::Serialize;
+use crate::hit_test::EnvironmentBounds;
+use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
 const SAMPLE_INTERVAL: Duration = Duration::from_millis(250);
 const PATCH_SIZE: i32 = 12;
-const PATCH_GAP: i32 = 8;
+const PATCH_GAP: i32 = 12;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EnvironmentColor {
     color: String,
+    patches: Vec<EnvironmentRect>,
+    viewport_width: f64,
+    viewport_height: f64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnvironmentRect {
+    left: f64,
+    top: f64,
+    width: f64,
+    height: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnvironmentOverlays {
+    viewport_width: f64,
+    viewport_height: f64,
+    regions: Vec<EnvironmentRect>,
+}
+
+impl EnvironmentOverlays {
+    fn validate(&self) -> Result<(), String> {
+        let valid = [self.viewport_width, self.viewport_height]
+            .iter()
+            .all(|v| v.is_finite() && *v > 0.0 && *v <= 16384.0)
+            && self.regions.len() <= 40
+            && self.regions.iter().all(|r| {
+                [r.left, r.top, r.width, r.height]
+                    .iter()
+                    .all(|v| v.is_finite())
+                    && r.left >= 0.0
+                    && r.top >= 0.0
+                    && r.width > 0.0
+                    && r.height > 0.0
+                    && r.left + r.width <= self.viewport_width
+                    && r.top + r.height <= self.viewport_height
+            });
+        if valid {
+            Ok(())
+        } else {
+            Err("invalid environment overlay geometry".into())
+        }
+    }
 }
 
 #[derive(Default)]
 struct SampleCache {
     sampled_at: Option<Instant>,
-    color: Option<EnvironmentColor>,
 }
 
 impl SampleCache {
@@ -45,9 +91,6 @@ impl EnvironmentSamplingState {
             && preferences.environment_lighting_strength > 0.0;
         if self.enabled.swap(enabled, Ordering::SeqCst) != enabled {
             self.generation.fetch_add(1, Ordering::SeqCst);
-            if let Ok(mut cache) = self.cache.try_lock() {
-                *cache = SampleCache::default();
-            }
         }
     }
 }
@@ -56,10 +99,12 @@ impl EnvironmentSamplingState {
 pub async fn sample_environment_color(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
+    overlays: EnvironmentOverlays,
 ) -> Result<Option<EnvironmentColor>, String> {
     if window.label() != "main" {
         return Err("environment sampling belongs to the pet window".into());
     }
+    overlays.validate()?;
     // The enabled state comes from native preferences, not an
     // untrusted webview parameter. There is no arbitrary screen rectangle API.
     let state = app.state::<EnvironmentSamplingState>();
@@ -77,22 +122,26 @@ pub async fn sample_environment_color(
             || !window.is_visible().unwrap_or(false)
             || window.is_minimized().unwrap_or(true)
         {
-            *cache = SampleCache::default();
             return None;
         }
         let now = Instant::now();
         if cache.fresh(now) {
-            return cache.color.clone();
+            // The frontend retains its last light. Replaying old patch positions
+            // after movement would misrepresent where a new screen read occurred.
+            return None;
         }
         cache.sampled_at = Some(now);
-        cache.color = sample_window(&window);
+        let color = sample_window(&window, &overlays);
         // A disable during a native read must not publish its late result.
         if !state.enabled.load(Ordering::SeqCst)
             || state.generation.load(Ordering::SeqCst) != generation
+            || app.state::<crate::tray::UiState>().paused()
+            || !window.is_visible().unwrap_or(false)
+            || window.is_minimized().unwrap_or(true)
         {
-            cache.color = None;
+            return None;
         }
-        cache.color.clone()
+        color
     })
     .await
     .ok()
@@ -124,40 +173,100 @@ impl Rect {
     }
 }
 
-/// Clip against real monitor rectangles, not the virtual bounding box (which
-/// can contain gaps). No requested patch overlaps the pet, its bubble or menu.
-fn surrounding_patches(window: Rect, monitors: &[Rect]) -> Vec<Rect> {
-    let width = i64::from(window.right) - i64::from(window.left);
-    let height = i64::from(window.bottom) - i64::from(window.top);
-    if !window.valid_size() {
+fn screen_rect(region: EnvironmentRect, overlays: &EnvironmentOverlays, client: Rect) -> Rect {
+    let x = f64::from(client.right - client.left) / overlays.viewport_width;
+    let y = f64::from(client.bottom - client.top) / overlays.viewport_height;
+    Rect {
+        left: client.left.saturating_add((region.left * x).floor() as i32),
+        top: client.top.saturating_add((region.top * y).floor() as i32),
+        right: client
+            .left
+            .saturating_add(((region.left + region.width) * x).ceil() as i32),
+        bottom: client
+            .top
+            .saturating_add(((region.top + region.height) * y).ceil() as i32),
+    }
+}
+
+struct SceneGeometry {
+    client: Rect,
+    model: Rect,
+    excluded: Vec<Rect>,
+}
+
+fn scene_geometry(
+    bounds: EnvironmentBounds,
+    overlays: &EnvironmentOverlays,
+    client: Rect,
+) -> Option<SceneGeometry> {
+    if !client.valid_size()
+        || bounds.viewport_width != overlays.viewport_width
+        || bounds.viewport_height != overlays.viewport_height
+    {
+        return None;
+    }
+    let model = screen_rect(
+        EnvironmentRect {
+            left: bounds.left,
+            top: bounds.top,
+            width: bounds.width,
+            height: bounds.height,
+        },
+        overlays,
+        client,
+    )
+    .intersection(client)?;
+    let excluded = overlays
+        .regions
+        .iter()
+        .map(|r| screen_rect(*r, overlays, client))
+        .collect();
+    Some(SceneGeometry {
+        client,
+        model,
+        excluded,
+    })
+}
+
+/// Model-relative candidates can lie inside the transparent native window.
+/// Clip to its client and real monitors, then remove visible UI coverage.
+fn surrounding_patches(
+    model: Rect,
+    client: Rect,
+    monitors: &[Rect],
+    excluded: &[Rect],
+) -> Vec<Rect> {
+    let width = i64::from(model.right) - i64::from(model.left);
+    let height = i64::from(model.bottom) - i64::from(model.top);
+    if !model.valid_size() || !client.valid_size() {
         return Vec::new();
     }
     if !monitors
         .iter()
-        .any(|monitor| window.intersection(*monitor).is_some())
+        .any(|monitor| model.intersection(*monitor).is_some())
     {
         return Vec::new();
     }
     let half = PATCH_SIZE / 2;
     let mut candidates = Vec::with_capacity(8);
     for numerator in [1, 3] {
-        let x = window.left.saturating_add((width * numerator / 4) as i32);
-        let y = window.top.saturating_add((height * numerator / 4) as i32);
+        let x = model.left.saturating_add((width * numerator / 4) as i32);
+        let y = model.top.saturating_add((height * numerator / 4) as i32);
         candidates.extend([
             (
                 x.saturating_sub(half),
-                window.top.saturating_sub(PATCH_GAP + PATCH_SIZE),
+                model.top.saturating_sub(PATCH_GAP + PATCH_SIZE),
             ),
             (
                 x.saturating_sub(half),
-                window.bottom.saturating_add(PATCH_GAP),
+                model.bottom.saturating_add(PATCH_GAP),
             ),
             (
-                window.left.saturating_sub(PATCH_GAP + PATCH_SIZE),
+                model.left.saturating_sub(PATCH_GAP + PATCH_SIZE),
                 y.saturating_sub(half),
             ),
             (
-                window.right.saturating_add(PATCH_GAP),
+                model.right.saturating_add(PATCH_GAP),
                 y.saturating_sub(half),
             ),
         ]);
@@ -170,8 +279,11 @@ fn surrounding_patches(window: Rect, monitors: &[Rect]) -> Vec<Rect> {
                 top,
                 right: left.saturating_add(PATCH_SIZE),
                 bottom: top.saturating_add(PATCH_SIZE),
-            };
-            if patch.intersection(window).is_some() {
+            }
+            .intersection(client)?;
+            if patch.intersection(model).is_some()
+                || excluded.iter().any(|r| patch.intersection(*r).is_some())
+            {
                 return None;
             }
             // Each patch is capped at 12x12 even when straddling two monitors.
@@ -201,6 +313,43 @@ fn retain_uncovered_patches(samples: &mut Vec<(Rect, [f64; 3])>, before: Rect, a
     samples.retain(|(patch, _)| patch.intersection(swept).is_none());
 }
 
+fn finish_sample(
+    mut samples: Vec<(Rect, [f64; 3])>,
+    before: &SceneGeometry,
+    after: &SceneGeometry,
+    overlays: &EnvironmentOverlays,
+) -> Option<EnvironmentColor> {
+    if before.client.right - before.client.left != after.client.right - after.client.left
+        || before.client.bottom - before.client.top != after.client.bottom - after.client.top
+        || before.excluded.len() != after.excluded.len()
+    {
+        return None;
+    }
+    retain_uncovered_patches(&mut samples, before.model, after.model);
+    for (old, new) in before.excluded.iter().zip(&after.excluded) {
+        retain_uncovered_patches(&mut samples, *old, *new);
+    }
+    // Patches are reported in the current client, never as arbitrary desktop coordinates.
+    samples.retain(|(patch, _)| patch.intersection(after.client) == Some(*patch));
+    let color = representative_color(&samples.iter().map(|(_, color)| *color).collect::<Vec<_>>())?;
+    let x = overlays.viewport_width / f64::from(after.client.right - after.client.left);
+    let y = overlays.viewport_height / f64::from(after.client.bottom - after.client.top);
+    Some(EnvironmentColor {
+        color,
+        patches: samples
+            .into_iter()
+            .map(|(r, _)| EnvironmentRect {
+                left: f64::from(r.left - after.client.left) * x,
+                top: f64::from(r.top - after.client.top) * y,
+                width: f64::from(r.right - r.left) * x,
+                height: f64::from(r.bottom - r.top) * y,
+            })
+            .collect(),
+        viewport_width: overlays.viewport_width,
+        viewport_height: overlays.viewport_height,
+    })
+}
+
 fn linear(value: u8) -> f64 {
     let value = f64::from(value) / 255.0;
     if value <= 0.04045 {
@@ -219,7 +368,7 @@ fn srgb(value: f64) -> u8 {
     (value * 255.0).round().clamp(0.0, 255.0) as u8
 }
 
-fn representative_color(patches: &[[f64; 3]]) -> Option<EnvironmentColor> {
+fn representative_color(patches: &[[f64; 3]]) -> Option<String> {
     if patches.is_empty()
         || patches
             .iter()
@@ -238,19 +387,23 @@ fn representative_color(patches: &[[f64; 3]]) -> Option<EnvironmentColor> {
         let values = &values[trim..values.len() - trim];
         rgb[channel] = srgb(values.iter().sum::<f64>() / values.len() as f64);
     }
-    Some(EnvironmentColor {
-        color: format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]),
-    })
+    Some(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]))
 }
 
 #[cfg(not(windows))]
-fn sample_window(_window: &tauri::WebviewWindow) -> Option<EnvironmentColor> {
+fn sample_window(
+    _window: &tauri::WebviewWindow,
+    _overlays: &EnvironmentOverlays,
+) -> Option<EnvironmentColor> {
     None
 }
 
 #[cfg(windows)]
-fn sample_window(window: &tauri::WebviewWindow) -> Option<EnvironmentColor> {
-    windows::sample(window)
+fn sample_window(
+    window: &tauri::WebviewWindow,
+    overlays: &EnvironmentOverlays,
+) -> Option<EnvironmentColor> {
+    windows::sample(window, overlays)
 }
 
 #[cfg(windows)]
@@ -262,9 +415,9 @@ mod windows {
         ptr::null_mut,
     };
     use windows_sys::Win32::{
-        Foundation::{LPARAM, RECT},
+        Foundation::{HWND, LPARAM, POINT, RECT},
         Graphics::Gdi::{
-            BitBlt, CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject,
+            BitBlt, ClientToScreen, CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject,
             EnumDisplayMonitors, GdiFlush, GetDC, ReleaseDC, SelectObject, BITMAPINFO,
             BITMAPINFOHEADER, BI_RGB, CAPTUREBLT, DIB_RGB_COLORS, HBITMAP, HDC, HGDIOBJ, HMONITOR,
             SRCCOPY,
@@ -273,7 +426,7 @@ mod windows {
             CloseDesktop, GetUserObjectInformationW, OpenInputDesktop, DESKTOP_READOBJECTS,
             UOI_NAME,
         },
-        UI::WindowsAndMessaging::GetWindowRect,
+        UI::WindowsAndMessaging::GetClientRect,
     };
 
     fn input_desktop_is_available() -> bool {
@@ -449,22 +602,34 @@ mod windows {
         }
     }
 
-    pub(super) fn sample(window: &tauri::WebviewWindow) -> Option<EnvironmentColor> {
+    fn client_rect(hwnd: HWND) -> Option<Rect> {
+        unsafe {
+            let mut size: RECT = zeroed();
+            let mut origin: POINT = zeroed();
+            if GetClientRect(hwnd, &mut size) == 0 || ClientToScreen(hwnd, &mut origin) == 0 {
+                return None;
+            }
+            let rect = Rect {
+                left: origin.x,
+                top: origin.y,
+                right: origin.x.checked_add(size.right)?,
+                bottom: origin.y.checked_add(size.bottom)?,
+            };
+            rect.valid_size().then_some(rect)
+        }
+    }
+
+    pub(super) fn sample(
+        window: &tauri::WebviewWindow,
+        overlays: &EnvironmentOverlays,
+    ) -> Option<EnvironmentColor> {
         if !input_desktop_is_available() {
             return None;
         }
         let hwnd = window.hwnd().ok()?.0;
+        let state = window.state::<crate::hit_test::HitTestState>();
+        let before = scene_geometry(state.environment_bounds()?, overlays, client_rect(hwnd)?)?;
         unsafe {
-            let mut before: RECT = zeroed();
-            if GetWindowRect(hwnd, &mut before) == 0 {
-                return None;
-            }
-            let window_rect = Rect {
-                left: before.left,
-                top: before.top,
-                right: before.right,
-                bottom: before.bottom,
-            };
             let mut monitors: Vec<Rect> = Vec::new();
             if EnumDisplayMonitors(
                 null_mut(),
@@ -475,32 +640,18 @@ mod windows {
             {
                 return None;
             }
-            let patches = surrounding_patches(window_rect, &monitors);
+            let patches =
+                surrounding_patches(before.model, before.client, &monitors, &before.excluded);
             if patches.is_empty() {
                 return None;
             }
             let capture = Capture::new()?;
-            let mut samples = capture.colors(&patches);
-            let mut after: RECT = zeroed();
-            if GetWindowRect(hwnd, &mut after) == 0 || !input_desktop_is_available() {
+            let samples = capture.colors(&patches);
+            let after = scene_geometry(state.environment_bounds()?, overlays, client_rect(hwnd)?)?;
+            if !input_desktop_is_available() {
                 return None;
             }
-            retain_uncovered_patches(
-                &mut samples,
-                window_rect,
-                Rect {
-                    left: after.left,
-                    top: after.top,
-                    right: after.right,
-                    bottom: after.bottom,
-                },
-            );
-            representative_color(
-                &samples
-                    .into_iter()
-                    .map(|(_, color)| color)
-                    .collect::<Vec<_>>(),
-            )
+            finish_sample(samples, &before, &after, overlays)
         }
     }
 }
@@ -518,11 +669,208 @@ mod tests {
         }
     }
 
+    fn patches_around(model: Rect, monitors: &[Rect]) -> Vec<Rect> {
+        surrounding_patches(model, rect(-10000, -10000, 10000, 10000), monitors, &[])
+    }
+
+    fn overlays(regions: Vec<EnvironmentRect>) -> EnvironmentOverlays {
+        EnvironmentOverlays {
+            viewport_width: 800.0,
+            viewport_height: 1200.0,
+            regions,
+        }
+    }
+
+    fn bounds() -> EnvironmentBounds {
+        EnvironmentBounds {
+            left: 300.0,
+            top: 400.0,
+            width: 200.0,
+            height: 400.0,
+            viewport_width: 800.0,
+            viewport_height: 1200.0,
+        }
+    }
+
+    #[test]
+    fn overlay_input_only_accepts_bounded_local_exclusions() {
+        let good = EnvironmentRect {
+            left: 10.0,
+            top: 20.0,
+            width: 30.0,
+            height: 40.0,
+        };
+        assert!(overlays(vec![good; 40]).validate().is_ok());
+        assert!(overlays(vec![good; 41]).validate().is_err());
+        for bad in [
+            EnvironmentRect { left: -1.0, ..good },
+            EnvironmentRect {
+                top: f64::NAN,
+                ..good
+            },
+            EnvironmentRect { width: 0.0, ..good },
+            EnvironmentRect {
+                height: f64::INFINITY,
+                ..good
+            },
+            EnvironmentRect {
+                left: 799.0,
+                ..good
+            },
+            EnvironmentRect {
+                top: 1199.0,
+                ..good
+            },
+        ] {
+            assert!(overlays(vec![bad]).validate().is_err());
+        }
+        let mut invalid = overlays(vec![]);
+        invalid.viewport_width = 0.0;
+        assert!(invalid.validate().is_err());
+        for json in [
+            r#"{"viewportWidth":800,"viewportHeight":1200,"regions":[],"screenX":10}"#,
+            r#"{"viewportWidth":800,"viewportHeight":1200,"regions":[{"left":0,"top":0,"width":1,"height":1,"color":"red"}]}"#,
+        ] {
+            assert!(serde_json::from_str::<EnvironmentOverlays>(json).is_err());
+        }
+    }
+
+    #[test]
+    fn nearby_patches_are_inside_client_and_avoid_visible_noninteractive_ui() {
+        let client = rect(0, 0, 800, 1200);
+        let model = rect(300, 400, 500, 800);
+        let all = surrounding_patches(model, client, &[client], &[]);
+        assert_eq!(all.len(), 8);
+        assert!(all.iter().all(|r| r.intersection(client) == Some(*r)));
+        // A plain text bubble and debug panel exclude samples despite not being clickable.
+        let excluded = [rect(300, 350, 500, 395), rect(505, 450, 550, 750)];
+        let safe = surrounding_patches(model, client, &[client], &excluded);
+        assert_eq!(safe.len(), 4);
+        assert!(safe
+            .iter()
+            .all(|r| excluded.iter().all(|e| r.intersection(*e).is_none())));
+        assert!(safe
+            .iter()
+            .all(|r| (r.right - r.left) * (r.bottom - r.top) <= 144));
+    }
+
+    #[test]
+    fn previous_debug_frame_edges_cannot_contaminate_new_patch_centers() {
+        let client = rect(0, 0, 800, 1200);
+        let model = rect(300, 400, 500, 800);
+        let patch = surrounding_patches(model, client, &[client], &[])[0];
+        // Prior hollow frame around this sample with a six-pixel empty gap.
+        let edges = [
+            rect(
+                patch.left - 8,
+                patch.top - 8,
+                patch.right + 8,
+                patch.top - 6,
+            ),
+            rect(
+                patch.left - 8,
+                patch.bottom + 6,
+                patch.right + 8,
+                patch.bottom + 8,
+            ),
+            rect(
+                patch.left - 8,
+                patch.top - 6,
+                patch.left - 6,
+                patch.bottom + 6,
+            ),
+            rect(
+                patch.right + 6,
+                patch.top - 6,
+                patch.right + 8,
+                patch.bottom + 6,
+            ),
+        ];
+        assert!(surrounding_patches(model, client, &[client], &edges).contains(&patch));
+        let moved = rect(307, 400, 507, 800);
+        let shifted = surrounding_patches(moved, client, &[client], &[])[0];
+        assert!(edges.iter().any(|e| shifted.intersection(*e).is_some()));
+        assert!(!surrounding_patches(moved, client, &[client], &edges).contains(&shifted));
+    }
+
+    #[test]
+    fn physical_sampling_and_returned_css_geometry_follow_client_dpi() {
+        let overlays = overlays(vec![]);
+        for dpi in [1.0, 1.25, 1.5, 1.75, 2.0] {
+            let client = rect(
+                -400,
+                100,
+                -400 + (800.0 * dpi) as i32,
+                100 + (1200.0 * dpi) as i32,
+            );
+            let scene = scene_geometry(bounds(), &overlays, client).unwrap();
+            assert_eq!(scene.model.left, -400 + (300.0 * dpi) as i32);
+            let patches = surrounding_patches(scene.model, client, &[client], &[]);
+            let result = finish_sample(
+                patches.iter().map(|r| (*r, [0.5; 3])).collect(),
+                &scene,
+                &scene,
+                &overlays,
+            )
+            .unwrap();
+            assert_eq!(result.patches.len(), 8);
+            assert_eq!(result.viewport_width, 800.0);
+            for (physical, css) in patches.iter().zip(result.patches) {
+                assert!(
+                    (css.left * dpi + f64::from(client.left) - f64::from(physical.left)).abs()
+                        < 1e-8
+                );
+                assert!((css.width * dpi - 12.0).abs() < 1e-8);
+            }
+        }
+        let mut stale = bounds();
+        stale.viewport_width = 799.0;
+        assert!(scene_geometry(stale, &overlays, rect(0, 0, 800, 1200)).is_none());
+    }
+
+    #[test]
+    fn moving_ui_and_model_use_swept_bounds_and_resize_drops_result() {
+        let overlays = overlays(vec![]);
+        let before = scene_geometry(bounds(), &overlays, rect(0, 0, 800, 1200)).unwrap();
+        let samples: Vec<_> =
+            surrounding_patches(before.model, before.client, &[before.client], &[])
+                .into_iter()
+                .map(|r| (r, [0.5; 3]))
+                .collect();
+        let after = scene_geometry(bounds(), &overlays, rect(40, 20, 840, 1220)).unwrap();
+        let result = finish_sample(samples.clone(), &before, &after, &overlays).unwrap();
+        assert_eq!(result.patches.len(), 4);
+        let resized = scene_geometry(bounds(), &overlays, rect(0, 0, 900, 1200)).unwrap();
+        assert!(finish_sample(samples.clone(), &before, &resized, &overlays).is_none());
+        let target = samples[0].0;
+        let old_ui = rect(
+            target.left - 50,
+            target.top,
+            target.left - 30,
+            target.bottom,
+        );
+        let new_ui = rect(
+            target.right + 30,
+            target.top,
+            target.right + 50,
+            target.bottom,
+        );
+        let mut before_ui = scene_geometry(bounds(), &overlays, before.client).unwrap();
+        let mut after_ui = scene_geometry(bounds(), &overlays, before.client).unwrap();
+        before_ui.excluded.push(old_ui);
+        after_ui.excluded.push(new_ui);
+        let result = finish_sample(samples, &before_ui, &after_ui, &overlays).unwrap();
+        assert!(!result
+            .patches
+            .iter()
+            .any(|r| r.left == f64::from(target.left) && r.top == f64::from(target.top)));
+    }
+
     #[test]
     fn patches_stay_outside_pet_and_within_real_monitors() {
         let window = rect(-200, 100, 100, 500);
         let monitors = [rect(-1920, 0, 0, 1080), rect(0, 200, 1920, 1280)];
-        let patches = surrounding_patches(window, &monitors);
+        let patches = patches_around(window, &monitors);
         assert!(patches.len() >= 6);
         for patch in patches {
             assert!(patch.intersection(window).is_none());
@@ -537,21 +885,21 @@ mod tests {
     #[test]
     fn edge_offscreen_and_invalid_geometry_do_not_capture_virtual_gaps() {
         let monitor = [rect(0, 0, 1920, 1080)];
-        assert!(surrounding_patches(rect(2100, 100, 2400, 500), &monitor).is_empty());
-        assert!(surrounding_patches(rect(10, 10, 0, 500), &monitor).is_empty());
-        assert!(surrounding_patches(rect(i32::MIN, 0, i32::MAX, 1), &monitor).is_empty());
-        let patches = surrounding_patches(rect(-50, -50, 100, 200), &monitor);
+        assert!(patches_around(rect(2100, 100, 2400, 500), &monitor).is_empty());
+        assert!(patches_around(rect(10, 10, 0, 500), &monitor).is_empty());
+        assert!(patches_around(rect(i32::MIN, 0, i32::MAX, 1), &monitor).is_empty());
+        let patches = patches_around(rect(-50, -50, 100, 200), &monitor);
         assert!(!patches.is_empty());
         assert!(patches
             .iter()
             .all(|patch| patch.left >= 0 && patch.top >= 0));
-        assert!(surrounding_patches(rect(0, 0, 1920, 1080), &monitor).is_empty());
+        assert!(patches_around(rect(0, 0, 1920, 1080), &monitor).is_empty());
     }
 
     #[test]
     fn stationary_and_small_movements_preserve_every_sample() {
         let before = rect(300, 300, 500, 600);
-        let samples: Vec<_> = surrounding_patches(before, &[rect(0, 0, 1600, 1200)])
+        let samples: Vec<_> = patches_around(before, &[rect(0, 0, 1600, 1200)])
             .into_iter()
             .enumerate()
             .map(|(index, patch)| (patch, [index as f64 / 16.0; 3]))
@@ -568,7 +916,7 @@ mod tests {
     #[test]
     fn directional_and_diagonal_movements_keep_only_uncovered_samples() {
         let before = rect(500, 500, 700, 800);
-        let samples: Vec<_> = surrounding_patches(before, &[rect(0, 0, 1800, 1600)])
+        let samples: Vec<_> = patches_around(before, &[rect(0, 0, 1800, 1600)])
             .into_iter()
             .enumerate()
             .map(|(index, patch)| (patch, [index as f64 / 16.0; 3]))
@@ -609,23 +957,20 @@ mod tests {
     #[test]
     fn skipped_capture_patches_do_not_shift_color_associations() {
         let before = rect(300, 300, 500, 600);
-        let patches = surrounding_patches(before, &[rect(0, 0, 1600, 1200)]);
+        let patches = patches_around(before, &[rect(0, 0, 1600, 1200)]);
         // Simulate failed reads at other indices. Only the successful left-side
         // patch remains safe when the window moves down and right.
         let expected = (patches[2], [44, 116, 204].map(linear));
         let mut samples = vec![(patches[1], [1.0; 3]), expected, (patches[7], [0.0; 3])];
         retain_uncovered_patches(&mut samples, before, rect(650, 720, 850, 1020));
         assert_eq!(samples, vec![expected]);
-        assert_eq!(
-            representative_color(&[samples[0].1]).unwrap().color,
-            "#2c74cc"
-        );
+        assert_eq!(representative_color(&[samples[0].1]).unwrap(), "#2c74cc");
     }
 
     #[test]
     fn invalid_or_fully_covering_after_rectangles_leave_no_color() {
         let before = rect(300, 300, 500, 600);
-        let samples: Vec<_> = surrounding_patches(before, &[rect(0, 0, 1600, 1200)])
+        let samples: Vec<_> = patches_around(before, &[rect(0, 0, 1600, 1200)])
             .into_iter()
             .map(|patch| (patch, [0.5; 3]))
             .collect();
@@ -648,9 +993,9 @@ mod tests {
         let rgb = [44, 116, 204].map(linear);
         let mut samples = vec![rgb; 6];
         samples.extend([[0.0; 3], [1.0; 3]]);
-        assert_eq!(representative_color(&samples).unwrap().color, "#2c74cc");
+        assert_eq!(representative_color(&samples).unwrap(), "#2c74cc");
         assert_eq!(
-            representative_color(&[[0.0; 3], [1.0; 3]]).unwrap().color,
+            representative_color(&[[0.0; 3], [1.0; 3]]).unwrap(),
             "#bcbcbc"
         );
         assert!(representative_color(&[]).is_none());
@@ -658,7 +1003,7 @@ mod tests {
     }
 
     #[test]
-    fn cache_rate_limit_and_disable_reset_do_not_keep_a_previous_color() {
+    fn rate_limit_survives_geometry_changes_and_disable_reenable() {
         let state = EnvironmentSamplingState::default();
         assert!(!state.enabled.load(Ordering::SeqCst));
         let mut preferences = crate::settings::DesktopPreferences {
@@ -670,9 +1015,6 @@ mod tests {
         let now = Instant::now();
         *state.cache.lock().unwrap() = SampleCache {
             sampled_at: Some(now),
-            color: Some(EnvironmentColor {
-                color: "#112233".into(),
-            }),
         };
         assert!(state
             .cache
@@ -689,6 +1031,17 @@ mod tests {
         state.configure(&preferences);
         assert!(!state.enabled.load(Ordering::SeqCst));
         assert!(state.generation.load(Ordering::SeqCst) > generation);
-        assert!(state.cache.lock().unwrap().color.is_none());
+        assert!(state
+            .cache
+            .lock()
+            .unwrap()
+            .fresh(now + Duration::from_millis(249)));
+        preferences.environment_lighting_strength = 1.0;
+        state.configure(&preferences);
+        assert!(state
+            .cache
+            .lock()
+            .unwrap()
+            .fresh(now + Duration::from_millis(249)));
     }
 }

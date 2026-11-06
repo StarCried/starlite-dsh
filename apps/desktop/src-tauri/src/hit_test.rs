@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HitMask {
     width: usize,
@@ -63,6 +63,53 @@ impl HitMask {
             (y * self.height as f64) as usize * self.width + (x * self.width as f64) as usize;
         self.bits[pixel >> 3] & (1 << (pixel & 7)) != 0
     }
+
+    fn visible_bounds(&self) -> Option<EnvironmentBounds> {
+        let (mut left, mut top, mut right, mut bottom) = (self.width, self.height, 0, 0);
+        for pixel in 0..self.width * self.height {
+            if self.bits[pixel >> 3] & (1 << (pixel & 7)) != 0 {
+                let (x, y) = (pixel % self.width, pixel / self.width);
+                left = left.min(x);
+                top = top.min(y);
+                right = right.max(x + 1);
+                bottom = bottom.max(y + 1);
+            }
+        }
+        if right == 0 || bottom == 0 {
+            return None;
+        }
+        // The display rectangle is the padded canvas, not the visible model.
+        // Include whole alpha cells plus one cell for downsampling/edge coverage.
+        let x = self.left + left.saturating_sub(1) as f64 * self.display_width / self.width as f64;
+        let y = self.top + top.saturating_sub(1) as f64 * self.display_height / self.height as f64;
+        let right =
+            self.left + (right + 1).min(self.width) as f64 * self.display_width / self.width as f64;
+        let bottom = self.top
+            + (bottom + 1).min(self.height) as f64 * self.display_height / self.height as f64;
+        let left = x.max(0.0);
+        let top = y.max(0.0);
+        let right = right.min(self.viewport_width);
+        let bottom = bottom.min(self.viewport_height);
+        (right > left && bottom > top).then_some(EnvironmentBounds {
+            left,
+            top,
+            width: right - left,
+            height: bottom - top,
+            viewport_width: self.viewport_width,
+            viewport_height: self.viewport_height,
+        })
+    }
+}
+
+/// Validated model-only alpha bounds in webview CSS coordinates.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct EnvironmentBounds {
+    pub left: f64,
+    pub top: f64,
+    pub width: f64,
+    pub height: f64,
+    pub viewport_width: f64,
+    pub viewport_height: f64,
 }
 
 #[derive(Default)]
@@ -75,6 +122,12 @@ pub struct HitTestState {
 }
 
 impl HitTestState {
+    pub(crate) fn environment_bounds(&self) -> Option<EnvironmentBounds> {
+        // Never retain this mutex while calling window APIs or reading the screen.
+        let mask = self.mask.lock().ok()?.as_ref()?.clone();
+        mask.visible_bounds()
+    }
+
     pub(crate) fn rebase_viewport(
         &self,
         delta: tauri::PhysicalPosition<i32>,
@@ -582,6 +635,51 @@ mod tests {
             viewport_height: 100.0,
             bits: vec![0b00100110],
         }
+    }
+    #[test]
+    fn environment_bounds_follow_alpha_cells_not_padded_canvas() {
+        let mut m = HitMask {
+            width: 8,
+            height: 8,
+            left: 100.0,
+            top: 200.0,
+            display_width: 400.0,
+            display_height: 400.0,
+            viewport_width: 800.0,
+            viewport_height: 1200.0,
+            bits: vec![0; 8],
+        };
+        // A small character in the middle of a much larger transparent canvas.
+        for pixel in [3 + 8 * 2, 4 + 8 * 5] {
+            m.bits[pixel >> 3] |= 1 << (pixel & 7);
+        }
+        m.validate().unwrap();
+        let bounds = m.visible_bounds().unwrap();
+        assert_eq!(
+            (bounds.left, bounds.top, bounds.width, bounds.height),
+            (200.0, 250.0, 200.0, 300.0)
+        );
+        assert!(bounds.width < m.display_width);
+        m.bits.fill(0);
+        assert!(m.visible_bounds().is_none());
+    }
+
+    #[test]
+    fn environment_bounds_clip_to_client_and_snapshot_clears_with_mask() {
+        let mut m = mask();
+        m.left = -80.0;
+        assert!(m.visible_bounds().is_none());
+        m.left = -40.0;
+        let visible = m.visible_bounds().unwrap();
+        assert_eq!(visible.left, 0.0);
+        assert_eq!(visible.width, 40.0);
+        let state = HitTestState::default();
+        *state.mask.lock().unwrap() = Some(m);
+        assert_eq!(state.environment_bounds(), Some(visible));
+        state
+            .rebase_viewport(tauri::PhysicalPosition::new(0, 0))
+            .unwrap();
+        assert!(state.environment_bounds().is_none());
     }
     #[test]
     fn coverage_respects_alpha_holes_offsets_dpi_and_outside_points() {

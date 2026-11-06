@@ -88,7 +88,7 @@ pnpm pack:plugin
 ```powershell
 $env:DSH_HOME = "E:/path/to/isolated-starlite-test-home"
 node tools/check-dsh-contract.mjs "E:/path/to/node_modules/@deepseek-ai/dsh"
-dsh plugin --profile starlite-test add "E:/path/to/starlite-dsh/packages/dsh-plugin/.pack/dsh-starlite-0.1.0-alpha.2.tgz"
+dsh plugin --profile starlite-test add "E:/path/to/starlite-dsh/packages/dsh-plugin/.pack/dsh-starlite-0.1.1.tgz"
 dsh --profile starlite-test --dump-config
 ```
 
@@ -117,7 +117,7 @@ DSH `0.2.1-rc.2` 将未绑定时的公开端口声明为 `number | undefined`；
 本机可对明确的官方 DSH 包目录和最终插件 tarball 运行同一检查：
 
 ```sh
-node tools/smoke-dsh-plugin.mjs /absolute/path/node_modules/@deepseek-ai/dsh /absolute/path/dsh-starlite-0.1.0-alpha.2.tgz
+node tools/smoke-dsh-plugin.mjs /absolute/path/node_modules/@deepseek-ai/dsh /absolute/path/dsh-starlite-0.1.1.tgz
 ```
 
 工具先调用官方 CLI 安装真实 tarball，再通过 `profile-boot` 公开的初始化／`runProfile`、返回的 shutdown、Cordis Context／Logger 和已安装插件的 `apply` 接口验收。它创建自己的临时 Harness home、user home 与 cwd，用不存在的 EXE 覆盖阻止启动桌宠／下载角色，不继承账户凭据、代理或 Node hooks；不提交提示，不调用模型或余额 API。只检查认证首页，不执行页面脚本，日志和认证 URL 不进入输出。检查结束删除自己的临时目录。CI 的 `stage-dsh-contract-fixture.mjs` 仅在干净 checkout 生成不可执行的 PE 头 fixture，已有程序构建会被拒绝覆盖；本机 smoke 应使用真实候选 tarball，无须运行该 staging 工具。

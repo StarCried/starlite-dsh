@@ -95,6 +95,7 @@
   keep mappings/resources unchanged and still reject malformed catalog values.
 - Creating a remote repository, pushing, publishing npm, publishing a Windows
   installer, and releasing a model each require separate approval.
+- npm publish exit 0 / HTTP 202 can precede public visibility: wait for the canonical registry version and `latest`, then anonymously verify the archive and perform a fresh registry install; a local tarball does not bypass propagation.
 - Windows installers currently remain unsigned, including 0.1.0; document SmartScreen without asking users to disable system protections.
 - Use hyphens in public release asset filenames. GitHub changes uploaded spaces
   to dots; generate flat `SHA256SUMS` against the final public names, then verify

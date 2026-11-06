@@ -1,12 +1,29 @@
 # DSH 兼容性与发布验收
 
-`0.1.0` 已于 2026-11-03 发布到 npm `latest` 渠道及 GitHub 正式发行。维护、模型诊断、性能与安装依据见 [本地稳定化验收](stabilization.md)。本页公开下载与早期设备手验保留各自的源码、哈希和范围。
+`0.1.1` 已于 2026-11-06 发布到 npm `latest`，Windows EXE 随插件提供，本轮没有另发 GitHub Windows 安装器或模型 Release。维护、模型诊断、性能与安装依据见 [本地稳定化验收](stabilization.md)。本页公开下载与早期设备手验保留各自的源码、哈希和范围。
+
+## 公开发行 0.1.1（2026-11-06）
+
+[`dsh-starlite@0.1.1`](https://www.npmjs.com/package/dsh-starlite/v/0.1.1) 已公开，`latest` 指向 `0.1.1`，旧 `alpha` 保留 `0.1.0-alpha.2`。发行源码、`SOURCE_REVISION` 和 annotated tag [`v0.1.1`](https://github.com/StarCried/starlite-dsh/tree/v0.1.1) 均对应 [`b6a62e5`](https://github.com/StarCried/starlite-dsh/commit/b6a62e57f20fbe42c9c961177b81e570fc789d3f)，共享运行时固定到 [`073db625`](https://github.com/StarCried/starlite/commit/073db625111aba345032b5b718bc39e0e8de901d)，provenance 为 `dirty: false`。后续文档提交不移动发行 tag 或替换已公开文件。
+
+- 精确源码的[主 CI](https://github.com/StarCried/starlite-dsh/actions/runs/42159674952)、[依赖审计](https://github.com/StarCried/starlite-dsh/actions/runs/42159674953)与 [DSH latest 兼容检查](https://github.com/StarCried/starlite-dsh/actions/runs/42159674967)全部通过。主 CI 包含 Windows 原生构建与隔离安装器生命周期；本地通过 676 项 JavaScript 测试、14 项审计测试、Rust 94 项测试、fmt、debug／release 严格 Clippy 和发布门。1 项私有模型 fixture 测试保持忽略，不计为通过。
+- 匿名从公共 registry 下载最终归档，长度、SHA-256 和 SHA-512/SRI 与本地发布件逐项一致，且逐字节相同。归档满足 12 文件白名单；Windows EXE 为 0.1.1，不含模型资源。
+- Windows 与 WSL2 分别使用官方 DSH `0.2.2-rc.1`、Node `24.15.0`，在空认证配置、全新缓存和独立 profile 中实际安装 registry 规格 `dsh-starlite@0.1.1`。安装锁的完整性值与公共归档一致，认证首页、适配失败不阻塞 DSH、退出回收均通过；没有付费模型请求、实际桌宠启动或日常 profile 修改。
+- 用户确认了隔离原生候选的脚下控件手验。自动化另覆盖微光／蓝鱼、暂停／运行及不同缩放档位下的脚点、工具条和菜单位置；最终包的 core／VRM 运行 JS 与已验候选逐字节一致。该结果不冒充新一轮长期性能、完整 DPI／多显示器或睡眠测试。
+- 微光和蓝鱼沿用既有公开 HTTPS 来源与独立许可。两个模型都重新通过空缓存下载、仅获取所选模型、长度／哈希校验和离线缓存复用；没有新增模型发布。Windows 程序仍未代码签名，已审查的维护／非 Windows 依赖告警范围见[依赖维护](dependency-audit.md)。
+
+| 公开 npm 归档或其内含程序 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| `dsh-starlite-0.1.1.tgz` | 4,203,974 | `d5082e5010fce88e98f2c038f43ecec3c2a95dc5fac2501d3262e9764a4d1132` |
+| 内含 `dsh-inochi2d-pet.exe` | 12,006,912 | `4adc682b1a98a36751c5a509ed0417b6796531edf4b4538b46af0a073fe808d5` |
+
+归档 SRI 为 `sha512-L14yvlZqyRihP2uk0UBPloo30pT+K8ROphP0hj4YxUzO7wTH0I9HC4/O8juEfb3lcFNcTEQ4fHUNHj4AASATEA==`。完整证明保留在本机忽略目录 `release-output/release-0.1.1/` 的 `artifact-manifest.json`、`registry-proof.json`、`dsh-registry-windows.json`、`dsh-registry-wsl.json` 和 `default-download-validation.json`。
 
 ## DSH 0.2.2-rc.1 发布前兼容检查（2026-11-06）
 
 从公共 npm 独立安装官方 `@deepseek-ai/dsh@0.2.2-rc.1`，未修改日常 Host。该版将嵌套 PTC 事件声明移到 `dsh-tool-executor-ptc/types`，投影值类型改为 `SessionProjectionViewValues`，问题投影通过具名 definition 声明。契约检查同时覆盖新的声明和此前 `0.2.1-rc.5`，包括普通／超时／继续问题、会话导航、桌面 RPC 与只读费用接口。
 
-官方实现仍保留注册表 `stateOf(session, key)` 并返回当前折叠状态，但已标记弃用、类型为 `unknown`。插件原有边界逐项验证 `questions.active`，本轮未替换问题服务或注册自己的投影；上游真正移除此读口时需要迁移。Windows Node 24.15.0 下，以已公开 `dsh-starlite@0.1.0` 归档完成基线隔离安装、认证首页、适配失败不阻塞 DSH 和退出回收，无付费请求或实际桌宠启动。此项是 Host 基线检查；`0.1.1` 的最终归档仍需另行验证。
+官方实现仍保留注册表 `stateOf(session, key)` 并返回当前折叠状态，但已标记弃用、类型为 `unknown`。插件原有边界逐项验证 `questions.active`，本轮未替换问题服务或注册自己的投影；上游真正移除此读口时需要迁移。Windows Node 24.15.0 下，以已公开 `dsh-starlite@0.1.0` 归档完成基线隔离安装、认证首页、适配失败不阻塞 DSH 和退出回收，无付费请求或实际桌宠启动。此项保留为 Host 基线检查；`0.1.1` 最终归档的发布后验证见上节。
 
 新版问答服务可携带 `intent.kind: "approval"` 的明确许可决定，并进入相同的问答 waterfall。插件在协议转换前把包含此意图的整批问题交回 DSH；继续问题投影也拒绝该意图，不发布气泡、不取得等待权、不代答许可。普通问答继续保留原有行为。此兼容修复不表示官方工具审批全部迁入了问答服务。
 

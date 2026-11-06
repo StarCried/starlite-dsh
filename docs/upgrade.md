@@ -2,7 +2,7 @@
 
 简体中文 · [English](upgrade.en.md)
 
-本文介绍 StarLite for DSH 正式版 `0.1.0`。安装 `dsh-starlite` 使用 `latest`；精确版本与来源查看 [npm](https://www.npmjs.com/package/dsh-starlite) 和 [Releases](https://github.com/StarCried/starlite-dsh/releases)。旧 alpha 记录保留在[兼容性记录](dsh-compatibility.md)。
+本文介绍 StarLite for DSH 正式版 `0.1.1`。安装 `dsh-starlite` 使用 `latest`；精确版本与来源查看 [npm](https://www.npmjs.com/package/dsh-starlite) 和[发行验收](dsh-compatibility.md#公开发行-0112026-11-06)。旧 alpha 记录保留在[兼容性记录](dsh-compatibility.md)。
 
 支持 Windows 11 x64 + WebView2，Host 可以是同机的官方 Windows DSH 桌面版、Windows 原生 CLI/Web 或 WSL2 CLI/Web。不同 Host／profile 要分别安装插件，但使用同一 Windows 用户的模型和偏好；一次只连接一个 Host。支持范围与实测 DSH 版本见 [兼容性记录](dsh-compatibility.md)。
 

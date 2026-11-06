@@ -2,7 +2,7 @@
 
 [简体中文](user-guide.md) · English · [README](../README.en.md)
 
-Requires Windows 11 x64, WebView2, and one supported DSH Host: official Windows Desktop, native Windows CLI/Web, or WSL2 CLI/Web. This guide covers `0.1.0`; the install channel is `dsh-starlite`. Pin `dsh-starlite@0.1.0` when reproducibility is required.
+Requires Windows 11 x64, WebView2, and one supported DSH Host: official Windows Desktop, native Windows CLI/Web, or WSL2 CLI/Web. This guide covers `0.1.1`; the install channel is `dsh-starlite`. Pin `dsh-starlite@0.1.1` when reproducibility is required.
 
 ## Install
 

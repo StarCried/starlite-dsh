@@ -8,6 +8,7 @@ export class InteractionMaskBridge {
   #pending: ModelHitMask | undefined;
   #hasPending = false;
   #sending = false;
+  readonly #waiters=new Set<()=>void>();
   constructor(
     readonly send: (mask: NativeHitMask | null) => Promise<unknown>,
     readonly onFailure: () => void,
@@ -17,6 +18,10 @@ export class InteractionMaskBridge {
     this.#pending = mask;
     this.#hasPending = true;
     void this.#flush();
+  }
+  /** Wait for the current and any coalesced newer coverage to reach native. */
+  ready():Promise<void> {
+    return this.#sending||this.#hasPending?new Promise(resolve=>this.#waiters.add(resolve)):Promise.resolve();
   }
   /** The VRM portrait and canvas keep fixed CSS bounds when only the native
    * surface changes. Reuse its alpha coverage while paused, updating only the
@@ -57,6 +62,10 @@ export class InteractionMaskBridge {
       this.#pending = undefined;
       this.#hasPending = false;
       this.onFailure();
-    } finally { this.#sending = false; }
+    } finally {
+      this.#sending = false;
+      for(const resolve of this.#waiters)resolve();
+      this.#waiters.clear();
+    }
   }
 }

@@ -82,6 +82,17 @@ describe("model-only pointer interaction", () => {
     expect(send).toHaveBeenLastCalledWith(null);
     finish(); await Promise.resolve();
   });
+  it("waits for coalesced fresh coverage before permitting a screen sample",async()=>{
+    let finish!:()=>void;
+    const send=vi.fn(()=>new Promise<void>(resolve=>{finish=resolve;}));
+    const bridge=new InteractionMaskBridge(send,vi.fn()),ready=vi.fn();
+    bridge.update(mask);bridge.update({...mask,left:30});
+    const waiting=bridge.ready().then(ready);
+    finish();await Promise.resolve();expect(send).toHaveBeenCalledTimes(2);expect(ready).not.toHaveBeenCalled();
+    finish();await waiting;expect(ready).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenLastCalledWith({...mask,left:30,bits:Array.from(mask.bits)});
+    await bridge.ready();
+  });
   it("reuses paused fixed-layout coverage after a native surface resize without filling transparent holes",async()=>{
     const send=vi.fn(async()=>{}),bridge=new InteractionMaskBridge(send,vi.fn());
     bridge.update({...mask,viewportWidth:576,viewportHeight:720});await Promise.resolve();

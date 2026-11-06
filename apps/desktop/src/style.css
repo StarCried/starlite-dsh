@@ -24,6 +24,11 @@ body {
   touch-action: none;
 }
 
+/* Transparent centres mark native-selected samples without painting over them.
+   The native sampler also excludes these borders from subsequent captures. */
+[data-environment-samples] {position:fixed;inset:0;pointer-events:none;z-index:2147483646;overflow:hidden;}
+[data-environment-sample] {position:absolute;box-sizing:border-box;border:1px solid #70fff2;background:none;pointer-events:none;}
+
 #model {
   position: absolute;
   inset: 0;

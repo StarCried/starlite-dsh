@@ -1,7 +1,8 @@
 import type {WidgetController} from "./vendor-types.js";
 
 type LightingController = Pick<WidgetController, "setEnvironmentLighting">;
-export interface EnvironmentColor {color: string}
+export interface EnvironmentPatch {left:number;top:number;width:number;height:number}
+export interface EnvironmentColor {color:string;patches?:EnvironmentPatch[];viewportWidth?:number;viewportHeight?:number}
 
 /** Host-local sampling only; no screen data enters the DSH connection. */
 export class EnvironmentLightingBridge {
@@ -14,7 +15,7 @@ export class EnvironmentLightingBridge {
   #destroyed = false;
   #timer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(private readonly sample: () => Promise<EnvironmentColor | null>) {}
+  constructor(private readonly sample: () => Promise<EnvironmentColor | null>,private readonly sampled:(sample:EnvironmentColor|null)=>void=()=>{}) {}
 
   configure(controller: LightingController | undefined, enabled: boolean, strength: number, active: boolean): void {
     if (this.#destroyed) return;
@@ -23,6 +24,7 @@ export class EnvironmentLightingBridge {
     if (controller === this.#controller && eligible === this.#active && safeStrength === this.#strength) return;
     ++this.#generation;
     this.#clearTimer();
+    this.sampled(null);
     if (this.#controller && (controller !== this.#controller || !eligible)) this.#controller.setEnvironmentLighting?.(null);
     if (controller !== this.#controller || !eligible) this.#lastColor = undefined;
     this.#controller = controller;
@@ -37,6 +39,7 @@ export class EnvironmentLightingBridge {
     this.#destroyed = true;
     ++this.#generation;
     this.#clearTimer();
+    this.sampled(null);
     this.#controller?.setEnvironmentLighting?.(null);
     this.#controller = undefined;
     this.#lastColor = undefined;
@@ -61,6 +64,7 @@ export class EnvironmentLightingBridge {
         this.#lastColor = color;
         this.#controller?.setEnvironmentLighting?.({color,strength:this.#strength});
       }
+      this.sampled(color?sample:null);
     } finally {
       this.#pending = false;
       // Schedule from completion, never overlap or catch up after sleep. A

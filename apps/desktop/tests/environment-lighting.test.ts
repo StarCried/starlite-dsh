@@ -140,3 +140,17 @@ it("passes strengths above 100% through to the runtime without changing the samp
   expect(target.setEnvironmentLighting).toHaveBeenLastCalledWith({color:"#123456",strength:1.5});
   bridge.destroy();
 });
+
+it("publishes only current-generation diagnostics and clears points without clearing retained lighting",async()=>{
+  const late=pending(),sampled=vi.fn(),valid={color:"#204a9e",patches:[{left:100,top:100,width:12,height:12}],viewportWidth:800,viewportHeight:600};
+  const read=vi.fn().mockResolvedValueOnce(valid).mockResolvedValueOnce(null).mockReturnValueOnce(late.promise);
+  const target=controller(),bridge=new EnvironmentLightingBridge(read,sampled);
+  bridge.configure(target,true,1,true);await vi.advanceTimersByTimeAsync(0);
+  expect(sampled).toHaveBeenLastCalledWith(valid);
+  await vi.advanceTimersByTimeAsync(250);
+  expect(sampled).toHaveBeenLastCalledWith(null);
+  expect(target.setEnvironmentLighting).toHaveBeenCalledExactlyOnceWith({color:valid.color,strength:1});
+  await vi.advanceTimersByTimeAsync(250);bridge.configure(target,false,1,true);sampled.mockClear();late.resolve(valid);
+  await vi.advanceTimersByTimeAsync(1);expect(sampled).not.toHaveBeenCalled();
+  bridge.destroy();expect(sampled).toHaveBeenLastCalledWith(null);
+});

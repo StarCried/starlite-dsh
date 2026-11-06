@@ -24,6 +24,7 @@ import { StateAnimator } from "./state-animator.js";
 import { InteractionMaskBridge } from "./interaction-mask.js";
 import { ModelViewportBridge } from "./model-viewport.js";
 import { EnvironmentLightingBridge, type EnvironmentColor } from "./environment-lighting.js";
+import { EnvironmentSamplingOverlay } from "./environment-debug.js";
 import { HostPositionBridge, screenSpaceAboveModel } from "./host-position.js";
 import { BillingBubble, renderBillingBubble } from "./billing-bubble.js";
 import {WorkBubble,renderPlainBubble} from "./work-bubble.js";
@@ -60,7 +61,21 @@ export async function startPet(): Promise<void> {
   const slot = await createModelSlot();
   let mountGeneration = 0;
   let controller: WidgetController | undefined;
-  const environmentLighting = new EnvironmentLightingBridge(() => invoke<EnvironmentColor | null>("sample_environment_color"));
+  const samplingOverlay = new EnvironmentSamplingOverlay(t("环境补光采样区域"));
+  const environmentLighting = new EnvironmentLightingBridge(
+    async () => {
+      // The normal click mask is throttled. A fresh pose avoids sampling into
+      // a fast-moving arm, and ready() includes coalesced native mask writes.
+      controller?.refreshInteractionMask?.();
+      await interaction.ready();
+      const overlays=samplingOverlay.exclusions();
+      const sample=await invoke<EnvironmentColor | null>("sample_environment_color",{overlays});
+      // A menu or bubble can change while native work is queued. Its old
+      // exclusion layout must not be used to apply a self-contaminated color.
+      return samplingOverlay.matches(overlays)?sample:null;
+    },
+    sample => samplingOverlay.update(sample),
+  );
   let animator: StateAnimator | undefined;
   let latestSnapshot: PetSnapshot | undefined;
   let offlineTimer: ReturnType<typeof setTimeout> | undefined;
@@ -189,7 +204,7 @@ export async function startPet(): Promise<void> {
         }
       }
     }),
-    ()=>{resetHostMotion=true;hostPosition.invalidate();interaction.invalidateForViewport();regionPending=null;menuRegionPending=null;},
+    ()=>{resetHostMotion=true;hostPosition.invalidate();interaction.invalidateForViewport();samplingOverlay.clear();regionPending=null;menuRegionPending=null;},
     ()=>{visitorToolbar?.place(viewport.modelRect);updateRegion();updateMenuRegion();void hostPosition.sync().catch(()=>{});},
     ()=>{void window.hide();void invoke("open_settings");},
     bubble,updateRegion,
@@ -207,6 +222,7 @@ export async function startPet(): Promise<void> {
   });
   const syncWindowGeometry = () => {
     if (closing) return;
+    samplingOverlay.clear();
     if (modelAvailable()) interaction.resizeFixedViewport(innerWidth,innerHeight);
     syncBubbleAnchor();
     updateRegion();
@@ -224,6 +240,7 @@ export async function startPet(): Promise<void> {
     animator?.setPaused(paused);
     if (paused) controller?.pause();
     else controller?.resume();
+    samplingOverlay.setEnabled(!paused&&!closing&&settings.preferences.performanceOverlay&&settings.preferences.environmentLightingEnabled!==false&&(settings.preferences.environmentLightingStrength??1)>0);
     environmentLighting.configure(controller,settings.preferences.environmentLightingEnabled!==false,settings.preferences.environmentLightingStrength??1,!paused&&connected&&!closing);
     if(document.visibilityState!=="visible")quickMenu?.close();
     syncVisitorToolbar();
@@ -315,7 +332,7 @@ export async function startPet(): Promise<void> {
   };
   const closeQuickMenu=()=>{++menuOpenGeneration;quickMenu?.close();visitorToolbar?.clear();cancelClick();syncMenuSurface();};
   globalThis.addEventListener("blur",closeQuickMenu);
-  globalThis.addEventListener("pagehide", () => { closing=true; environmentLighting.destroy(); if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu);host.removeEventListener("model-viewport-change",syncBubbleAnchor); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();visitorToolbar?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { closing=true; environmentLighting.destroy(); samplingOverlay.destroy(); if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu);host.removeEventListener("model-viewport-change",syncBubbleAnchor); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();visitorToolbar?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
   let preparing = true;
   await listen<{modelId: string; adjustments: ModelAdjustments}>("model-adjustments-preview", ({payload}) => {

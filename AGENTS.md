@@ -24,7 +24,12 @@
 - Model-only alpha hit testing and transparent background passthrough are approved.
   Keep cursor coordinates in memory; do not log or transmit desktop input.
 - Optional environment lighting samples at most eight 12x12 visible patches
-  outside the main window, at most four times a second. Native sampling must
+  near the model's alpha bounds, at most four times a second. Compute those
+  bounds from mask bits, not the padded canvas or the large native window.
+  Restrict patches to the window client and real monitors; exclude the model,
+  visible bubbles (including noninteractive ones), controls, shadows and debug
+  frame strokes. Webview overlay rectangles can only exclude capture regions.
+  Native sampling must
   respect the native enabled preference and stop when paused, hidden or on a secure
   desktop. Return only reduced RGB, never pixels; do not write captures, upload
   them, hide the pet to sample, or exclude it from other applications' recordings.
@@ -36,6 +41,16 @@
   generation checks must run before storing or applying an asynchronous result.
   Window movement alone must not discard the whole sample. Keep each captured
   patch associated with its rectangle when filtering possible self-overlap.
+- The user-facing toggle is “显示调试信息 / Show debug info”; preserve the existing
+  performanceOverlay setting and runtime API. Sampling frames show only with
+  debug and lighting enabled, using native-returned accepted patch geometry.
+  Frames have transparent centres, never receive pointer input, and their four
+  border strokes must be excluded from the next sample. Geometry updates must
+  not reset the native four-Hz sampling clock. No editable points/distance UI.
+  Refresh alpha coverage and await coalesced native writes before capture;
+  reject results if visible UI exclusion geometry changed during the request.
+  Retire disappearing UI from the first observed disappearance, not the last
+  visible poll (which can already be older than the compositor grace period).
 - Keep `docs/network-and-storage.md` and the packaged README's download disclosure
   aligned with bootstrap, billing and launcher behavior. External directories may
   compare static call-pattern scans with runtime events; do not invent unsupported

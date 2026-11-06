@@ -229,6 +229,27 @@ describe("desktop hidden-window startup", () => {
     expect(controller.setPerformanceVisible).toHaveBeenLastCalledWith(false);
     expect(native.mountModel).toHaveBeenCalledOnce();expect(native.connection).toHaveBeenCalledOnce();
   });
+  it("shows native sampling points only with both debug and lighting enabled and clears on pause",async()=>{
+    controller.setEnvironmentLighting=vi.fn();
+    const original=native.invoke.getMockImplementation()!;
+    native.invoke.mockImplementation(async(command,...args)=>command==="sample_environment_color"
+      ?{color:"#204a9e",viewportWidth:innerWidth,viewportHeight:innerHeight,patches:[{left:100,top:100,width:12,height:12}]}
+      :original(command,...args));
+    const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    await vi.advanceTimersByTimeAsync(250);
+    expect(document.querySelector("[data-environment-samples]")).toBeNull();
+    const next=structuredClone(settings);next.preferences.performanceOverlay=true;
+    settingsListener!({payload:next});await vi.advanceTimersByTimeAsync(250);
+    expect(document.querySelectorAll("[data-environment-sample]")).toHaveLength(1);
+    expect(native.invoke).toHaveBeenCalledWith("sample_environment_color",{overlays:expect.objectContaining({viewportWidth:innerWidth,viewportHeight:innerHeight})});
+    next.preferences.environmentLightingEnabled=false;settingsListener!({payload:structuredClone(next)});
+    expect(document.querySelector("[data-environment-samples]")).toBeNull();
+    next.preferences.environmentLightingEnabled=true;settingsListener!({payload:structuredClone(next)});await vi.advanceTimersByTimeAsync(250);
+    expect(document.querySelectorAll("[data-environment-sample]")).toHaveLength(1);
+    trayListener!({payload:"pause"});expect(document.querySelector("[data-environment-samples]")).toBeNull();
+    expect(native.mountModel).toHaveBeenCalledOnce();
+  });
   it("resynchronizes a paused portrait and static question region after DPI resize without remounting",async()=>{
     vi.stubGlobal("innerWidth",576);vi.stubGlobal("innerHeight",720);
     let report:Parameters<WidgetController["observeInteractionMask"]>[0];

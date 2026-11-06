@@ -108,6 +108,11 @@ struct Rect {
 }
 
 impl Rect {
+    fn valid_size(self) -> bool {
+        (1..=32768).contains(&(i64::from(self.right) - i64::from(self.left)))
+            && (1..=32768).contains(&(i64::from(self.bottom) - i64::from(self.top)))
+    }
+
     fn intersection(self, other: Self) -> Option<Self> {
         let result = Self {
             left: self.left.max(other.left),
@@ -124,7 +129,7 @@ impl Rect {
 fn surrounding_patches(window: Rect, monitors: &[Rect]) -> Vec<Rect> {
     let width = i64::from(window.right) - i64::from(window.left);
     let height = i64::from(window.bottom) - i64::from(window.top);
-    if !(1..=32768).contains(&width) || !(1..=32768).contains(&height) {
+    if !window.valid_size() {
         return Vec::new();
     }
     if !monitors
@@ -177,6 +182,23 @@ fn surrounding_patches(window: Rect, monitors: &[Rect]) -> Vec<Rect> {
                 .max_by_key(|rect| (rect.right - rect.left) * (rect.bottom - rect.top))
         })
         .collect()
+}
+
+/// Keep samples outside the conservative bounds between the two observed
+/// window positions. Movement can invalidate a leading-side patch without
+/// invalidating the safe trailing-side samples from the same screen read.
+fn retain_uncovered_patches(samples: &mut Vec<(Rect, [f64; 3])>, before: Rect, after: Rect) {
+    if !before.valid_size() || !after.valid_size() {
+        samples.clear();
+        return;
+    }
+    let swept = Rect {
+        left: before.left.min(after.left),
+        top: before.top.min(after.top),
+        right: before.right.max(after.right),
+        bottom: before.bottom.max(after.bottom),
+    };
+    samples.retain(|(patch, _)| patch.intersection(swept).is_none());
 }
 
 fn linear(value: u8) -> f64 {
@@ -374,7 +396,7 @@ mod windows {
             }
         }
 
-        fn colors(&self, patches: &[Rect]) -> Vec<[f64; 3]> {
+        fn colors(&self, patches: &[Rect]) -> Vec<(Rect, [f64; 3])> {
             let mut copied = Vec::new();
             for (index, rect) in patches.iter().take(8).enumerate() {
                 let width = rect.right - rect.left;
@@ -394,7 +416,7 @@ mod windows {
                     ) != 0
                 };
                 if success {
-                    copied.push((index, width as usize, height as usize));
+                    copied.push((index, *rect));
                 }
             }
             if unsafe { GdiFlush() } == 0 {
@@ -408,7 +430,9 @@ mod windows {
             };
             copied
                 .into_iter()
-                .map(|(index, width, height)| {
+                .map(|(index, rect)| {
+                    let width = (rect.right - rect.left) as usize;
+                    let height = (rect.bottom - rect.top) as usize;
                     let mut sum = [0.0; 3];
                     for y in 0..height {
                         for x in 0..width {
@@ -419,7 +443,7 @@ mod windows {
                             }
                         }
                     }
-                    sum.map(|channel| channel / (width * height) as f64)
+                    (rect, sum.map(|channel| channel / (width * height) as f64))
                 })
                 .collect()
         }
@@ -456,16 +480,27 @@ mod windows {
                 return None;
             }
             let capture = Capture::new()?;
-            let color = representative_color(&capture.colors(&patches));
+            let mut samples = capture.colors(&patches);
             let mut after: RECT = zeroed();
-            if GetWindowRect(hwnd, &mut after) == 0
-                || [before.left, before.top, before.right, before.bottom]
-                    != [after.left, after.top, after.right, after.bottom]
-                || !input_desktop_is_available()
-            {
+            if GetWindowRect(hwnd, &mut after) == 0 || !input_desktop_is_available() {
                 return None;
             }
-            color
+            retain_uncovered_patches(
+                &mut samples,
+                window_rect,
+                Rect {
+                    left: after.left,
+                    top: after.top,
+                    right: after.right,
+                    bottom: after.bottom,
+                },
+            );
+            representative_color(
+                &samples
+                    .into_iter()
+                    .map(|(_, color)| color)
+                    .collect::<Vec<_>>(),
+            )
         }
     }
 }
@@ -511,6 +546,101 @@ mod tests {
             .iter()
             .all(|patch| patch.left >= 0 && patch.top >= 0));
         assert!(surrounding_patches(rect(0, 0, 1920, 1080), &monitor).is_empty());
+    }
+
+    #[test]
+    fn stationary_and_small_movements_preserve_every_sample() {
+        let before = rect(300, 300, 500, 600);
+        let samples: Vec<_> = surrounding_patches(before, &[rect(0, 0, 1600, 1200)])
+            .into_iter()
+            .enumerate()
+            .map(|(index, patch)| (patch, [index as f64 / 16.0; 3]))
+            .collect();
+        assert_eq!(samples.len(), 8);
+        for (dx, dy) in [(0, 0), (1, 0), (-1, -1), (7, 7), (8, -8)] {
+            let after = rect(300 + dx, 300 + dy, 500 + dx, 600 + dy);
+            let mut retained = samples.clone();
+            retain_uncovered_patches(&mut retained, before, after);
+            assert_eq!(retained, samples, "movement ({dx}, {dy})");
+        }
+    }
+
+    #[test]
+    fn directional_and_diagonal_movements_keep_only_uncovered_samples() {
+        let before = rect(500, 500, 700, 800);
+        let samples: Vec<_> = surrounding_patches(before, &[rect(0, 0, 1800, 1600)])
+            .into_iter()
+            .enumerate()
+            .map(|(index, patch)| (patch, [index as f64 / 16.0; 3]))
+            .collect();
+        for (dx, dy, count) in [
+            (350, 0, 6),
+            (-350, 0, 6),
+            (0, 420, 6),
+            (0, -420, 6),
+            (350, 420, 4),
+            (-350, 420, 4),
+            (350, -420, 4),
+            (-350, -420, 4),
+        ] {
+            let after = rect(500 + dx, 500 + dy, 700 + dx, 800 + dy);
+            let mut retained = samples.clone();
+            retain_uncovered_patches(&mut retained, before, after);
+            assert_eq!(retained.len(), count, "movement ({dx}, {dy})");
+            for sample in &retained {
+                assert!(samples.contains(sample), "keep each patch's own color");
+                for step in 0..=20 {
+                    let x = dx * step / 20;
+                    let y = dy * step / 20;
+                    assert!(sample
+                        .0
+                        .intersection(rect(500 + x, 500 + y, 700 + x, 800 + y))
+                        .is_none());
+                }
+            }
+            // A large jump can cross a patch without either endpoint covering
+            // it. Checking only the two endpoint rectangles would keep it.
+            assert!(samples.iter().any(|sample| {
+                sample.0.intersection(after).is_none() && !retained.contains(sample)
+            }));
+        }
+    }
+
+    #[test]
+    fn skipped_capture_patches_do_not_shift_color_associations() {
+        let before = rect(300, 300, 500, 600);
+        let patches = surrounding_patches(before, &[rect(0, 0, 1600, 1200)]);
+        // Simulate failed reads at other indices. Only the successful left-side
+        // patch remains safe when the window moves down and right.
+        let expected = (patches[2], [44, 116, 204].map(linear));
+        let mut samples = vec![(patches[1], [1.0; 3]), expected, (patches[7], [0.0; 3])];
+        retain_uncovered_patches(&mut samples, before, rect(650, 720, 850, 1020));
+        assert_eq!(samples, vec![expected]);
+        assert_eq!(
+            representative_color(&[samples[0].1]).unwrap().color,
+            "#2c74cc"
+        );
+    }
+
+    #[test]
+    fn invalid_or_fully_covering_after_rectangles_leave_no_color() {
+        let before = rect(300, 300, 500, 600);
+        let samples: Vec<_> = surrounding_patches(before, &[rect(0, 0, 1600, 1200)])
+            .into_iter()
+            .map(|patch| (patch, [0.5; 3]))
+            .collect();
+        for after in [
+            rect(0, 0, 0, 0),
+            rect(1, 1, 0, 0),
+            rect(i32::MIN, 0, i32::MAX, 1),
+            rect(200, 200, 700, 800),
+        ] {
+            let mut retained = samples.clone();
+            retain_uncovered_patches(&mut retained, before, after);
+            assert!(retained.is_empty());
+            let colors: Vec<_> = retained.into_iter().map(|(_, color)| color).collect();
+            assert!(representative_color(&colors).is_none());
+        }
     }
 
     #[test]

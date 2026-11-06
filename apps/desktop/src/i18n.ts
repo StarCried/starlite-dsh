@@ -41,6 +41,7 @@ export function translateTemplate(root: HTMLElement): void {
 
 export const EN: Readonly<Record<string, string>> = {
   "环境补光": "Environment lighting",
+  "环境补光采样区域": "Environment lighting sample regions",
   "补光强度": "Tint strength",
   "补光强度（%）": "Tint strength (%)",
   "仅在本机读取角色周边颜色，不保存或上传图像。": "Samples nearby colors locally. No images are saved or uploaded.",
@@ -155,7 +156,7 @@ export const EN: Readonly<Record<string, string>> = {
   "accessor 逻辑数据": "Logical accessor data",
   "三角面单项参考 VRChat PC 档位：≤ 32,000 为优秀，≤ 70,000 为良好，超过 70,000 标为偏高。它不是 VRChat 的整体评级，也不代表实际帧率。": "Triangle reference based on VRChat PC thresholds: up to 32,000 is Excellent, up to 70,000 is Good, above 70,000 is High. This is not an overall VRChat rank or an FPS prediction.",
   "几何统计按资源 primitive 累加，可能重复引用，不计场景实例的重复绘制。材质数不等于材质槽；绘制分组不等于实际 draw calls；人形映射不等于总骨骼数。其他数量不参与评级。": "Geometry totals sum resource primitives, may count shared references, and exclude repeated scene instances. Material counts are not material slots, primitives are not actual draw calls, and humanoid mappings are not total bones. Other counts are not rated.",
-  "文件体积与 accessor 逻辑数据不等于 GPU 或进程内存。运行流畅度可在「显示 → 显示性能参数」中查看。": "File size and logical accessor data are not GPU or process memory. Enable Display → Performance overlay to inspect runtime smoothness.",
+  "文件体积与 accessor 逻辑数据不等于 GPU 或进程内存。运行流畅度可在「显示 → 显示调试信息」中查看。": "File size and logical accessor data are not GPU or process memory. Enable Display → Show debug info to inspect runtime smoothness.",
   "使用本模型即视为同意其许可；如不同意，请在设置中选择“不显示模型”。": "Using this model means accepting its license. Otherwise select Hide model in settings.",
   "{title}使用许可": "License for {title}",
   "{title} · 使用许可": "{title} · License",
@@ -176,7 +177,7 @@ export const EN: Readonly<Record<string, string>> = {
   "恢复默认大小": "Restore default size",
   "恢复默认位置": "Restore default position",
   "帧率": "Frame rate",
-  "显示性能参数": "Performance overlay",
+  "显示调试信息": "Show debug info",
   "当前模型": "Current model",
   "显示": "Display",
   "互动": "Interaction",
@@ -280,7 +281,6 @@ export const EN: Readonly<Record<string, string>> = {
   "只有待机持续循环，其他动作播放一次后回到待机。点击回应和偶发小动作可勾选多个，每次随机播放一个。": "Only idle loops continuously. Other motions play once, then return to idle. Select multiple click or ambient gestures for random playback.",
   "渲染 DPR 上限": "Maximum render DPR",
   "模型缩放": "Model scale",
-  "显示性能参数（FPS 等）": "Show performance overlay (FPS and more)",
   "隐藏会话标题、正文、交互问题和费用，仅显示状态。": "Hide session titles, content, questions, and billing. Show status only.",
   "精简：会话标题和状态": "Compact: session title and status",
   "详细：会话标题和内容": "Detailed: session title and content",

@@ -24,7 +24,7 @@ export function petQuickSettings(actions:PetQuickSettingsActions,close:()=>void)
     {id:"reset-size",kind:"action",label:t("恢复默认大小"),onAction:()=>actions.patch({scale:1})},
     {id:"position",kind:"action",label:t("恢复默认位置"),onAction:run(actions.restorePosition)},
     {id:"fps",kind:"select",label:t("帧率"),value:String(p.fps),options:[{value:"30",label:"30 FPS"},{value:"60",label:"60 FPS"}],onChange:value=>actions.patch({fps:value==="30"?30:60})},
-    {id:"performance",kind:"toggle",label:t("显示性能参数"),value:p.performanceOverlay,onChange:performanceOverlay=>actions.patch({performanceOverlay})},
+    {id:"performance",kind:"toggle",label:t("显示调试信息"),value:p.performanceOverlay,onChange:performanceOverlay=>actions.patch({performanceOverlay})},
     {id:"environment-lighting",kind:"toggle",label:t("环境补光"),value:p.environmentLightingEnabled!==false,description:t("仅在本机读取角色周边颜色，不保存或上传图像。"),onChange:environmentLightingEnabled=>actions.patch({environmentLightingEnabled})},
     {id:"environment-strength",kind:"range",label:t("补光强度"),value:p.environmentLightingStrength??1,min:0,max:2,step:.05,disabled:p.environmentLightingEnabled===false,formatValue:value=>`${Math.round(value*100)}%`,onChange:environmentLightingStrength=>actions.patch({environmentLightingStrength})},
   ];

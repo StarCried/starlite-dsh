@@ -34,6 +34,14 @@ Double-click should open the existing official Desktop app or the CLI/Web interf
 
 Billing requires an official DeepSeek API key configured in DSH, not merely a desktop account login. Unsupported gateways and incomplete pricing are marked rather than guessed. No paid inference request is necessary to test basic interaction or balance access.
 
+## Show debug info
+
+Enable **Show debug info** under **Settings → Display** or the character's right-click **Display** menu. It is off by default, saves automatically, and takes effect without reloading the model.
+
+The corner display shows rendered FPS, frame-interval p95, CPU-side frame-time p95, draw calls, and triangles. It updates at most twice per second using the latest 240 rendered frames. Pause, hide, and resume reset the measurements. CPU time includes model update and WebGL submission work, including driver waits; it is not GPU execution time, CPU utilization, or DSH inference performance.
+
+With **Environment lighting** also enabled, outlines show the actual sample regions around the character. These regions are laid out automatically and cannot be dragged or edited. Turning either option off, pausing, or hiding the character hides the outlines. Debug information stays local and is not uploaded.
+
 ## Reporting a problem
 
 Include StarLite and DSH versions, Windows version, Desktop/CLI/Web/WSL mode, display scaling, reproducible steps, and whether the issue also affects a fresh example. Keep API keys, prompts, session logs, and private models out of public issues. English and Chinese reports are welcome.

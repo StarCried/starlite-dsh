@@ -109,7 +109,7 @@ export function showModelInspection(report: ModelInspection): void {
   for (const text of [
     t("三角面单项参考 VRChat PC 档位：≤ 32,000 为优秀，≤ 70,000 为良好，超过 70,000 标为偏高。它不是 VRChat 的整体评级，也不代表实际帧率。"),
     t("几何统计按资源 primitive 累加，可能重复引用，不计场景实例的重复绘制。材质数不等于材质槽；绘制分组不等于实际 draw calls；人形映射不等于总骨骼数。其他数量不参与评级。"),
-    t("文件体积与 accessor 逻辑数据不等于 GPU 或进程内存。运行流畅度可在「显示 → 显示性能参数」中查看。"),
+    t("文件体积与 accessor 逻辑数据不等于 GPU 或进程内存。运行流畅度可在「显示 → 显示调试信息」中查看。"),
   ]) details.append(element("p", "inspection-hint", text));
   content.append(details);
 

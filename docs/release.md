@@ -1,5 +1,9 @@
 # StarLite for DSH 发布检查
 
+## 0.1.1 npm 发布准备（2026-11-06）
+
+本轮发布目标为 `dsh-starlite@0.1.1`，Windows EXE 随 npm 插件提供。新增共享脚下工具条、固定脚点缩放和六像素拖动判定；现有模型来源、许可和用户偏好保留。最终运行时 revision、归档哈希与本地检查记录保存在本机 `release-output/release-0.1.1/`。发布前仍须确认精确共享源码已公开，并对最终 tarball 完成隔离安装与 fail-open 检查；本段不表示 npm 已公开。本轮不另行发布 Windows 安装器或模型 GitHub Release。
+
 `0.1.0` 已于 2026-11-03 发布到 npm `latest` 和 [GitHub 正式发行](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0)，包括统一插件、Windows 安装器和免安装版；蓝鱼另行发布为独立模型资源。变化见 [版本变化](../CHANGELOG.md)，精确源码、公开下载与实际 registry 安装结果见 [发布验收](dsh-compatibility.md#公开发行-0102026-11-03)。本页保留后续构建流程和历史发行证据。
 
 ## 0.1.0 发行范围（2026-11-03）

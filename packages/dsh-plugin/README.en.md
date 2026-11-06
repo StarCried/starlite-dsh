@@ -4,7 +4,7 @@
 
 A lightweight VRM companion for DeepSeek Harness. Install one plugin, start DSH, and the Weiguang example is prepared automatically. Bring your own model whenever you like.
 
-Release `0.1.0`. Requires Windows 11 x64 and WebView2. Supports official Windows Desktop, native Windows CLI/Web, and WSL2 DSH.
+Release `0.1.1`. Requires Windows 11 x64 and WebView2. Supports official Windows Desktop, native Windows CLI/Web, and WSL2 DSH.
 
 ## Install
 
@@ -36,6 +36,8 @@ To learn first, ask the Agent to explain that guide without installing or changi
 ## Use and customize
 
 Click the body for an idle gesture and billing; double-click opens the current session or DSH. Drag the body to move it; transparent areas pass clicks through. Right-click opens size, frame-rate, tracking, bubble, and position controls. Questions can be answered directly in bubbles; tool permission approvals remain in DSH.
+
+Hover near the character to show smaller, larger, bubbles, and hide controls below its feet. Size changes by 10 percentage points without reloading the model or moving the toolbar. Controls remain available while paused; restore a hidden character from the tray. A body press becomes a drag only after moving more than six CSS pixels.
 
 Import a standard humanoid `.vrm` through **Add VRM model**. The Import guide explains bones, blink, and lookAt requirements. Changes save automatically. User models and source files are preserved when upgrading; removing a library model does not delete its source.
 

@@ -118,6 +118,14 @@
 - Run narrow package tests first, then `pnpm check` and Rust checks.
 - Test the packed bundle in an isolated DSH profile and verify fail-open DSH
   behavior when the adapter is incompatible.
+- DSH 0.2.2 moved nested PTC events to `dsh-tool-executor-ptc/types` and
+  projection values to the unmarked `SessionProjectionViewValues` alias.
+  Its registry-level `stateOf(session, key)` still folds registered state but
+  is deprecated and returns `unknown`; validate the owned question fold and
+  runtime value shape. Do not register a competing question projection to
+  obtain a reader handle. Keep contract checks against both declaration generations.
+  A question item's `intent.kind: "approval"` belongs to DSH, including mixed
+  batches and continued projections; reject it before wire parsing drops intent.
 - Native GUI acceptance uses `tauri build --no-bundle`; plain `cargo build
   --release` can retain the development URL instead of embedded frontend assets.
   For isolated native acceptance, override the Tauri identifier in a local-only

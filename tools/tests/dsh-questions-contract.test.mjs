@@ -14,7 +14,27 @@ const contract={
  stateOf<K extends keyof SessionProjectionStateMap>(session: Session, key: K): SessionProjectionStateMap[K] | undefined;`,
  agents:`get(id: SessionId): Agent | undefined; roots(): Agent[];`,
 };
+const currentFold = `interface UserQuestionFold { readonly timed: boolean; readonly questions: UserQuestionProjectionView; }
+export declare const userQuestionProjectionDefinition: {
+ key: "userQuestions";
+ apply: (state: NoInfer<UserQuestionProjectionState>, event: SessionEvent) => UserQuestionProjectionState;
+ wire: { view: (state: NoInfer<UserQuestionProjectionState>) => UserQuestionProjectionView; };
+};`;
+const current = {...contract, fold: currentFold, projections: `onChanged(listener: ProjectionChangeListener): () => void;
+stateOf(session: Session, key: string): unknown;`};
 describe("typed public question lifecycle contracts",()=>{
+ it("accepts the 0.2.2 registered domain fold and retained registry reader",()=>{
+  expect(questionLifecycleContract(current)).toEqual({kind:"timed + continued",missing:[]});
+ });
+ it.each([
+  ["fold", 'key: "userQuestions"', 'key: "other"', "Host question projection registration"],
+  ["fold", "=> UserQuestionProjectionState", "=> unknown", "Host question projection registration"],
+  ["fold", "=> UserQuestionProjectionView", "=> unknown", "Host question projection registration"],
+  ["projections", "key: string", "key: number", "authoritative Host projection read"],
+  ["projections", "): unknown", "): Promise<unknown>", "authoritative Host projection read"],
+ ])("rejects a changed 0.2.2 %s field %s",(field,before,after,label)=>{
+  expect(questionLifecycleContract({...current,[field]:current[field].replace(before,after)}).missing).toContain(label);
+ });
  it("retains the blocking question contract on old builds without timed APIs",()=>{
   expect(questionLifecycleContract({questions:"interface Request { questions: AskUserQuestionItem[]; }"})).toEqual({kind:"blocking",missing:[]});
  });

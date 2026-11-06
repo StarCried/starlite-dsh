@@ -37,6 +37,26 @@ function reply(request:PetInteraction):PetAnswer{return {requestId:request.reque
 afterEach(()=>vi.useRealTimers());
 
 describe("official timed and continued user questions",()=>{
+  it("does not claim or expose approval intent even when a request carries timed metadata",async()=>{
+    const f=await fixture();try{
+      const next=vi.fn(async()=>"official-permission"),count=f.snapshots.length;
+      const batch=questions.map(question=>({...question,intent:{kind:"approval",approve:"Yes",reject:"No"}}));
+      expect(await f.bridge.ask(f.session,{agent:f.agent,questions:batch,wait:{callId:"permission",timed:true}},next)).toBe("official-permission");
+      expect(next).toHaveBeenCalledOnce();expect(f.attachWait).not.toHaveBeenCalled();expect(f.answer).not.toHaveBeenCalled();
+      expect(f.claims()).toBe(0);expect(f.snapshots).toHaveLength(count);
+    }finally{await f.close();}
+  });
+  it("rejects approval-intent projections and retires an ordinary form if its intent changes",async()=>{
+    const f=await fixture();try{
+      const batch=questions.map(question=>({...question,intent:{kind:"approval",approve:"Yes",reject:"No"}}));
+      f.project("continued","permission",batch);await settle();expect(f.request()).toBeUndefined();
+      f.project();await settle();const request=f.request();expect(request).toBeDefined();
+      f.project("continued","PRIVATE-call",batch);await settle();
+      expect(f.bridge.read(request.requestId)).toBeUndefined();expect(f.snapshots.at(-1)?.inputRequest).toBeUndefined();
+      await expect(f.bridge.answer(reply(request))).rejects.toThrow("no longer pending");
+      expect(f.attachWait).not.toHaveBeenCalled();expect(f.answer).not.toHaveBeenCalled();
+    }finally{await f.close();}
+  });
   it("claims the official wait, keeps details and answers once without exposing identities",async()=>{
     const f=await fixture();try{
       const wait=f.wait();await settle();const request=f.request();

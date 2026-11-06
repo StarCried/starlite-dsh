@@ -143,7 +143,12 @@ export class QuestionBridge {
     });
     return answer?{answers:answer.answers}:next();
   }
-  #request(key:unknown,questions:unknown,wait?:PetInteraction["wait"]):PetInteraction{return parsePetInteraction({interactionVersion:1,requestId:randomUUID(),sessionRef:this.aggregator.sessionInfo(key).ref,questions,...(wait?{wait}:{})});}
+  #request(key:unknown,questions:unknown,wait?:PetInteraction["wait"]):PetInteraction{
+    // DSH 0.2.2 can carry permission decisions through its question service.
+    // Delegate the whole batch before projection/wire parsing drops the intent.
+    if(Array.isArray(questions)&&questions.some(item=>record(record(item)?.intent)?.kind==="approval"))throw Error("permission question belongs to DSH");
+    return parsePetInteraction({interactionVersion:1,requestId:randomUUID(),sessionRef:this.aggregator.sessionInfo(key).ref,questions,...(wait?{wait}:{})});
+  }
   #questionService():QuestionService|undefined{
     const service=this.#service("userQuestions");
     return typeof service?.attachWait==="function"&&typeof service.answer==="function"?service as unknown as QuestionService:undefined;

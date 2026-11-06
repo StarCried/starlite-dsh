@@ -11,9 +11,12 @@ export function questionLifecycleContract(sources) {
     ["continued question identity", sources.questions, /interface\s+PendingUserQuestion\s*\{\s*readonly\s+callId:\s*ToolCallId;\s*readonly\s+questions:\s*readonly\s+AskUserQuestionItem\[\];\s*readonly\s+state:\s*UserQuestionState;/u],
     ["active question view", sources.questions, /readonly\s+active:\s*readonly\s+PendingUserQuestion\[\];/u],
     ["Host question fold shape", sources.fold, /interface\s+UserQuestionFold\s*\{\s*readonly\s+timed:\s*boolean;\s*readonly\s+questions:\s*UserQuestionProjectionView;/u],
-    ["Host question projection registration", sources.fold, /interface\s+SessionProjectionStateMap\s*\{\s*userQuestions:\s*UserQuestionProjectionState;/u],
+    ["Host question projection registration", sources.fold, /interface\s+SessionProjectionStateMap\s*\{\s*userQuestions:\s*UserQuestionProjectionState;|const\s+userQuestionProjectionDefinition:\s*\{\s*key:\s*"userQuestions";[\s\S]{0,1600}apply:\s*\(state:\s*NoInfer<UserQuestionProjectionState>,\s*event:\s*SessionEvent\)\s*=>\s*UserQuestionProjectionState;\s*wire:\s*\{[\s\S]{0,400}view:\s*\(state:\s*NoInfer<UserQuestionProjectionState>\)\s*=>\s*UserQuestionProjectionView;/u],
     ["projection change subscription and disposal", sources.projections, /onChanged\(listener:\s*ProjectionChangeListener\):\s*\(\)\s*=>\s*void;/u],
-    ["authoritative Host projection read", sources.projections, /stateOf<K\s+extends\s+keyof\s+SessionProjectionStateMap>\(session:\s*Session,\s*key:\s*K\):\s*SessionProjectionStateMap\[K\]\s*\|\s*undefined;/u],
+    // DSH 0.2.2 keeps the registry reader with an unknown return type. Its
+    // implementation still folds the registered state; the adapter validates
+    // questions.active before exposing any question and never owns registration.
+    ["authoritative Host projection read", sources.projections, /stateOf<K\s+extends\s+keyof\s+SessionProjectionStateMap>\(session:\s*Session,\s*key:\s*K\):\s*SessionProjectionStateMap\[K\]\s*\|\s*undefined;|stateOf\(session:\s*Session,\s*key:\s*string\):\s*unknown;/u],
     ["exact live agent lookup", sources.agents, /get\(id:\s*SessionId\):\s*Agent\s*\|\s*undefined;/u],
     ["live runtime root directory", sources.agents, /roots\(\):\s*Agent\[\];/u],
   ];

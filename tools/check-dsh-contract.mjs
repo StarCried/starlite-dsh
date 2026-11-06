@@ -5,6 +5,7 @@ import { navigationContract } from "./dsh-navigation-contract.mjs";
 import { desktopNavigationContract } from "./dsh-desktop-contract.mjs";
 import { questionLifecycleContract } from "./dsh-questions-contract.mjs";
 import { webServerContract } from "./dsh-webserver-contract.mjs";
+import { nestedToolContract } from "./dsh-nested-tools-contract.mjs";
 
 const dshRoot = resolve(
   process.argv[2]
@@ -27,7 +28,10 @@ const approval = [
   await source("dsh-user-approval/lib/types/index.d.ts"),
   await source("dsh-user-approval/lib/types/types.d.ts"),
 ].join("\n");
-const nestedTools = await source("dsh-tools/lib/types/types.d.ts");
+const nestedTools = nestedToolContract({
+  tools: await optionalSource("dsh-tools/lib/types/types.d.ts"),
+  executor: await optionalSource("dsh-tool-executor-ptc/lib/types/types.d.ts"),
+});
 const llmTypes = await source("dsh-llm/lib/types/types.d.ts");
 const llmMessages = await source("dsh-llm/lib/types/message.d.ts");
 const questions = await source("dsh-user-questions/lib/types/types.d.ts");
@@ -88,14 +92,11 @@ const requirements = [
   ["approval/request callback", approval, /'approval\/request'[^\n]*req:\s*ApprovalRequest(?:Event)?/u],
   ["approval/asked event", approval, /'approval\/asked':\s*\{[\s\S]{0,180}id:\s*ApprovalRequestId;[\s\S]{0,180}toolName:\s*string;/u],
   ["approval/decided event", approval, /'approval\/decided':\s*\{[\s\S]{0,180}id:\s*ApprovalRequestId;[\s\S]{0,180}outcome:\s*ApprovalOutcome;/u],
-  ["nested tool start shape", nestedTools, /interface\s+(?:Code|Ptc)DispatchStartEventData\s*\{[\s\S]{0,260}subCallId:\s*(?:Tool)?CallId;[\s\S]{0,120}name:\s*string;[\s\S]{0,120}arguments:\s*unknown;/u],
-  ["nested tool start event", nestedTools, /'tool\/(?:code|ptc)-dispatch-start':\s*(?:Code|Ptc)DispatchStartEventData/u],
-  ["nested tool finish event", nestedTools, /'tool\/(?:code|ptc)-dispatch':\s*(?:Code|Ptc)DispatchEventData/u],
 ];
 
 const missing = requirements
   .filter(([, contents, pattern]) => !pattern.test(contents))
-  .map(([name]) => name).concat(navigation.missing,questionLifecycle.missing,webServerContract(webServer));
+  .map(([name]) => name).concat(navigation.missing,questionLifecycle.missing,webServerContract(webServer),nestedTools);
 
 if (missing.length > 0) {
   throw new Error(

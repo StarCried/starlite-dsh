@@ -4,6 +4,14 @@ import {QuestionBridge} from "../src/questions.js";
 import type {PetSnapshot} from "@starcried/starlite-dsh-protocol";
 async function fixture(){const snapshots:PetSnapshot[]=[];const aggregator=new DshStateAggregator();await aggregator.start(s=>snapshots.push(s));const open=vi.fn(async()=>{}),bridge=new QuestionBridge(aggregator,open);bridge.setConnected(true);bridge.setEnabled(true);return {bridge,aggregator,snapshots,open}}
 const questions=[{id:"q",question:"Pick",options:[{label:"Yes"},{label:"No"}]}];
+it.each([false,true])("delegates an approval-intent batch to DSH without publishing it (mixed=%s)",async mixed=>{
+ const f=await fixture(),next=vi.fn(async()=>"official-permission");
+ const approval={...questions[0],id:"permission",intent:{kind:"approval",approve:"Yes",reject:"No"}};
+ const batch=mixed?[...questions,approval]:[approval],count=f.snapshots.length;
+ expect(await f.bridge.ask("A",{questions:batch},next)).toBe("official-permission");
+ expect(next).toHaveBeenCalledOnce();expect(f.snapshots).toHaveLength(count);expect(f.snapshots.at(-1)?.inputRequest).toBeUndefined();
+ f.bridge.close();await f.aggregator.stop();
+});
 it("answers the exact pending request once without forwarding identity or arguments",async()=>{
  const f=await fixture(),key={id:"PRIVATE-ID"};f.aggregator.sessionInfo(key,"Named task");
  const next=vi.fn(async()=>({answers:[]}));const answer=f.bridge.ask(key,{questions,agent:{id:"PRIVATE-ID"},arguments:{secret:"PRIVATE"}},next);

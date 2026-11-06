@@ -22,6 +22,12 @@ describe("complete DSH navigation declaration contracts", () => {
   it("accepts workspace navigation only with the authoritative projection contract", () => {
     expect(navigationContract(projected)).toEqual({kind: "projected", missing: []});
   });
+  it("accepts the 0.2.2 unmarked view values while rejecting unrelated aliases", () => {
+    const projections = projected.projections.replace("SessionProjectionMap", "SessionProjectionViewValues");
+    expect(navigationContract({...projected, projections})).toEqual({kind: "projected", missing: []});
+    expect(navigationContract({...projected, projections: projections.replace("SessionProjectionViewValues", "UnknownValues")}).missing)
+      .toContain("projected: projection values");
+  });
   it("accepts the 0.2.1 migration state without accepting unknown lifecycle states", () => {
     const declarations = projected.projections.replace("'ready' | 'error'", "'ready' | 'migration-required' | 'error'");
     expect(navigationContract({...projected, projections: declarations})).toEqual({kind: "projected", missing: []});

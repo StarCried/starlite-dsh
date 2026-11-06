@@ -2,6 +2,14 @@
 
 `0.1.0` 已于 2026-11-03 发布到 npm `latest` 渠道及 GitHub 正式发行。维护、模型诊断、性能与安装依据见 [本地稳定化验收](stabilization.md)。本页公开下载与早期设备手验保留各自的源码、哈希和范围。
 
+## DSH 0.2.2-rc.1 发布前兼容检查（2026-11-06）
+
+从公共 npm 独立安装官方 `@deepseek-ai/dsh@0.2.2-rc.1`，未修改日常 Host。该版将嵌套 PTC 事件声明移到 `dsh-tool-executor-ptc/types`，投影值类型改为 `SessionProjectionViewValues`，问题投影通过具名 definition 声明。契约检查同时覆盖新的声明和此前 `0.2.1-rc.5`，包括普通／超时／继续问题、会话导航、桌面 RPC 与只读费用接口。
+
+官方实现仍保留注册表 `stateOf(session, key)` 并返回当前折叠状态，但已标记弃用、类型为 `unknown`。插件原有边界逐项验证 `questions.active`，本轮未替换问题服务或注册自己的投影；上游真正移除此读口时需要迁移。Windows Node 24.15.0 下，以已公开 `dsh-starlite@0.1.0` 归档完成基线隔离安装、认证首页、适配失败不阻塞 DSH 和退出回收，无付费请求或实际桌宠启动。此项是 Host 基线检查；`0.1.1` 的最终归档仍需另行验证。
+
+新版问答服务可携带 `intent.kind: "approval"` 的明确许可决定，并进入相同的问答 waterfall。插件在协议转换前把包含此意图的整批问题交回 DSH；继续问题投影也拒绝该意图，不发布气泡、不取得等待权、不代答许可。普通问答继续保留原有行为。此兼容修复不表示官方工具审批全部迁入了问答服务。
+
 ## 公开发行 0.1.0（2026-11-03）
 
 [`dsh-starlite@0.1.0`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0) 与 [Release `v0.1.0`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0) 已公开，Release 不是草稿或预发行。发行 tag 和 `SOURCE_REVISION` 均指向 [`d55e2de`](https://github.com/StarCried/starlite-dsh/commit/d55e2de1981f10c69f317d59c163a95cd4498877)，共享运行时固定到 [`63e0718`](https://github.com/StarCried/starlite/commit/63e07182948d88aca6b8c30ab459547a4a19c858)，provenance 为 `dirty: false`。后续文档提交不移动发行 tag，也不替换已公开文件。

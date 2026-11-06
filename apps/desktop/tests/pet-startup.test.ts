@@ -63,6 +63,7 @@ beforeEach(() => {
     getAnimations: () => [{name: "Idle", durationMs: 1_000}],
     playAnimation: vi.fn(async () => "stopped" as const), stopAnimation: vi.fn(), resetCamera: vi.fn(),
     observeInteractionMask: vi.fn(), setPointerPosition: vi.fn(), setPerformanceVisible: vi.fn(),setFrameRate:vi.fn(),setDisplaySize:vi.fn(),setPointerEnabled:vi.fn(),setModelAdjustments:vi.fn(),refreshInteractionMask:vi.fn(), destroy: vi.fn(),
+    setHostPosition:vi.fn(),
   };
   const monitor = {position: {x: 0, y: 0}, size: {width: 1920, height: 1080}, workArea: {position: {x: 0, y: 0}}};
   native.availableMonitors.mockResolvedValue([monitor]); native.primaryMonitor.mockResolvedValue(monitor);
@@ -116,31 +117,59 @@ afterEach(async () => {
 
 describe("desktop hidden-window startup", () => {
   it("shares visible toolbar coverage, persisted controls and paused hot resizing without remounting",async()=>{
-    vi.stubGlobal("innerWidth",576);vi.stubGlobal("innerHeight",1204);
+    vi.stubGlobal("innerWidth",736);vi.stubGlobal("innerHeight",1444);
     try{
       const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
       await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
       const toolbar=await native.createVisitorToolbar.mock.results[0]!.value as VisitorToolbar;
       const options=native.createVisitorToolbar.mock.calls[0]![0] as VisitorToolbarOptions;
-      const region={left:159,top:864,width:152,height:42,viewportWidth:576,viewportHeight:1204};
+      const region={left:292,top:1262,width:152,height:42,viewportWidth:736,viewportHeight:1444};
       expect(toolbar.show).toHaveBeenLastCalledWith(false);
-      cursorListener!({payload:{x:160,y:600}});
+      cursorListener!({payload:{x:300,y:1000}});
       await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("set_menu_interaction_region",{region}));
       uiListener!({payload:{paused:true,visible:true,clickThrough:false}});
       await options.onLarger();expect(native.invoke).toHaveBeenCalledWith("patch_preferences",{patch:{scale:.77}});
       const next=structuredClone(settings);next.preferences.scale=.77;settingsListener!({payload:next});
       await vi.waitFor(()=>expect(controller.setDisplaySize).toHaveBeenCalledWith(246.4,369.6));
+      await vi.waitFor(()=>expect(controller.setHostPosition).toHaveBeenLastCalledWith(expect.any(Number),expect.any(Number),{resetMotion:true}));
       globalThis.dispatchEvent(new Event("resize"));
       await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("set_menu_interaction_region",{region}));
-      expect(toolbar.place).toHaveBeenLastCalledWith(235,864,1000);
+      expect(toolbar.place).toHaveBeenLastCalledWith(368,1262,1000);
       expect(controller.status).toBe("paused");expect(native.mountModel).toHaveBeenCalledOnce();
       await options.onBubbles();expect(native.invoke).toHaveBeenCalledWith("patch_preferences",{patch:{bubblesVisible:false}});
       globalThis.dispatchEvent(new Event("blur"));
       await vi.waitFor(()=>expect(native.invoke.mock.calls.filter(([command])=>command==="set_menu_interaction_region").at(-1)).toEqual(["set_menu_interaction_region",{region:null}]));
-      cursorListener!({payload:{x:160,y:600}});expect(toolbar.show).toHaveBeenLastCalledWith(false);
-      cursorListener!({payload:{x:161,y:600}});expect(toolbar.show).toHaveBeenLastCalledWith(true);
+      cursorListener!({payload:{x:300,y:1000}});expect(toolbar.show).toHaveBeenLastCalledWith(false);
+      cursorListener!({payload:{x:301,y:1000}});expect(toolbar.show).toHaveBeenLastCalledWith(true);
       await options.onHide();expect(native.invoke).toHaveBeenCalledWith("set_pet_visible",{visible:false});
       expect(toolbar.show).toHaveBeenLastCalledWith(false);
+    }finally{vi.unstubAllGlobals();}
+  });
+  it("preserves the open menu screen anchor when an external size expands the reserved range",async()=>{
+    vi.stubGlobal("innerWidth",1216);vi.stubGlobal("innerHeight",2164);
+    try{
+      const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+      await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+      const menu=await native.createQuickMenu.mock.results[0]!.value;
+      menu.isOpen=true;menu.element.style.left="100px";menu.element.style.top="200px";
+      vi.spyOn(menu.element,"getBoundingClientRect").mockImplementation(()=>{
+        const left=parseFloat(menu.element.style.left),top=parseFloat(menu.element.style.top);
+        return {left,top,right:left+200,bottom:top+100,width:200,height:100} as DOMRect;
+      });
+      menu.element.dispatchEvent(new CustomEvent("starlite-menu-change"));
+      let position={x:400,y:400};
+      native.getCurrentWindow.mock.results[0]!.value.outerPosition.mockImplementation(async()=>position);
+      const invoke=native.invoke.getMockImplementation()!;
+      native.invoke.mockImplementation(async(command,args)=>{
+        if(command==="set_model_viewport"&&args.viewport?.baseWidth===960)position={x:160,y:-320};
+        return invoke(command,args);
+      });
+      const next=structuredClone(settings);next.preferences.scale=3;settingsListener!({payload:next});
+      await vi.waitFor(()=>expect(controller.setDisplaySize).toHaveBeenCalledWith(960,1440));
+      expect(menu.element.style.left).toBe("340px");expect(menu.element.style.top).toBe("920px");
+      expect(340+position.x).toBe(500);expect(920+position.y).toBe(600);
+      await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("set_menu_interaction_region",{region:{left:340,top:920,width:200,height:100,viewportWidth:1216,viewportHeight:2164}}));
+      expect(native.mountModel).toHaveBeenCalledOnce();
     }finally{vi.unstubAllGlobals();}
   });
   it("hides work and question bubbles without remounting or intercepting DSH input",async()=>{
@@ -401,28 +430,28 @@ describe("desktop hidden-window startup", () => {
     await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
     await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
     const nativeResizes=native.invoke.mock.calls.filter(([command])=>command==="set_model_viewport").length;
-    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("528px");
+    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("926px");
     y=35;host.dispatchEvent(new CustomEvent("model-viewport-change",{bubbles:true}));
-    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("543px");
+    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("941px");
     y=40;globalThis.dispatchEvent(new Event("resize"));
-    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("548px");
+    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("946px");
     const resized=structuredClone(settings);resized.preferences.scale=.8;
     vi.mocked(controller.setDisplaySize!).mockImplementation(()=>{y=50;});
     settingsListener!({payload:resized});
-    await vi.waitFor(()=>expect(anchor.style.getPropertyValue("--bubble-top")).toBe("558px"));
+    await vi.waitFor(()=>expect(anchor.style.getPropertyValue("--bubble-top")).toBe("894px"));
     const second={...controller,getBubbleAnchor:vi.fn(()=>({x:125,y:120}))};
     let finishMount!:(value:WidgetController)=>void;
     native.mountModel.mockImplementationOnce(()=>new Promise<WidgetController>(resolve=>{finishMount=resolve;}));
     const next=structuredClone(resized);next.models.push({...structuredClone(next.models[0]!),id:"second",modelPath:"C:\\fixture\\second.vrm"});next.activeModelId="second";
     settingsListener!({payload:next});
     await vi.waitFor(()=>expect(native.mountModel).toHaveBeenCalledTimes(2));
-    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("508px");
+    expect(anchor.style.getPropertyValue("--bubble-top")).toBe("844px");
     const oldReads=vi.mocked(controller.getBubbleAnchor).mock.calls.length;
     host.dispatchEvent(new CustomEvent("model-viewport-change",{bubbles:true}));
     expect(controller.getBubbleAnchor).toHaveBeenCalledTimes(oldReads);
     finishMount(second);
-    await vi.waitFor(()=>expect(anchor.style.getPropertyValue("--bubble-top")).toBe("628px"));
-    expect(anchor.style.getPropertyValue("--bubble-left")).toBe("253px");
+    await vi.waitFor(()=>expect(anchor.style.getPropertyValue("--bubble-top")).toBe("964px"));
+    expect(anchor.style.getPropertyValue("--bubble-left")).toBe("365px");
     expect(native.invoke.mock.calls.filter(([command])=>command==="set_model_viewport")).toHaveLength(nativeResizes+1);
     expect(native.connection).toHaveBeenCalledTimes(1);
   });

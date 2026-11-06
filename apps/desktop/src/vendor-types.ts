@@ -45,7 +45,7 @@ export interface WidgetController {
   getBubbleAnchor?(): ModelBubbleAnchor | undefined;
   observeInteractionMask(listener?: (mask: ModelHitMask | undefined) => void): void;
   setPointerPosition(clientX: number, clientY: number): void;
-  setHostPosition?(x: number, y: number): void;
+  setHostPosition?(x: number, y: number, options?:{resetMotion?:boolean}): void;
   setPerformanceVisible?(visible: boolean): void;
   setDisplaySize?(width: number, height: number): void;
   setFrameRate?(fps: number | "display"): void;

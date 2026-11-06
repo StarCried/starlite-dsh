@@ -39,7 +39,12 @@
   in host CSS pixels (no DPR or canvas padding). Reproject after resize, clear on
   model replacement, and never resize the native window from animated bounds.
 - Visitor controls use shared `createVisitorToolbar` and `isModelDrag` exports.
-  Keep the toolbar's CSS size and initial portrait anchor fixed during scaling.
+  Keep the toolbar's CSS size and portrait foot anchor fixed during scaling.
+  Reserve the full quick-control range before mount and scale the body inside
+  it around its bottom center; native geometry preserves that screen anchor.
+  Bubble and host position use the changing body top-left. Reset host motion
+  after viewport changes so size edits do not kick spring physics; compensate
+  an open menu if an external preference expands the reserved range.
   Toolbar and context menu are mutually exclusive and share the native menu
   region; never union their rectangles across transparent space. The shared
   drag threshold is strictly greater than six CSS pixels, including native DPI conversion.

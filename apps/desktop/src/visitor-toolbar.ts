@@ -6,7 +6,7 @@ const LEAVE_DELAY_MS = 650;
 const NEAR_MARGIN = 24;
 
 /** Native cursor events also arrive over transparent pixels and while paused.
- * The reference portrait stays fixed through size/animation changes. */
+ * The viewport keeps the logical portrait's foot point fixed through scaling. */
 export class PetVisitorToolbar {
   #enabled = false;
   #visible = false;
@@ -34,12 +34,10 @@ export class PetVisitorToolbar {
     const p=this.#reference,{width,height}=this.toolbar.dimensions;
     return {left:p.left+p.width/2-width/2,top:p.top+p.height+TOOLBAR_GAP,width,height};
   }
-  place(): void {
+  place(reference:PortraitRect=this.#reference): void {
+    this.#reference={...reference};
     const rect=this.rect;
     this.toolbar.place(rect.left+rect.width/2,rect.top,1000);
-  }
-  setReference(reference:PortraitRect): void {
-    this.clear();this.#reference={...reference};this.place();
   }
   configure(enabled: boolean): void {
     this.#enabled=enabled;

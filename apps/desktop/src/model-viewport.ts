@@ -22,19 +22,13 @@ const MIN_BUBBLE_HEIGHT = 128;
 const BILLING_INSET = 40;
 const RESERVE = MAX_BUBBLE_HEIGHT+BUBBLE_MARGIN+BUBBLE_GAP;
 const PORTRAIT_TOP = VRM_VIEWPORT_PADDING.top+RESERVE;
-const FIXED: ModelViewport = {
-  ...BASE,left:-VRM_VIEWPORT_PADDING.left,top:-PORTRAIT_TOP,
-  width:BASE.width+VRM_VIEWPORT_PADDING.left+VRM_VIEWPORT_PADDING.right,
-  height:BASE.height+VRM_VIEWPORT_PADDING.top+VRM_VIEWPORT_PADDING.bottom+RESERVE,
-};
 
 /** Reserve one stable native surface at mount. Bubble/action changes only affect
  * bubble layout, never native geometry or the model's screen anchor. */
 export class ModelViewportBridge {
   #vrm = false;
   #scale = 1;
-  #menuScale: number | undefined;
-  #toolbarExtent: {right:number;bottom:number} | undefined;
+  #envelopeScale = 1.5;
   #viewport = BASE;
   #screenSpace: number | undefined;
   #bubbleAnchor: ModelBubbleAnchor | undefined;
@@ -66,34 +60,21 @@ export class ModelViewportBridge {
     if (vrm === this.#vrm && (!vrm || scale === this.#scale)) return this.#tail;
     this.#vrm = vrm;
     this.#scale = scale;
+    this.#envelopeScale=vrm?Math.max(this.#envelopeScale,scale):1.5;
     this.#updateViewport();
-    return this.#tail;
-  }
-
-  /** Keep the native surface large enough for the entire slider range until
-   * the menu closes. Shrinking the window beneath a captured slider moves or
-   * clips that control even when its own CSS position is fixed. */
-  reserveMenuSpace(open: boolean): Promise<void> {
-    const next = open ? Math.max(1.5, this.#menuScale ?? this.#scale) : undefined;
-    if (next === this.#menuScale) return this.#tail;
-    this.#menuScale = next;
-    if (this.#vrm) this.#updateViewport();
-    return this.#tail;
-  }
-
-  /** Preserve the fixed toolbar anchor even when its portrait is made smaller. */
-  reserveToolbarSpace(rect: {left:number;top:number;width:number;height:number}): Promise<void> {
-    this.#toolbarExtent={right:Math.ceil(rect.left+rect.width+12),bottom:Math.ceil(rect.top+rect.height+12)};
-    if(this.#vrm&&(this.#toolbarExtent.right>this.#viewport.width||this.#toolbarExtent.bottom>this.#viewport.height))this.#updateViewport();
     return this.#tail;
   }
 
   #updateViewport(): void {
     const baseWidth = Math.round(BASE.width * this.#scale), baseHeight = Math.round(BASE.height * this.#scale);
-    const envelope = Math.max(this.#scale, this.#menuScale ?? this.#scale);
-    this.#apply(this.#vrm ? {...FIXED, baseWidth, baseHeight,
-      width:Math.max(this.#toolbarExtent?.right??0,Math.round(BASE.width * envelope) + VRM_VIEWPORT_PADDING.left + VRM_VIEWPORT_PADDING.right),
-      height:Math.max(this.#toolbarExtent?.bottom??0,Math.round(BASE.height * envelope) + VRM_VIEWPORT_PADDING.top + VRM_VIEWPORT_PADDING.bottom + RESERVE)} : null);
+    const width=Math.round(BASE.width*this.#envelopeScale),height=Math.round(BASE.height*this.#envelopeScale);
+    // Reserve the full quick-control range once. The body scales around this
+    // fixed foot point; toolbar and captured menu sliders keep their position.
+    this.#apply(this.#vrm ? {baseWidth,baseHeight,
+      left:baseWidth/2-(VRM_VIEWPORT_PADDING.left+width/2),
+      top:baseHeight-(PORTRAIT_TOP+height),
+      width:width+VRM_VIEWPORT_PADDING.left+VRM_VIEWPORT_PADDING.right,
+      height:height+PORTRAIT_TOP+VRM_VIEWPORT_PADDING.bottom} : null);
   }
 
   hostPosition(position: {x:number;y:number}, scale: number): {x:number;y:number} {
@@ -152,8 +133,9 @@ export class ModelViewportBridge {
     // Measure after setting max-height so a previously clipped question cannot
     // leave a later short balance card stuck at its old position. At the screen
     // edge only the bubble moves; the model keeps its user-chosen screen anchor.
-    const workTop = above === undefined ? BUBBLE_MARGIN : PORTRAIT_TOP-above+BUBBLE_MARGIN;
-    const top = Math.max(BUBBLE_MARGIN,PORTRAIT_TOP+inset-BUBBLE_GAP-visibleHeight,workTop);
+    const bodyTop=-this.#viewport.top;
+    const workTop = above === undefined ? BUBBLE_MARGIN : bodyTop-above+BUBBLE_MARGIN;
+    const top = Math.max(BUBBLE_MARGIN,bodyTop+inset-BUBBLE_GAP-visibleHeight,workTop);
     const halfWidth = (BASE.width-32)/2;
     const left = Math.max(BUBBLE_MARGIN+halfWidth,Math.min(this.#viewport.width-BUBBLE_MARGIN-halfWidth,
       -this.#viewport.left+(this.#bubbleAnchor?.x ?? this.#viewport.baseWidth/2)));

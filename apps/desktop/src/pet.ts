@@ -68,7 +68,7 @@ export async function startPet(): Promise<void> {
   let ui:PetUiState={paused:false,visible:true,clickThrough:false};
   let quickMenu:PetQuickMenu|undefined;
   let visitorToolbar:PetVisitorToolbar|undefined;
-  let toolbarReferenceReady=false;
+  let resetHostMotion=false;
   let menuOpenGeneration=0;
   let connected = false;
   let connection: StatusConnection | undefined;
@@ -167,15 +167,30 @@ export async function startPet(): Promise<void> {
     ()=>!closing&&Boolean(controller)&&!viewport.pending,
     position=>{
       const point=viewport.hostPosition(position,position.scale);
-      controller?.setHostPosition?.(point.x,point.y);
+      controller?.setHostPosition?.(point.x,point.y,resetHostMotion?{resetMotion:true}:undefined);
+      resetHostMotion=false;
       const space=screenSpaceAboveModel(point,position.scale,position.monitors,viewport.modelRect);
       if(space!==undefined)viewport.setScreenSpace(space);
     },
   );
   const viewport = new ModelViewportBridge(host,anchor,
-    value=>geometryInvoke("set_model_viewport",{viewport:value}),
-    ()=>{hostPosition.invalidate();interaction.invalidateForViewport();regionPending=null;menuRegionPending=null;},
-    ()=>{updateRegion();updateMenuRegion();void hostPosition.sync().catch(()=>{});},
+    value=>geometryTask(async()=>{
+      // Ordinary scale changes stay inside the fixed surface. If an external
+      // preference expands that range, compensate an already-open menu once.
+      const menu=quickMenu?.isOpen?quickMenu:undefined,generation=menuOpenGeneration;
+      const rect=menu?.element.getBoundingClientRect();
+      const before=menu?await window.outerPosition():undefined;
+      await invoke("set_model_viewport",{viewport:value});
+      if(menu&&rect&&before){
+        const after=await window.outerPosition();
+        if(menu.isOpen&&generation===menuOpenGeneration){
+          menu.element.style.left=`${rect.left+(before.x-after.x)/(devicePixelRatio||1)}px`;
+          menu.element.style.top=`${rect.top+(before.y-after.y)/(devicePixelRatio||1)}px`;
+        }
+      }
+    }),
+    ()=>{resetHostMotion=true;hostPosition.invalidate();interaction.invalidateForViewport();regionPending=null;menuRegionPending=null;},
+    ()=>{visitorToolbar?.place(viewport.modelRect);updateRegion();updateMenuRegion();void hostPosition.sync().catch(()=>{});},
     ()=>{void window.hide();void invoke("open_settings");},
     bubble,updateRegion,
   );
@@ -259,11 +274,6 @@ export async function startPet(): Promise<void> {
     if (!enabled) void window.hide();
     await viewport.configure(enabled,next.preferences.scale);
     if(generation!==mountGeneration)return;
-    if(enabled&&visitorToolbar&&!toolbarReferenceReady){
-      visitorToolbar.setReference(viewport.modelRect);toolbarReferenceReady=true;
-      await viewport.reserveToolbarSpace(visitorToolbar.rect);
-      if(generation!==mountGeneration)return;
-    }
     host.replaceChildren(); empty.hidden = !enabled || Boolean(model);
     syncInputAvailable();
     if (!enabled || !model) return;
@@ -301,7 +311,6 @@ export async function startPet(): Promise<void> {
     const open=quickMenu?.isOpen===true;
     if(!open)++menuOpenGeneration;
     syncVisitorToolbar();
-    void viewport.reserveMenuSpace(open).then(()=>{controller?.refreshInteractionMask?.();updateMenuRegion();}).catch(()=>{});
     updateMenuRegion();
   };
   const closeQuickMenu=()=>{++menuOpenGeneration;quickMenu?.close();visitorToolbar?.clear();cancelClick();syncMenuSurface();};
@@ -459,8 +468,6 @@ export async function startPet(): Promise<void> {
     onBubbles:async()=>{await invoke("patch_preferences",{patch:{bubblesVisible:settings.preferences.bubblesVisible===false}});},
     onHide:async()=>{visitorToolbar?.clear();await invoke("set_pet_visible",{visible:false});},
   }),viewport.modelRect,updateMenuRegion);
-  toolbarReferenceReady=modelAvailable();
-  await viewport.reserveToolbarSpace(visitorToolbar.rect);
   syncVisitorToolbar();
   cancelClick=installPointerBehavior(host, {
     begin: (x, y) => invoke("begin_model_drag",{x,y}),
@@ -472,7 +479,7 @@ export async function startPet(): Promise<void> {
   }, () => {void fees.show(); void animator?.click();}, (x, y) => interaction.hitTest(x, y), await loadModelDragGesture(), (x,y) => {
     visitorToolbar?.clear();
     const generation=++menuOpenGeneration;
-    void viewport.reserveMenuSpace(true).then(async()=>{
+    void viewport.ready().then(async()=>{
       // Native set_size acknowledges before WebView layout necessarily catches
       // up. Complete that layout before the one-time placement measurement.
       await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));

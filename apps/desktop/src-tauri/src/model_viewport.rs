@@ -1,4 +1,4 @@
-//! Expand the transparent VRM window without moving or scaling its logical model area.
+//! Expand the transparent VRM surface while retaining the portrait's bottom-center anchor.
 use std::sync::{Arc, Mutex, TryLockError};
 
 use serde::Deserialize;
@@ -312,12 +312,15 @@ fn geometry(
     scale: f64,
 ) -> Result<Geometry, String> {
     let size = physical_size(next, scale)?;
-    // Round each padding separately: repeated fractional-DPI expansion/collapse
-    // must not gradually move the character on screen.
+    // Preserve the physical foot anchor when portrait size or padding changes.
+    // Round each endpoint instead of each delta, so repeated fractional-DPI
+    // zooms and expand/restore cycles cannot accumulate window-position drift.
     let previous = previous.unwrap_or_else(|| next.base());
     let delta = PhysicalPosition::new(
-        (next.left * scale).round() as i32 - (previous.left * scale).round() as i32,
-        (next.top * scale).round() as i32 - (previous.top * scale).round() as i32,
+        ((-previous.left + previous.base_width / 2.0) * scale).round() as i32
+            - ((-next.left + next.base_width / 2.0) * scale).round() as i32,
+        ((-previous.top + previous.base_height) * scale).round() as i32
+            - ((-next.top + next.base_height) * scale).round() as i32,
     );
     Ok(Geometry {
         position: PhysicalPosition::new(
@@ -513,7 +516,7 @@ mod tests {
     }
 
     #[test]
-    fn true_model_scaling_preserves_body_anchor_and_validates_aspect() {
+    fn true_model_scaling_preserves_body_bottom_center_and_validates_aspect() {
         let previous = fixed_vrm_viewport();
         let origin = PhysicalPosition::new(200, -100);
         for model_scale in [0.25_f64, 0.5, 0.73, 1.0, 1.5, 3.0] {
@@ -528,7 +531,10 @@ mod tests {
             };
             for dpi in [1.0, 1.25, 1.5, 2.0] {
                 let resized = geometry(Some(previous), next, origin, dpi).unwrap();
-                assert_eq!(resized.position, origin);
+                assert_eq!(
+                    physical_body_anchor(next, resized.position, dpi),
+                    physical_body_anchor(previous, origin, dpi)
+                );
                 assert_eq!(resized.size.width, (next.width * dpi).round() as u32);
             }
             assert!(ModelViewport {
@@ -537,6 +543,101 @@ mod tests {
             }
             .validate()
             .is_err());
+        }
+    }
+
+    fn physical_body_anchor(
+        viewport: ModelViewport,
+        position: PhysicalPosition<i32>,
+        dpi: f64,
+    ) -> PhysicalPosition<i32> {
+        PhysicalPosition::new(
+            position.x + ((-viewport.left + viewport.base_width / 2.0) * dpi).round() as i32,
+            position.y + ((-viewport.top + viewport.base_height) * dpi).round() as i32,
+        )
+    }
+
+    fn reserved_vrm_viewport(model_scale: f64, envelope: f64) -> ModelViewport {
+        let base_width = (320.0 * model_scale).round();
+        let base_height = (480.0 * model_scale).round();
+        let envelope_width = (320.0 * envelope).round();
+        let envelope_height = (480.0 * envelope).round();
+        ModelViewport {
+            left: base_width / 2.0 - (128.0 + envelope_width / 2.0),
+            top: base_height - (532.0 + envelope_height),
+            width: envelope_width + 256.0,
+            height: envelope_height + 724.0,
+            base_width,
+            base_height,
+        }
+    }
+
+    #[test]
+    fn reserved_zoom_keeps_window_toolbar_and_foot_anchor_fixed_without_clipping() {
+        for envelope in [1.5, 3.0] {
+            for dpi in [1.0, 1.25, 1.5, 2.0] {
+                let origin = PhysicalPosition::new(-1500, -400);
+                let mut current = reserved_vrm_viewport(0.67, envelope);
+                let anchor = physical_body_anchor(current, origin, dpi);
+                let mut position = origin;
+                for _ in 0..20 {
+                    for model_scale in [0.25, 1.5, 0.5, envelope, 0.73, 0.67] {
+                        let next = reserved_vrm_viewport(model_scale, envelope);
+                        let resized = geometry(Some(current), next, position, dpi).unwrap();
+                        assert_eq!(resized.position, origin);
+                        assert_eq!(resized.delta, PhysicalPosition::new(0, 0));
+                        assert_eq!(physical_body_anchor(next, resized.position, dpi), anchor);
+                        // The fixed foot anchor also fixes the toolbar beneath it.
+                        // All scales retain the renderer's entire gesture padding.
+                        assert!(-next.left >= 128.0);
+                        assert!(-next.top >= 532.0);
+                        assert!(next.width + next.left - next.base_width >= 128.0);
+                        assert!(next.height + next.top - next.base_height >= 192.0);
+                        position = resized.position;
+                        current = next;
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn reserved_mount_zoom_exit_and_reopen_preserve_the_saved_screen_anchor() {
+        for dpi in [1.0, 1.25, 1.5, 2.0] {
+            let origin = PhysicalPosition::new(-625, 330);
+            let initial = reserved_vrm_viewport(0.67, 1.5);
+            let mounted = geometry(None, initial, origin, dpi).unwrap();
+            let anchor = physical_body_anchor(initial.base(), origin, dpi);
+            assert_eq!(physical_body_anchor(initial, mounted.position, dpi), anchor);
+            let smaller = reserved_vrm_viewport(0.5, 1.5);
+            let resized = geometry(Some(initial), smaller, mounted.position, dpi).unwrap();
+            let dragged = PhysicalPosition::new(resized.position.x + 35, resized.position.y - 20);
+            let saved = geometry(Some(smaller), smaller.base(), dragged, dpi).unwrap();
+            assert_eq!(
+                physical_body_anchor(smaller.base(), saved.position, dpi),
+                PhysicalPosition::new(anchor.x + 35, anchor.y - 20)
+            );
+            let reopened = geometry(None, smaller, saved.position, dpi).unwrap();
+            assert_eq!(reopened.position, dragged);
+            assert_eq!(reopened.size, resized.size);
+        }
+    }
+
+    #[test]
+    fn menu_surface_expansion_without_portrait_changes_never_moves_the_window() {
+        let previous = reserved_vrm_viewport(0.67, 1.5);
+        let larger_surface = ModelViewport {
+            width: previous.width + 160.0,
+            height: previous.height + 240.0,
+            ..previous
+        };
+        let position = PhysicalPosition::new(250, -170);
+        for dpi in [1.0, 1.25, 1.5, 2.0] {
+            let expanded = geometry(Some(previous), larger_surface, position, dpi).unwrap();
+            assert_eq!(expanded.position, position);
+            assert_eq!(expanded.delta, PhysicalPosition::new(0, 0));
+            let closed = geometry(Some(larger_surface), previous, expanded.position, dpi).unwrap();
+            assert_eq!(closed.position, position);
         }
     }
 

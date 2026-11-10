@@ -61,7 +61,7 @@ export async function startPet(): Promise<void> {
   const slot = await createModelSlot();
   let mountGeneration = 0;
   let controller: WidgetController | undefined;
-  const samplingOverlay = new EnvironmentSamplingOverlay(t("环境补光采样区域"));
+  const samplingOverlay = new EnvironmentSamplingOverlay(t("环境光采样区域"));
   const environmentLighting = new EnvironmentLightingBridge(
     async () => {
       // The normal click mask is throttled. A fresh pose avoids sampling into

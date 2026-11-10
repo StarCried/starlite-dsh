@@ -41,6 +41,9 @@
   generation checks must run before storing or applying an asynchronous result.
   Window movement alone must not discard the whole sample. Keep each captured
   patch associated with its rectangle when filtering possible self-overlap.
+- Name the lighting feature “环境光 / Environment lighting” and its intensity
+  “环境光强度 / Lighting strength” in current UI/docs; keep environmentLighting
+  API/config names and saved preference keys unchanged.
 - The user-facing toggle is “显示调试信息 / Show debug info”; preserve the existing
   performanceOverlay setting and runtime API. Sampling frames show only with
   debug and lighting enabled, using native-returned accepted patch geometry.

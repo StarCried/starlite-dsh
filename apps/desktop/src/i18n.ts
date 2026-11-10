@@ -40,12 +40,12 @@ export function translateTemplate(root: HTMLElement): void {
 }
 
 export const EN: Readonly<Record<string, string>> = {
-  "环境补光": "Environment lighting",
-  "环境补光采样区域": "Environment lighting sample regions",
-  "补光强度": "Tint strength",
-  "补光强度（%）": "Tint strength (%)",
+  "环境光": "Environment lighting",
+  "环境光采样区域": "Environment lighting sample regions",
+  "环境光强度": "Lighting strength",
+  "环境光强度（%）": "Lighting strength (%)",
   "仅在本机读取角色周边颜色，不保存或上传图像。": "Samples nearby colors locally. No images are saved or uploaded.",
-  "补光强度必须在 0% 到 200% 之间。": "Tint strength must be between 0% and 200%.",
+  "环境光强度必须在 0% 到 200% 之间。": "Lighting strength must be between 0% and 200%.",
   "暂不可用": "Unavailable",
   "部分记录": "Partial records",
   "{count} 次未计入": "{count} requests not priced",

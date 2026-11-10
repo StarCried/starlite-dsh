@@ -364,7 +364,7 @@ function readPreferences(): DesktopPreferences {
   if (fps !== 30 && fps !== 60) throw new Error(t("帧率只能是 30 或 60。"));
   if (!Number.isFinite(maxDevicePixelRatio) || maxDevicePixelRatio < 1 || maxDevicePixelRatio > 1.5) throw new Error(t("DPR 上限必须在 1 到 1.5 之间。"));
   if (!Number.isFinite(scale) || scale < 0.25 || scale > 3) throw new Error(t("模型缩放必须在 0.25 到 3 之间。"));
-  if (typeof environmentLightingStrength !== "number" || !Number.isFinite(environmentLightingStrength) || environmentLightingStrength < 0 || environmentLightingStrength > 2) throw new Error(t("补光强度必须在 0% 到 200% 之间。"));
+  if (typeof environmentLightingStrength !== "number" || !Number.isFinite(environmentLightingStrength) || environmentLightingStrength < 0 || environmentLightingStrength > 2) throw new Error(t("环境光强度必须在 0% 到 200% 之间。"));
   return {fps,maxDevicePixelRatio,scale,privacyMode,bubbleMode,performanceOverlay,pointerEnabled:pointerEnabled!==false,bubblesVisible:bubblesVisible!==false,environmentLightingEnabled:environmentLightingEnabled!==false,environmentLightingStrength};
 }
 

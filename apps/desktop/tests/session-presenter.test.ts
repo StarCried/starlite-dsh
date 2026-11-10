@@ -50,6 +50,14 @@ it("deduplicates frames and renews the same owner without recapturing the baseli
   expect(f.view.play).toHaveBeenCalledOnce();expect(f.view.enter).toHaveBeenCalledOnce();
   expect(f.presenter.owner?.title).toBe("Renamed");expect(f.view.stop).not.toHaveBeenCalled();
 });
+it("keeps idle running for text-only presentation after interrupting a foreground action",async()=>{
+  const f=fixture();await f.acquire();f.presenter.receive(frame({kind:"perform",animation:"Wave"}));
+  const text=frame({kind:"perform",text:"Just talking",durationMs:1200});f.presenter.receive(text);
+  expect(f.view.stop).toHaveBeenCalledOnce();expect(f.view.idle).toHaveBeenCalledTimes(2);
+  f.playbacks[0]!.resolve("interrupted");await vi.advanceTimersByTimeAsync(1200);
+  expect(f.view.ack).toHaveBeenLastCalledWith(expect.objectContaining({commandId:text.commandId,status:"completed"}));
+  expect(f.view.idle).toHaveBeenCalledTimes(2);
+});
 it("rejects missing animations, hidden text and nonfinite geometry without disrupting the current performance",async()=>{
   const f=fixture();await f.acquire();f.presenter.receive(frame({kind:"perform",animation:"Wave"}));
   f.presenter.receive(frame({kind:"perform",animation:"wave",text:"bad"}));

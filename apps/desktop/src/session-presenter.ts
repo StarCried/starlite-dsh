@@ -94,6 +94,7 @@ export class SessionPresenter {
       let playback:Promise<AnimationPlaybackResult>|undefined;
       try{if(frame.animation)playback=this.view.play(frame.animation);}
       catch{this.#performance=undefined;this.#ack(frame,"rejected","failed");this.view.idle();return;}
+      if(!frame.animation)this.view.idle();
       if(frame.text){
         this.#bubbleOwner=pending;
         this.view.bubble(frame.text,this.#owner.title);

@@ -206,14 +206,14 @@ struct Geometry {
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ModelBodyRect {
-    left: f64,
-    top: f64,
-    width: f64,
-    height: f64,
+    pub(crate) left: f64,
+    pub(crate) top: f64,
+    pub(crate) width: f64,
+    pub(crate) height: f64,
 }
 
 impl ModelBodyRect {
-    fn validate(&self) -> Result<(), String> {
+    pub(crate) fn validate(&self) -> Result<(), String> {
         if ![self.left, self.top, self.width, self.height]
             .iter()
             .all(|v| v.is_finite())
@@ -375,7 +375,8 @@ pub fn set_model_viewport(
 /// temporary transparent margin that would be subtracted again next launch.
 pub fn restore_before_exit(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
-        let _ = set_model_viewport(window, app.state(), app.state(), None);
+        let _ = set_model_viewport(window.clone(), app.state(), app.state(), None);
+        crate::session_stage::restore_before_exit(&window);
     }
 }
 

@@ -107,6 +107,8 @@ pub struct DesktopPreferences {
     pub environment_lighting_enabled: bool,
     #[serde(default = "default_environment_lighting_strength")]
     pub environment_lighting_strength: f64,
+    #[serde(default)]
+    pub session_control_enabled: bool,
 }
 
 fn default_environment_lighting_strength() -> f64 {
@@ -131,6 +133,7 @@ pub struct PreferencesPatch {
     pub pointer_enabled: Option<bool>,
     pub environment_lighting_enabled: Option<bool>,
     pub environment_lighting_strength: Option<f64>,
+    pub session_control_enabled: Option<bool>,
 }
 
 impl PreferencesPatch {
@@ -154,6 +157,9 @@ impl PreferencesPatch {
             environment_lighting_strength: self
                 .environment_lighting_strength
                 .unwrap_or(current.environment_lighting_strength),
+            session_control_enabled: self
+                .session_control_enabled
+                .unwrap_or(current.session_control_enabled),
         };
         validate_preferences(&next)?;
         Ok(next)
@@ -181,6 +187,7 @@ impl Default for DesktopPreferences {
             pointer_enabled: true,
             environment_lighting_enabled: true,
             environment_lighting_strength: default_environment_lighting_strength(),
+            session_control_enabled: false,
         }
     }
 }
@@ -1244,6 +1251,33 @@ mod tests {
             serde_json::to_value(next).unwrap(),
             serde_json::to_value(unchanged).unwrap()
         );
+    }
+
+    #[test]
+    fn session_control_is_opt_in_and_partial_preferences_preserve_it() {
+        let mut value = serde_json::to_value(DesktopPreferences::default()).unwrap();
+        value
+            .as_object_mut()
+            .unwrap()
+            .remove("sessionControlEnabled");
+        let old: DesktopPreferences = serde_json::from_value(value).unwrap();
+        assert!(!old.session_control_enabled);
+        let enable: PreferencesPatch =
+            serde_json::from_value(serde_json::json!({"sessionControlEnabled":true})).unwrap();
+        let enabled = enable.apply(&old).unwrap();
+        assert!(enabled.session_control_enabled);
+        let other: PreferencesPatch =
+            serde_json::from_value(serde_json::json!({"bubblesVisible":false})).unwrap();
+        let next = other.apply(&enabled).unwrap();
+        assert!(next.session_control_enabled);
+        assert!(!next.bubbles_visible);
+        let round_trip: DesktopPreferences =
+            serde_json::from_value(serde_json::to_value(next).unwrap()).unwrap();
+        assert!(round_trip.session_control_enabled);
+        assert!(serde_json::from_value::<PreferencesPatch>(
+            serde_json::json!({"sessionControlEnabled":"true"})
+        )
+        .is_err());
     }
 
     #[test]

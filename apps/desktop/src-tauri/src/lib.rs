@@ -5,6 +5,7 @@ mod locale;
 mod model;
 mod model_viewport;
 mod native_messages;
+mod session_stage;
 mod settings;
 mod startup;
 mod tray;
@@ -208,6 +209,7 @@ pub fn run() {
         .manage(tray::UiState::default())
         .manage(hit_test::HitTestState::default())
         .manage(model_viewport::ModelViewportState::default())
+        .manage(session_stage::SessionStageState::default())
         .manage(settings::SettingsWriteState::default())
         .manage(environment::EnvironmentSamplingState::default())
         .invoke_handler(tauri::generate_handler![
@@ -233,6 +235,9 @@ pub fn run() {
             hit_test::set_bubble_interaction_region,
             hit_test::set_menu_interaction_region,
             model_viewport::restore_default_position,
+            session_stage::begin_session_stage,
+            session_stage::set_session_stage_position,
+            session_stage::end_session_stage,
             tray::get_pet_ui_state,
             tray::set_pet_paused,
             tray::set_pet_visible,

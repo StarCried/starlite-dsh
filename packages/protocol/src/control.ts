@@ -16,6 +16,7 @@ export interface ControlStage { position?: { x: number; y: number }; scale?: num
 interface ControlEnvelope { controlVersion: 1; sequence: number; leaseId: string; commandId: string; leaseMs: number }
 export type ControlFrame = ControlEnvelope & (
   | { kind: "acquire"; sessionTitle: string }
+  | { kind: "activity" }
   | ({ kind: "perform" } & ControlPerform)
   | ({ kind: "stage" } & ControlStage)
   | { kind: "cancel"; targetId: string }
@@ -75,6 +76,7 @@ export function parseControlFrame(value: unknown): ControlFrame {
   if (!Number.isSafeInteger(envelope.sequence)) throw Error("invalid sequence");
   let result: ControlFrame;
   if (row.kind === "acquire") { keys(row, [...common, "sessionTitle"]); result = { ...envelope, kind: "acquire", sessionTitle: text(row.sessionTitle, 120) }; }
+  else if (row.kind === "activity") { keys(row, common); result = { ...envelope, kind: "activity" }; }
   else if (row.kind === "perform") { keys(row, [...common, "animation", "text", "durationMs", "stop"]); result = { ...envelope, kind: "perform", ...parseControlPerform(without(row, common)) }; }
   else if (row.kind === "stage") { keys(row, [...common, "position", "scale", "pointerEnabled"]); result = { ...envelope, kind: "stage", ...parseControlStage(without(row, common)) }; }
   else if (row.kind === "cancel") { keys(row, [...common, "targetId"]); result = { ...envelope, kind: "cancel", targetId: ref(row.targetId) }; }

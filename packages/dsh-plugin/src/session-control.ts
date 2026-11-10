@@ -50,11 +50,12 @@ export class SessionControl {
     if (signal.aborted) return result("interrupted", "cancelled");
     if (!this.ready) return result("rejected", this.enabled ? "unavailable" : "disabled");
     if (this.owner && this.owner.session !== session) return result("rejected", "busy");
+    if ([...this.pending.values()].some(item => item.frame.kind === "acquire")) return result("rejected", "busy");
     if (!this.owner) {
       this.owner = { session, leaseId: randomUUID(), title: sanitizeBubbleText(title, 60).slice(0, 120) || "DSH session", timer: setTimeout(() => this.release("expired"), CONTROL_LEASE_MS) };
       this.owner.timer.unref(); this.changed();
     }
-    this.interruptKind("acquire"); this.renew();
+    this.renew();
     const leaseId = this.owner.leaseId;
     const outcome = await this.send({ kind: "acquire", sessionTitle: this.owner.title }, signal, ACK_TIMEOUT_MS);
     if (outcome.status === "rejected" && this.owner?.leaseId === leaseId) this.release("unavailable");

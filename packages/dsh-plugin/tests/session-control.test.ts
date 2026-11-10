@@ -31,6 +31,15 @@ it("waits for actual completion and ignores late or foreign acknowledgements", a
   control.acknowledge({ controlVersion: 1, leaseId: randomUUID(), commandId: frame.commandId, status: "completed" }); await Promise.resolve(); expect(finished).not.toHaveBeenCalled();
   ack(frame); expect(await pending).toEqual({ status: "completed" }); ack(frame, "rejected"); expect(control.active).toBe(true);
 });
+it("does not cancel an in-flight acquisition and renews an acknowledged lease idempotently", async () => {
+  const { control, frames, ack, session, signal } = setup();
+  const first = control.acquire(session, "Title", signal), frame = frames.at(-1)!;
+  expect(await control.acquire(session, "Title", signal)).toEqual({ status: "rejected", reason: "busy" }); expect(frames).toHaveLength(1);
+  ack(frame); await first;
+  const renewed = control.acquire(session, "Title", signal), renewal = frames.at(-1)!;
+  expect(renewal.kind).toBe("acquire"); expect(renewal.leaseId).toBe(frame.leaseId); expect(renewal.commandId).not.toBe(frame.commandId);
+  ack(renewal); expect(await renewed).toEqual({ status: "completed" });
+});
 it("latest performance wins without a queue or cross-session cancellation", async () => {
   const { control, frames, ack, acquire, session, signal } = setup(); await acquire();
   const old = control.perform(session, { animation: "Wave" }, signal), oldFrame = frames.at(-1)!;

@@ -38,6 +38,21 @@ it("keeps controls fixed in CSS pixels when the displayed portrait changes size"
   }
   expect(rect).toEqual({left:159,top:864,width:152,height:42});bridge.destroy();
 });
+it("re-centers the optional control button width without revealing a hidden toolbar or shifting its foot anchor",()=>{
+  const {toolbar,bridge,changed}=fixture();
+  let controlActive=false;
+  Object.defineProperty(toolbar,"dimensions",{get:()=>({width:controlActive?188:152,height:42})});
+  for(const active of [true,false]){
+    controlActive=active;bridge.place(portrait);
+    expect(bridge.visible).toBe(false);expect(changed).not.toHaveBeenCalled();
+    expect(toolbar.place).toHaveBeenLastCalledWith(235,864,1000);
+    expect(bridge.rect.width).toBe(active?188:152);
+    expect(bridge.rect.left+bridge.rect.width/2).toBe(235);
+  }
+  bridge.pointer(150,600,portrait);expect(bridge.visible).toBe(true);
+  controlActive=true;bridge.place(portrait);expect(bridge.visible).toBe(true);expect(changed).toHaveBeenCalledOnce();
+  bridge.destroy();
+});
 it("releases real button focus when native blur clears the visible toolbar region",()=>{
   const {toolbar,bridge,changed}=fixture(),button=document.createElement("button");
   toolbar.element.append(button);document.body.append(toolbar.element);

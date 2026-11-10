@@ -5,7 +5,7 @@ import type {AnimationPlaybackResult} from "../src/vendor-types.js";
 
 const leaseId="123e4567-e89b-42d3-a456-426614174000";
 let sequence=0;
-type Command=({kind:"acquire";sessionTitle:string}|{kind:"perform";animation?:string;text?:string;durationMs?:number;stop?:true}|{kind:"stage";scale?:number;pointerEnabled?:boolean;position?:{x:number;y:number}}|{kind:"cancel";targetId:string}|{kind:"release";reason:"user"});
+type Command=({kind:"acquire";sessionTitle:string}|{kind:"activity"}|{kind:"perform";animation?:string;text?:string;durationMs?:number;stop?:true}|{kind:"stage";scale?:number;pointerEnabled?:boolean;position?:{x:number;y:number}}|{kind:"cancel";targetId:string}|{kind:"release";reason:"user"});
 const frame=(value:Command):ControlFrame=>({controlVersion:1,sequence:++sequence,leaseId,commandId:`123e4567-e89b-42d3-a456-${String(sequence).padStart(12,"0")}`,leaseMs:CONTROL_LEASE_MS,...value});
 function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>{resolve=done;});return{promise,resolve};}
 function fixture(){
@@ -24,10 +24,10 @@ afterEach(()=>{vi.clearAllTimers();vi.useRealTimers();});
 it("starts text and named motion together, keeps text for its requested lifetime, and returns to idle",async()=>{
   const f=fixture();await f.acquire();
   const command=frame({kind:"perform",animation:"Wave",text:"Hello <b>plain</b>",durationMs:5000});f.presenter.receive(command);
-  expect(f.view.play).toHaveBeenCalledWith("Wave");expect(f.view.bubble).toHaveBeenLastCalledWith("Hello <b>plain</b>","Test session");
+  expect(f.view.play).toHaveBeenCalledWith("Wave");expect(f.view.bubble).toHaveBeenLastCalledWith("Hello <b>plain</b>");
   expect(f.view.ack).toHaveBeenLastCalledWith(expect.objectContaining({commandId:command.commandId,status:"started"}));
   f.playbacks[0]!.resolve("completed");await Promise.resolve();
-  expect(f.view.idle).toHaveBeenCalledTimes(2);expect(f.view.bubble).toHaveBeenLastCalledWith("Hello <b>plain</b>","Test session");
+  expect(f.view.idle).toHaveBeenCalledTimes(2);expect(f.view.bubble).toHaveBeenLastCalledWith("Hello <b>plain</b>");
   await vi.advanceTimersByTimeAsync(5000);expect(f.view.bubble).toHaveBeenLastCalledWith(undefined);
 });
 it("interrupts replaced playback exactly once and ignores its late completion and timer",async()=>{
@@ -37,7 +37,7 @@ it("interrupts replaced playback exactly once and ignores its late completion an
   const calls=vi.mocked(f.view.ack).mock.calls.filter(([value])=>value.commandId===old.commandId);
   expect(calls.map(([value])=>value.status)).toEqual(["started","interrupted"]);
   f.playbacks[0]!.resolve("completed");await vi.advanceTimersByTimeAsync(1500);
-  expect(f.view.bubble).toHaveBeenLastCalledWith("current","Test session");expect(f.view.idle).toHaveBeenCalledOnce();
+  expect(f.view.bubble).toHaveBeenLastCalledWith("current");expect(f.view.idle).toHaveBeenCalledOnce();
   expect(f.view.stop).not.toHaveBeenCalled(); // Runtime blends the replacement directly.
   f.playbacks[1]!.resolve("completed");await Promise.resolve();
   expect(f.view.ack).toHaveBeenLastCalledWith(expect.objectContaining({commandId:current.commandId,status:"completed"}));
@@ -57,6 +57,24 @@ it("keeps idle running for text-only presentation after interrupting a foregroun
   f.playbacks[0]!.resolve("interrupted");await vi.advanceTimersByTimeAsync(1200);
   expect(f.view.ack).toHaveBeenLastCalledWith(expect.objectContaining({commandId:text.commandId,status:"completed"}));
   expect(f.view.idle).toHaveBeenCalledTimes(2);
+});
+it("renews only the active lease watchdog from owner activity without touching presentation or acknowledging it",async()=>{
+  const f=fixture();await f.acquire();
+  await vi.advanceTimersByTimeAsync(CONTROL_LEASE_MS-1000);
+  f.presenter.receive(frame({kind:"perform",animation:"Wave",text:"Still talking",durationMs:30000}));
+  await vi.advanceTimersByTimeAsync(1000);
+  const activity=frame({kind:"activity"});
+  for(const call of [f.view.bubble,f.view.idle,f.view.play,f.view.stop,f.view.changed,f.view.ack])vi.mocked(call).mockClear();
+  f.presenter.receive(activity);
+  for(const call of [f.view.bubble,f.view.idle,f.view.play,f.view.stop,f.view.changed,f.view.ack])expect(call).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(CONTROL_LEASE_MS-500);
+  expect(f.presenter.owner).toBeDefined();
+  f.presenter.receive(activity); // Duplicate does not keep an abandoned lease alive.
+  f.presenter.receive({...frame({kind:"activity"}),leaseId:"123e4567-e89b-42d3-a456-426614174999"});
+  await vi.advanceTimersByTimeAsync(500);
+  expect(f.presenter.owner).toBeUndefined();expect(f.view.release).toHaveBeenCalledWith({leaseId,reason:"unavailable"});
+  vi.mocked(f.view.ack).mockClear();f.presenter.receive(frame({kind:"activity"}));
+  expect(f.presenter.owner).toBeUndefined();expect(f.view.ack).not.toHaveBeenCalled();
 });
 it("rejects missing animations, hidden text and nonfinite geometry without disrupting the current performance",async()=>{
   const f=fixture();await f.acquire();f.presenter.receive(frame({kind:"perform",animation:"Wave"}));

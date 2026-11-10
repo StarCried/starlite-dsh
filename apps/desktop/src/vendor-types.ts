@@ -80,11 +80,12 @@ export interface VisitorToolbarOptions {
   onLarger(): void | Promise<void>;
   onBubbles(): void | Promise<void>;
   onHide(): void | Promise<void>;
+  onReleaseControl?(): void | Promise<void>;
 }
 export interface VisitorToolbar {
   readonly element: HTMLElement;
   readonly dimensions: {width: number; height: number};
-  update(state: {scale:number;minScale:number;maxScale:number;bubbles:boolean;bubblesAllowed:boolean;enabled?:boolean}): void;
+  update(state: {scale:number;minScale:number;maxScale:number;bubbles:boolean;bubblesAllowed:boolean;enabled?:boolean;controlActive?:boolean}): void;
   show(visible: boolean): void;
   place(centerX: number, topY: number, zIndex: number): void;
   reattach(): void;

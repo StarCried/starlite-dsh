@@ -174,10 +174,19 @@ describe("desktop hidden-window startup", () => {
     const envelope=(sequence:number)=>({controlVersion:1 as const,sequence,leaseId,commandId:`123e4567-e89b-42d3-a456-${String(sequence).padStart(12,"0")}`,leaseMs:CONTROL_LEASE_MS});
     callbacks.onControl({...envelope(1),kind:"acquire",sessionTitle:"Character chat"});
     await vi.waitFor(()=>expect(bridge.acknowledgeControl).toHaveBeenCalledWith(expect.objectContaining({commandId:envelope(1).commandId,status:"completed"})));
-    expect(document.querySelector(".session-control-badge")?.textContent).toContain("Character chat");
+    const toolbar=await native.createVisitorToolbar.mock.results[0]!.value as VisitorToolbar;
+    const toolbarOptions=native.createVisitorToolbar.mock.calls[0]![0] as VisitorToolbarOptions;
+    expect(toolbar.update).toHaveBeenLastCalledWith(expect.objectContaining({controlActive:true}));
+    expect(toolbar.show).toHaveBeenLastCalledWith(false);
+    expect(document.querySelector(".session-control-badge")).toBeNull();
+    expect(document.body.textContent).not.toContain("Character chat");
+    cursorListener!({payload:{x:300,y:1000}});expect(toolbar.show).toHaveBeenLastCalledWith(true);
+    cursorListener!({payload:{x:-100,y:-100}});await vi.advanceTimersByTimeAsync(650);expect(toolbar.show).toHaveBeenLastCalledWith(false);
     expect(bridge.setInputAvailable).toHaveBeenLastCalledWith(false);
     callbacks.onControl({...envelope(2),kind:"perform",animation:"Wave",text:"My own bubble",durationMs:5000});
     expect(document.getElementById("bubble")!.textContent).toContain("My own bubble");
+    expect(document.querySelector("#bubble .bubble-title")).toBeNull();
+    expect(document.getElementById("bubble")!.textContent).not.toContain("Character chat");
     callbacks.onSnapshot({protocolVersion:1,sequence:10,emittedAt:1,state:"working",session:{ref:leaseId,title:"Latest session"},bubble:{kind:"response",text:"Latest work"}});
     expect(controller.playAnimation).not.toHaveBeenCalledWith("Work",expect.anything());
     expect(document.getElementById("bubble")!.textContent).not.toContain("Latest work");
@@ -185,12 +194,13 @@ describe("desktop hidden-window startup", () => {
     await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("set_session_stage_position",expect.objectContaining({x:.2,y:.6})));
     expect(controller.setDisplaySize).toHaveBeenLastCalledWith(256,384);expect(controller.setPointerEnabled).toHaveBeenLastCalledWith(false);
     expect(native.invoke.mock.calls.some(([command])=>command==="patch_preferences")).toBe(false);
-    document.querySelector<HTMLButtonElement>(".session-control-badge button")!.click();
+    await toolbarOptions.onReleaseControl!();
     await vi.waitFor(()=>expect(controller.playAnimation).toHaveBeenCalledWith("Work",{mode:"once",restart:true}));
     expect(document.getElementById("bubble")!.textContent).toContain("Latest work");
     expect(controller.setDisplaySize).toHaveBeenLastCalledWith(320*.67,480*.67);expect(controller.setPointerEnabled).toHaveBeenLastCalledWith(true);
     expect(native.invoke).toHaveBeenCalledWith("end_session_stage",expect.objectContaining({restore:true}));
     expect(bridge.releaseControl).toHaveBeenCalledWith({leaseId,reason:"user"});
+    expect(toolbar.update).toHaveBeenLastCalledWith(expect.objectContaining({controlActive:false}));
     await vi.waitFor(()=>expect(bridge.setInputAvailable).toHaveBeenLastCalledWith(true));
   });
   it("shares visible toolbar coverage, persisted controls and paused hot resizing without remounting",async()=>{

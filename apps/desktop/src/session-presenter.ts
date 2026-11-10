@@ -11,7 +11,7 @@ export interface SessionPresentation {
   idle():void;
   play(name:string):Promise<AnimationPlaybackResult>;
   stop():void;
-  bubble(text:string|undefined,title?:string):void;
+  bubble(text:string|undefined):void;
   stage(value:ControlStage,signal:AbortSignal):Promise<void>;
   changed(owner:SessionOwner|undefined):void;
   ack(value:ControlAck):Promise<void>;
@@ -66,6 +66,12 @@ export class SessionPresenter {
       });
       return;
     }
+    if(frame.kind==="activity"){
+      // Content-free owner activity extends only the watchdog. It must not
+      // interrupt a gesture, replay Idle or touch the current speech bubble.
+      if(this.#owner?.leaseId===frame.leaseId&&this.#ready&&this.view.available())this.#renew(frame.leaseMs);
+      return;
+    }
     if(!this.#owner||frame.leaseId!==this.#owner.leaseId){this.#ack(frame,"rejected","stale");return;}
     if(frame.kind==="release"){
       void this.#end(undefined,true).then(()=>this.#ack(frame,"completed"));return;
@@ -97,7 +103,7 @@ export class SessionPresenter {
       if(!frame.animation)this.view.idle();
       if(frame.text){
         this.#bubbleOwner=pending;
-        this.view.bubble(frame.text,this.#owner.title);
+        this.view.bubble(frame.text);
         this.#bubbleTimer=setTimeout(()=>{
           this.#bubbleTimer=undefined;
           if(this.#bubbleOwner!==pending||pending.abort.signal.aborted)return;

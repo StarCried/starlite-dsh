@@ -29,7 +29,6 @@ import { HostPositionBridge, screenSpaceAboveModel } from "./host-position.js";
 import { BillingBubble, renderBillingBubble } from "./billing-bubble.js";
 import {WorkBubble,renderPlainBubble} from "./work-bubble.js";
 import {SessionPresenter} from "./session-presenter.js";
-import {SessionControlBadge} from "./session-control-badge.js";
 export {renderBubble} from "./work-bubble.js";
 
 const OFFLINE_EXIT_MS = 60_000;
@@ -93,7 +92,6 @@ export async function startPet(): Promise<void> {
   let modelRevision:string|undefined;
   let temporaryScale:number|undefined;
   let temporaryPointer:boolean|undefined;
-  const controlBadge=new SessionControlBadge(()=>{void presenter?.release();});
   let cancelClick=()=>{};
   let geometryQueue:Promise<unknown>=Promise.resolve();
   const geometryTask=<T>(operation:()=>Promise<T>):Promise<T>=>{
@@ -120,10 +118,9 @@ export async function startPet(): Promise<void> {
   const updateMenuRegion=()=>{
     // Toolbar and full menu are mutually exclusive; never bridge their empty
     // surroundings with one oversized native rectangle.
-    const badgeVisible=controlBadge.visible;
-    const visible=ui.visible&&!ui.clickThrough&&!viewport.pending&&(quickMenu?.isOpen||visitorToolbar?.visible||badgeVisible);
+    const visible=ui.visible&&!ui.clickThrough&&!viewport.pending&&(quickMenu?.isOpen||visitorToolbar?.visible);
     const controls=visitorToolbar?.visible?visitorToolbar.rect:undefined;
-    const rect=quickMenu?.isOpen?quickMenu.element.getBoundingClientRect():badgeVisible?portraitWithToolbar(controlBadge.rect,controls):controls;
+    const rect=quickMenu?.isOpen?quickMenu.element.getBoundingClientRect():controls;
     const bounds=rect?{left:rect.left,top:rect.top,right:rect.left+rect.width,bottom:rect.top+rect.height}:undefined;
     const left=Math.max(0,bounds?.left??0),top=Math.max(0,bounds?.top??0),right=Math.min(innerWidth,bounds?.right??0),bottom=Math.min(innerHeight,bounds?.bottom??0);
     menuRegionPending=visible&&document.visibilityState==="visible"&&right>left&&bottom>top
@@ -214,7 +211,7 @@ export async function startPet(): Promise<void> {
       }
     }),
     ()=>{resetHostMotion=true;hostPosition.invalidate();interaction.invalidateForViewport();samplingOverlay.clear();regionPending=null;menuRegionPending=null;},
-    ()=>{visitorToolbar?.place(viewport.modelRect);controlBadge.place(viewport.modelRect);updateRegion();updateMenuRegion();void hostPosition.sync().catch(()=>{});},
+    ()=>{visitorToolbar?.place(viewport.modelRect);updateRegion();updateMenuRegion();void hostPosition.sync().catch(()=>{});},
     ()=>{void window.hide();void invoke("open_settings");},
     bubble,updateRegion,
   );
@@ -260,9 +257,10 @@ export async function startPet(): Promise<void> {
     const p=settings.preferences;
     const enabled=!closing&&connected&&modelAvailable()&&Boolean(controller)&&ui.visible&&!ui.clickThrough&&document.visibilityState==="visible"&&!quickMenu?.isOpen;
     const scale=temporaryScale??p.scale;
-    visitorToolbar?.toolbar.update({scale,minScale:Math.min(.5,scale),maxScale:Math.max(1.5,scale),bubbles:p.bubblesVisible!==false,bubblesAllowed:true,enabled});
+    visitorToolbar?.toolbar.update({scale,minScale:Math.min(.5,scale),maxScale:Math.max(1.5,scale),bubbles:p.bubblesVisible!==false,bubblesAllowed:true,enabled,controlActive:Boolean(presenter?.owner)});
+    // The optional Bot button changes toolbar width, not its fixed foot anchor.
+    visitorToolbar?.place(viewport.modelRect);
     visitorToolbar?.configure(enabled);
-    controlBadge.show(enabled);
   };
   const controlAvailable=()=>Boolean(connected&&!closing&&controller&&modelRevision&&modelAvailable()&&ui.visible&&!ui.paused&&!pausedByTray&&!ui.clickThrough&&document.visibilityState==="visible"&&!presenter?.restoring);
   let controlReportPending=false,controlReportSending=false,lastControlReport="";
@@ -308,7 +306,7 @@ export async function startPet(): Promise<void> {
     idle:()=>{const idle=selectedModel(settings)?.mappings.idle;if(controller&&idle)void controller.playAnimation(idle,{mode:"loop",restart:false}).catch(()=>{});},
     play:name=>controller!.playAnimation(name,{mode:"once",restart:true}),
     stop:()=>controller?.stopAnimation(),
-    bubble:(text,title)=>{if(text)renderPlainBubble(bubble,text,"session",title);else{bubble.hidden=true;bubble.replaceChildren();}updateRegion();},
+    bubble:text=>{if(text)renderPlainBubble(bubble,text,"session");else{bubble.hidden=true;bubble.replaceChildren();}updateRegion();},
     stage:async(value,signal)=>{
       if(signal.aborted)return;
       if(value.pointerEnabled!==undefined){temporaryPointer=value.pointerEnabled;controller?.setPointerEnabled?.(value.pointerEnabled);}
@@ -318,7 +316,7 @@ export async function startPet(): Promise<void> {
       if(signal.aborted)return;
       resetHostMotion=true;await hostPosition.sync().catch(()=>{});syncVisitorToolbar();syncControlReport();
     },
-    changed:owner=>{controlBadge.owner(owner?settings.preferences.privacyMode?"DSH":owner.title:undefined);quickMenu?.refresh();restoreAutomatic();syncRendering();},
+    changed:()=>{quickMenu?.refresh();restoreAutomatic();syncRendering();},
     ack:async value=>{await connection?.acknowledgeControl(value);},
     release:async value=>{await connection?.releaseControl(value);},
   });
@@ -407,7 +405,7 @@ export async function startPet(): Promise<void> {
   };
   const closeQuickMenu=()=>{++menuOpenGeneration;quickMenu?.close();visitorToolbar?.clear();cancelClick();syncMenuSurface();};
   globalThis.addEventListener("blur",closeQuickMenu);
-  globalThis.addEventListener("pagehide", () => { closing=true;presenter?.disconnect();controlBadge.destroy(); environmentLighting.destroy(); samplingOverlay.destroy(); if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu);host.removeEventListener("model-viewport-change",syncBubbleAnchor); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();visitorToolbar?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { closing=true;presenter?.disconnect(); environmentLighting.destroy(); samplingOverlay.destroy(); if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu);host.removeEventListener("model-viewport-change",syncBubbleAnchor); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();visitorToolbar?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
   let preparing = true;
   await listen<{modelId: string; adjustments: ModelAdjustments}>("model-adjustments-preview", async ({payload}) => {
@@ -568,6 +566,7 @@ export async function startPet(): Promise<void> {
     onLarger:async()=>{await presenter?.release();await invoke("patch_preferences",{patch:{scale:steppedPetScale(settings.preferences.scale,1)}});},
     onBubbles:async()=>{await presenter?.release();await invoke("patch_preferences",{patch:{bubblesVisible:settings.preferences.bubblesVisible===false}});},
     onHide:async()=>{await presenter?.release();visitorToolbar?.clear();await invoke("set_pet_visible",{visible:false});},
+    onReleaseControl:async()=>{await presenter?.release();},
   }),viewport.modelRect,updateMenuRegion);
   syncVisitorToolbar();
   cancelClick=installPointerBehavior(host, {

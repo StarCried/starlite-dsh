@@ -35,6 +35,11 @@ async function qualify(bundle, base) {
   const host = new Context();
   host.provide("systemPrompt", {tools: () => () => {}, section: () => () => {}});
   const tools = new toolsPackage.ToolRuntime(host), skills = new skillsPackage.SkillRegistry(host), control = new SessionControl();
+  // DSH 0.2.2 separates capability registration from its selected executor.
+  if (typeof tools.setExecutor === "function") {
+    const {NativeToolExecutor} = await official("dsh-tool-executor-native");
+    tools.setExecutor(new NativeToolExecutor(host));
+  }
   const dispose = registerSessionTools(host, control);
   const report = {controlVersion: 1, enabled: true, available: true, model: {revision: crypto.randomUUID(), title: "Fixture", animations: [{name: "Wave", durationMs: 1000}]}, preferences: {bubblesVisible: true, pointerEnabled: true, scale: 1}};
   const checks = [];
@@ -51,7 +56,15 @@ async function qualify(bundle, base) {
     assert((await skills.get("starlite-character"))?.content.includes("starlite_inspect")); checks.push("embedded skill loaded");
     const agent = {session: {}, ctx: host};
     const execute = async (name, args) => {
-      const outcome = await tools.execute({callId: crypto.randomUUID(), name, arguments: args, agent, signal: new AbortController().signal});
+      const signal = new AbortController().signal, callId = crypto.randomUUID();
+      let outcome;
+      if (typeof tools.setExecutor === "function") {
+        const toolSet = await tools.resolve({agent, signal, modelSelection: {provider: "fixture", model: "fixture"}});
+        try {
+          const batch = await tools.execute({calls: [{type: "tool-call", id: callId, name, arguments: JSON.stringify(args)}], agent, signal, toolSet});
+          outcome = batch.results[0]?.result;
+        } finally {toolSet.dispose();}
+      } else outcome = await tools.execute({callId, name, arguments: args, agent, signal});
       assert.equal(outcome.isError, false, "official executor rejected StarLite tool"); return outcome.value;
     };
     assert.equal((await execute("starlite_inspect", {})).available, true);

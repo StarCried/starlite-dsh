@@ -75,8 +75,9 @@ export async function startDshAdapter(
     subscribeRequired(context, disposers, "agent/assistant-stream", (...arguments_) => {
       const payload = asRecord(arguments_[0]);
       if (payload?.agent) {
-        refreshTitle(subjectKey(payload.agent));
-        aggregator.handleAssistantStream(subjectKey(payload.agent), payload.frame);
+        const key=subjectKey(payload.agent);refreshTitle(key);
+        if(hasAssistantOutput(payload.frame))control.activity(key);
+        aggregator.handleAssistantStream(key, payload.frame);
       }
     });
     subscribeRequired(context, disposers, "session/event", (...arguments_) => {
@@ -84,6 +85,12 @@ export async function startDshAdapter(
       const event = asRecord(arguments_[1]);
       if (session && typeof event?.type === "string") {
         const key=subjectKey(session);refreshTitle(key);
+        // Official session/event publishes new commits, never restored seeds.
+        // Retain just the owner-local sequence to reject duplicated delivery.
+        if(typeof event.seq==="number"&&Number.isSafeInteger(event.seq)&&event.seq>=0){
+          if(event.type==="assistant/message"&&hasAssistantMessage(event.data))control.activity(key,event.seq);
+          else if(event.type==="assistant/chunk"&&hasAssistantOutput({type:"chunk",chunk:asRecord(event.data)?.chunk}))control.activity(key,event.seq);
+        }
         if(event.type==="turn/end"){
           questions.cancelForeground(key);
           const reason=asRecord(asRecord(event.data)?.reason)?.kind;
@@ -207,6 +214,21 @@ function subjectKey(subject: unknown): unknown {
   const record = asRecord(subject);
   return record?.session ?? subject;
 }
+
+function hasAssistantOutput(value: unknown): boolean {
+  const frame=asRecord(value);if(frame?.type!=="chunk")return false;
+  const chunk=asRecord(frame.chunk);
+  if(chunk?.type==="text-delta"||chunk?.type==="reasoning-delta")return nonempty(chunk.text);
+  return chunk?.type==="tool-call-delta"&&(nonempty(chunk.argumentsDelta)||nonempty(chunk.name));
+}
+function hasAssistantMessage(value: unknown): boolean {
+  const content=asRecord(asRecord(value)?.message)?.content;
+  return Array.isArray(content)&&content.some(item=>{
+    const block=asRecord(item);
+    return (block?.type==="text"||block?.type==="reasoning")&&nonempty(block.text)||block?.type==="tool-call"&&nonempty(block.name);
+  });
+}
+function nonempty(value: unknown): boolean {return typeof value==="string"&&value.length>0;}
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)

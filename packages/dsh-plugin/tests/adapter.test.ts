@@ -1,10 +1,45 @@
 import { describe, expect, it, vi } from "vitest";
-import type { PetSnapshot, PetStateSource } from "@starcried/starlite-dsh-protocol";
+import {CONTROL_LEASE_MS,type ControlFrame,type PetSnapshot,type PetStateSource} from "@starcried/starlite-dsh-protocol";
 import { startDshAdapter, type CordisContextLike } from "../src/adapter.js";
 import type { BillingSource } from "../src/billing.js";
 import type { SessionControl } from "../src/session-control.js";
 
 describe("DSH compatibility adapter", () => {
+  it("renews owner output across turns while ignoring unrelated, empty and duplicate events",async()=>{
+    vi.useFakeTimers();const listeners=new Map<string,(...args:unknown[])=>unknown>();let control:SessionControl|undefined;
+    const stop=await startDshAdapter({on(event,listener){listeners.set(event,listener);return()=>listeners.delete(event)}},{host:()=>"windows",launch:async()=>undefined,startServer:async(_source,options)=>{control=options?.control;return{port:41234,token:"a".repeat(43),close:async()=>undefined}}});
+    const session={},other={},frames:ControlFrame[]=[];
+    try{
+      control!.subscribe(frame=>{frames.push(frame);if(frame.kind==="acquire")control!.acknowledge({controlVersion:1,leaseId:frame.leaseId,commandId:frame.commandId,status:"completed"})});
+      control!.setConnected(true);control!.report({controlVersion:1,enabled:true,available:true,model:{revision:"15c3a508-c0c7-4a6e-8c89-985e13ef5a72",title:"Model",animations:[]},preferences:{bubblesVisible:true,pointerEnabled:true,scale:1}});
+      const acquire=()=>control!.acquire(session,"Session",new AbortController().signal);
+      const stream=(key:unknown,frame:unknown)=>listeners.get("agent/assistant-stream")?.({agent:{session:key},frame});
+      const event=(key:unknown,type:string,data:unknown,seq?:number)=>listeners.get("session/event")?.(key,{type,data,...(seq===undefined?{}:{seq})});
+      await acquire();await vi.advanceTimersByTimeAsync(240_000);
+      for(const frame of [{type:"start"},{type:"end"},{type:"heartbeat"},{type:"chunk",chunk:{type:"usage",usage:{totalTokens:10}}},{type:"chunk",chunk:{type:"text-delta",text:""}},{type:"chunk",chunk:{type:"reasoning-delta",text:{private:true}}},{type:"chunk",chunk:{type:"tool-call-delta",argumentsDelta:""}}])stream(session,frame);
+      stream(other,{type:"chunk",chunk:{type:"text-delta",text:"other session"}});
+      listeners.get("agent/status")?.({agent:{session},status:"running"});
+      event(session,"user/message",{content:[{type:"text",text:"user input"}]},1);
+      event(session,"assistant/message",{message:{content:[]}},2);
+      event(session,"assistant/message",{message:{content:[{type:"text",text:"missing sequence"}]}});
+      event(session,"assistant/attempt",{message:{content:[{type:"text",text:"attempt record"}]}},3);
+      await vi.advanceTimersByTimeAsync(60_000);expect(control!.active).toBe(false);expect(frames.some(frame=>frame.kind==="activity")).toBe(false);
+      await acquire();
+      for(const type of ["text-delta","reasoning-delta","tool-call-delta"]){
+        await vi.advanceTimersByTimeAsync(240_000);
+        stream(session,{type:"chunk",chunk:{type,...(type==="tool-call-delta"?{argumentsDelta:"PRIVATE arguments"}:{text:"PRIVATE output"})}});
+        event(session,"turn/end",{reason:{kind:"completed"}});expect(control!.active).toBe(true);
+      }
+      await vi.advanceTimersByTimeAsync(240_000);
+      event(session,"assistant/message",{message:{content:[{type:"text",text:"PRIVATE final"}]}},90);
+      await vi.advanceTimersByTimeAsync(240_000);
+      event(session,"assistant/message",{message:{content:[{type:"text",text:"PRIVATE replay"}]}},90);
+      event(other,"assistant/message",{message:{content:[{type:"text",text:"PRIVATE unrelated"}]}},91);
+      await vi.advanceTimersByTimeAsync(CONTROL_LEASE_MS-240_000-1);expect(control!.active).toBe(true);
+      await vi.advanceTimersByTimeAsync(1);expect(control!.active).toBe(false);
+      expect(frames.filter(frame=>frame.kind==="activity")).toHaveLength(4);expect(JSON.stringify(frames)).not.toContain("PRIVATE");
+    }finally{await stop();vi.useRealTimers()}
+  });
   it("keeps takeover across successful turns but releases on explicit cancellation, errors and disposal", async () => {
     const listeners = new Map<string, (...args: unknown[]) => unknown>(); let control: SessionControl | undefined;
     const stop = await startDshAdapter({ on(event, listener) { listeners.set(event, listener); return () => listeners.delete(event); } }, {

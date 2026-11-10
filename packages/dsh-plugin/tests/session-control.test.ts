@@ -116,3 +116,44 @@ it("ignores delayed acquisition ACK after cancellation and opens only the lease 
   await control.open({ leaseId: next.leaseId }); expect(navigate).toHaveBeenCalledExactlyOnceWith(session);
   control.relinquish(session); await expect(control.open({ leaseId: next.leaseId })).rejects.toThrow();
 });
+it("keeps active owner output alive beyond five minutes and expires from its last message", async () => {
+  vi.useFakeTimers(); const { control, frames, acquire, session } = setup(); await acquire();
+  for (let minute=0;minute<12;minute++) {
+    await vi.advanceTimersByTimeAsync(60_000); control.activity(session); expect(control.active).toBe(true);
+  }
+  expect(frames.filter(frame=>frame.kind==="activity")).toHaveLength(12);
+  await vi.advanceTimersByTimeAsync(CONTROL_LEASE_MS-1); expect(control.active).toBe(true);
+  await vi.advanceTimersByTimeAsync(1); expect(control.active).toBe(false); expect(frames.at(-1)).toMatchObject({kind:"release",reason:"expired"});
+  control.activity(session); expect(control.active).toBe(false);
+});
+it("never extends inactivity for unrelated sessions or connection and desktop reports", async () => {
+  vi.useFakeTimers(); const { control, frames, report, acquire } = setup(); await acquire();
+  for(let minute=0;minute<4;minute++) {
+    await vi.advanceTimersByTimeAsync(60_000); control.activity({}); control.setConnected(true); control.report(report);
+  }
+  await vi.advanceTimersByTimeAsync(60_000); expect(control.active).toBe(false);
+  expect(frames.filter(frame=>frame.kind==="activity")).toHaveLength(0);
+});
+it("coalesces streaming and final messages with a trailing renewal without shortening their deadline", async () => {
+  vi.useFakeTimers(); const { control, frames, acquire, session } = setup(); await acquire();
+  const sent: number[]=[];control.subscribe(frame=>{if(frame.kind==="activity")sent.push(performance.now())});
+  control.activity(session);
+  for(let chunk=0;chunk<100;chunk++) {await vi.advanceTimersByTimeAsync(5);control.activity(session);}
+  control.activity(session,42);control.activity(session,42); expect(sent).toEqual([0]);
+  await vi.advanceTimersByTimeAsync(500); expect(sent).toEqual([0,1000]);
+  await vi.advanceTimersByTimeAsync(CONTROL_LEASE_MS-501);expect(control.active).toBe(true);
+  await vi.advanceTimersByTimeAsync(1);expect(control.active).toBe(false);
+  for(const frame of frames.filter(frame=>frame.kind==="activity"))expect(Object.keys(frame).sort()).toEqual(["commandId","controlVersion","kind","leaseId","leaseMs","sequence"].sort());
+});
+it("does not renew for duplicate, older or malformed committed messages", async () => {
+  vi.useFakeTimers(); const { control, frames, acquire, session } = setup();await acquire();
+  control.activity(session,10);
+  await vi.advanceTimersByTimeAsync(200_000);
+  for(const seq of [10,9,-1,NaN,Infinity,10.1])control.activity(session,seq);
+  await vi.advanceTimersByTimeAsync(100_000);expect(control.active).toBe(false);expect(frames.filter(frame=>frame.kind==="activity")).toHaveLength(1);
+});
+it("cancels delayed activity when ownership ends and never renews a replacement lease", async () => {
+  vi.useFakeTimers();const { control, frames, acquire, session }=setup();await acquire();
+  control.activity(session);await vi.advanceTimersByTimeAsync(100);control.activity(session);control.relinquish(session);
+  await acquire();const count=frames.length;await vi.advanceTimersByTimeAsync(1000);expect(frames).toHaveLength(count);
+});

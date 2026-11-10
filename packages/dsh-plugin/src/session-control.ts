@@ -3,10 +3,11 @@ import { CONTROL_LEASE_MS, isOpaqueRef, parseControlAck, parseControlDesktopRepo
   type ControlAck, type ControlDesktopReport, type ControlFrame, type ControlPerform, type ControlReleaseReason, type ControlStage } from "@starcried/starlite-dsh-protocol";
 
 export interface ControlResult { status: ControlAck["status"]; reason?: string }
-type Command = { kind: "acquire"; sessionTitle: string } | ({ kind: "perform" } & ControlPerform) | ({ kind: "stage" } & ControlStage) | { kind: "cancel"; targetId: string } | { kind: "release"; reason: ControlReleaseReason };
-interface Owner { session: unknown; leaseId: string; title: string; timer: ReturnType<typeof setTimeout> }
+type Command = { kind: "acquire"; sessionTitle: string } | { kind: "activity" } | ({ kind: "perform" } & ControlPerform) | ({ kind: "stage" } & ControlStage) | { kind: "cancel"; targetId: string } | { kind: "release"; reason: ControlReleaseReason };
+interface Owner { session: unknown; leaseId: string; title: string; timer: ReturnType<typeof setTimeout>; activityTimer: ReturnType<typeof setTimeout> | undefined; lastActivityFrameAt: number; lastMessageSequence: number }
 interface Pending { frame: ControlFrame; started: boolean; timer: ReturnType<typeof setTimeout>; finish(result: ControlResult): void }
 const ACK_TIMEOUT_MS = 4000;
+const ACTIVITY_FRAME_INTERVAL_MS = 1000;
 
 /** A Host-local lease. Only SDK execution identity may select its session owner. */
 export class SessionControl {
@@ -52,7 +53,7 @@ export class SessionControl {
     if (this.owner && this.owner.session !== session) return result("rejected", "busy");
     if ([...this.pending.values()].some(item => item.frame.kind === "acquire")) return result("rejected", "busy");
     if (!this.owner) {
-      this.owner = { session, leaseId: randomUUID(), title: sanitizeBubbleText(title, 60).slice(0, 120) || "DSH session", timer: setTimeout(() => this.release("expired"), CONTROL_LEASE_MS) };
+      this.owner = { session, leaseId: randomUUID(), title: sanitizeBubbleText(title, 60).slice(0, 120) || "DSH session", timer: setTimeout(() => this.release("expired"), CONTROL_LEASE_MS), activityTimer: undefined, lastActivityFrameAt: -Infinity, lastMessageSequence: -1 };
       this.owner.timer.unref(); this.changed();
     }
     this.renew();
@@ -101,6 +102,28 @@ export class SessionControl {
     if (!row || Object.keys(row).length !== 1 || !isOpaqueRef(row.leaseId) || row.leaseId !== this.owner?.leaseId || !this.openSession) throw Error("session control unavailable");
     await this.openSession(this.owner.session);
   }
+  /** Called only for actual assistant output; no content or real session ID crosses the wire. */
+  activity(session: unknown, messageSequence?: number): void {
+    const owner = this.owner;
+    if (!owner || owner.session !== session || !this.ready) return;
+    if (messageSequence !== undefined) {
+      if (!Number.isSafeInteger(messageSequence) || messageSequence < 0 || messageSequence <= owner.lastMessageSequence) return;
+      owner.lastMessageSequence = messageSequence;
+    }
+    this.renew();
+    const elapsed = performance.now() - owner.lastActivityFrameAt;
+    const emit = () => {
+      owner.activityTimer = undefined;
+      if (this.owner !== owner || !this.ready) return;
+      owner.lastActivityFrameAt = performance.now(); this.emit({ kind: "activity" });
+    };
+    if (elapsed >= ACTIVITY_FRAME_INTERVAL_MS) { clearTimeout(owner.activityTimer); emit(); }
+    else if (!owner.activityTimer) {
+      // Trailing emission keeps the client watchdog beyond the most recent
+      // chunk's deadline. The Host still expires exactly from that chunk.
+      owner.activityTimer = setTimeout(emit, ACTIVITY_FRAME_INTERVAL_MS - elapsed); owner.activityTimer.unref();
+    }
+  }
   releaseSession(session: unknown, reason: "session-ended" | "cancelled" = "session-ended"): void { if (this.owner?.session === session) this.release(reason); }
   close(): void { if (this.closed) return; this.release("unavailable"); this.closed = true; this.desktop = undefined; this.listeners.clear(); this.changed(); this.availability.clear(); }
 
@@ -143,6 +166,7 @@ export class SessionControl {
   private release(reason: ControlReleaseReason): void {
     if (!this.owner) return;
     clearTimeout(this.owner.timer);
+    clearTimeout(this.owner.activityTimer);
     for (const pending of this.pending.values()) pending.finish(result("interrupted", reason));
     this.emit({ kind: "release", reason }); this.owner = undefined; this.changed();
   }

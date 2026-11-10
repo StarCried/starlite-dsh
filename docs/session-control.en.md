@@ -12,9 +12,9 @@ Enable **Allow session control** in the character's DSH quick-menu tab or full s
 
 The plugin registers native tools and an embedded Skill. No separate MCP server is required. Tools are offered only when enabled; acquiring control additionally requires a ready character. Unsupported DSH tool services do not prevent the ordinary companion from running.
 
-During control, a small owner indicator provides a release button. Automatic state, ambient, click and billing interactions yield to the session; baseline idle, blinking and physics continue. Manual dragging, pausing, hiding or model changes end control. Hidden bubbles and privacy preferences still apply. Questions return to DSH, and permission approvals always stay there.
+During control, hovering near the character reveals a robot button in its foot toolbar; click it to release control. The right-click menu also retains the exit action. Session bubbles show only their message, without a session-title header. Automatic state, ambient, click and billing interactions yield to the session; baseline idle, blinking and physics continue. Manual dragging, pausing, hiding or model changes end control. Hidden bubbles and privacy preferences still apply. Questions return to DSH, and permission approvals always stay there.
 
-Only one session can control the model. The lease expires after five minutes without a valid control operation. Cancellation, disconnect and disposal release it. Release restores the latest DSH state and the user's original layout; commands are not replayed after reconnect.
+Only one session can control the model. Control expires after five minutes without new assistant output (text, reasoning or tool calls) from the owning session or a valid control operation; an ongoing conversation can last longer. Other sessions, connection heartbeats and read-only inspection do not extend it. Cancellation, disconnect and disposal release it. Release restores the latest DSH state and the user's original layout; commands are not replayed after reconnect.
 
 | Tool | Purpose |
 | --- | --- |

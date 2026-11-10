@@ -99,6 +99,11 @@
   snapshot rather than the state captured at acquisition. No replay or automatic
   takeover after reconnect. Temporary stage changes must not persist as preferences
   or normal-exit window state. Keep native permission approvals in DSH.
+  The five-minute timeout measures owner inactivity: new assistant text/reasoning
+  and valid control commands renew it, unrelated sessions/heartbeats do not.
+  Synchronize the desktop watchdog with bounded content-free activity frames.
+  Show ownership only as the hover toolbar's robot action (click to release),
+  not a persistent strip. Session-controlled speech has no title header.
 - Render bubble content as plain text. Do not persist or log bubble text or the
   bearer token.
 - Login-account billing consumes only `deepseekAccount.getState/getBalance/watch`.

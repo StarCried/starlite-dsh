@@ -2,6 +2,8 @@
 
 [简体中文](companion-interactions.md) · English · [User guide](user-guide.en.md)
 
+The hover toolbar uses transparent buttons without a shared background panel. Icons retain hover, press and keyboard-focus feedback. During session control it gains a robot button to release control, hidden with the other hover controls. Session speech has no title header; ordinary work bubbles keep their session title.
+
 Optional [session control](session-control.en.md) lets DSH temporarily control animations, bubbles and layout. It is off by default; manual visibility, pause, privacy and bubble preferences retain priority.
 
 Right-click the character for size, frame rate, tracking, bubbles, pause, and position controls. Changes save automatically without reloading the model or restarting its motions. Hover near the character to show smaller, larger, bubbles, and hide buttons below its feet. Resizing keeps the toolbar in place. Restore a hidden character from the tray.

@@ -11,8 +11,19 @@ function fixture(next=settings){
 it("offers only approved quick controls and keeps application actions outside interaction toggles",()=>{
   const f=fixture(),items=f.menu.tabs.flatMap(tab=>tab.items);
   expect(f.menu.tabs.map(tab=>tab.label)).toEqual(["显示","互动","DSH"]);
-  expect(items.map(item=>item.id)).toEqual(["size","reset-size","position","fps","performance","environment-lighting","environment-strength","pointer","bubbles","pause","hide","bubble-mode","privacy","open-dsh","settings"]);
+  expect(items.map(item=>item.id)).toEqual(["size","reset-size","position","fps","performance","environment-lighting","environment-strength","pointer","bubbles","pause","hide","bubble-mode","privacy","session-control","open-dsh","settings"]);
   expect(items.some(item=>/偶发|点击回应|查看费用/u.test(item.label))).toBe(false);
+});
+it("keeps session control opt-in and exposes a clear owner exit without changing the preference",async()=>{
+  const f=fixture(),toggle=f.menu.tabs[2]!.items.find(item=>item.id==="session-control")!;
+  expect(toggle.kind==="toggle"&&toggle.value).toBe(false);
+  if(toggle.kind!=="toggle")throw Error("expected toggle");
+  await toggle.onChange(true);expect(f.actions.patch).toHaveBeenCalledWith({sessionControlEnabled:true});
+  const release=vi.fn(async()=>{}),menu=petQuickSettings({...f.actions,controlOwner:()=>"Example session",releaseControl:release},f.close);
+  const exit=menu.tabs[2]!.items.find(item=>item.id==="release-control")!;
+  expect(exit.description).toBe("Example session");
+  if(exit.kind!=="action")throw Error("expected exit");
+  await exit.onAction();expect(release).toHaveBeenCalledOnce();expect(f.close).toHaveBeenCalledOnce();
 });
 it("defaults environment lighting on and preserves an explicit disabled preference",async()=>{
   const f=fixture(),items=f.menu.tabs[0]!.items;

@@ -37,6 +37,7 @@ export interface DesktopPreferences {
   bubblesVisible?: boolean;
   pointerEnabled?: boolean;
   environmentLightingEnabled?: boolean;
+  sessionControlEnabled?: boolean;
   environmentLightingStrength?: number;
 }
 

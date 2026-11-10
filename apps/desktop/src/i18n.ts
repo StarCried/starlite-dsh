@@ -40,6 +40,11 @@ export function translateTemplate(root: HTMLElement): void {
 }
 
 export const EN: Readonly<Record<string, string>> = {
+  "允许会话控制角色": "Allow session control",
+  "会话可临时播放动作、显示气泡和调整位置；你的操作始终优先。": "Sessions can temporarily play animations, show bubbles and move the character. Your actions always take priority.",
+  "开启后，DSH 会话可临时播放动作、显示气泡和调整位置。拖动角色、更改设置或退出接管会恢复自动模式。": "DSH sessions can temporarily play animations, show bubbles and adjust placement. Drag the character, change a setting or exit control to resume automatic mode.",
+  "会话接管": "Session control",
+  "退出会话接管": "Exit session control",
   "环境光": "Environment lighting",
   "环境光采样区域": "Environment lighting sample regions",
   "环境光强度": "Lighting strength",

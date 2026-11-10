@@ -103,6 +103,15 @@ function edit(id:string,value:string) {
 }
 
 describe("settings model library",() => {
+ it("keeps session control off until explicitly opted in, without editing model settings",async()=>{
+  await launch();
+  const toggle=document.getElementById("session-control") as HTMLInputElement;
+  expect(toggle.checked).toBe(false);
+  toggle.checked=true;toggle.dispatchEvent(new Event("change",{bubbles:true}));
+  await vi.waitFor(()=>expect(current.preferences.sessionControlEnabled).toBe(true));
+  expect(current.models).toEqual(installed.models);
+  expect(native.invoke).toHaveBeenCalledWith("patch_preferences",{patch:{sessionControlEnabled:true}});
+ });
  it("defaults local environment sampling on and preserves its strength across unrelated preference edits",async()=>{
   await launch();
   const toggle=document.getElementById("environment-lighting") as HTMLInputElement;

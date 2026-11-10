@@ -13,6 +13,8 @@ export interface PetQuickSettingsActions {
   openSettings():Promise<void>;
   openDsh():Promise<void>;
   selectModel(id:string):Promise<void>;
+  controlOwner?():string|undefined;
+  releaseControl?():Promise<void>;
 }
 
 /** Hosts own state; the shared menu only renders controls and calls actions. */
@@ -40,6 +42,8 @@ export function petQuickSettings(actions:PetQuickSettingsActions,close:()=>void)
     {id:"work",label:"DSH",items:[
       {id:"bubble-mode",kind:"select",label:t("工作气泡"),value:p.bubbleMode,disabled:p.bubblesVisible===false,options:[{value:"compact",label:t("精简")},{value:"detailed",label:t("详细")}],onChange:value=>actions.patch({bubbleMode:value==="detailed"?"detailed":"compact"})},
       {id:"privacy",kind:"toggle",label:t("隐藏会话内容"),value:p.privacyMode,onChange:privacyMode=>actions.patch({privacyMode})},
+      {id:"session-control",kind:"toggle",label:t("允许会话控制角色"),value:p.sessionControlEnabled===true,description:t("会话可临时播放动作、显示气泡和调整位置；你的操作始终优先。"),onChange:sessionControlEnabled=>actions.patch({sessionControlEnabled})},
+      ...(actions.controlOwner?.()?[{id:"release-control",kind:"action" as const,label:t("退出会话接管"),description:actions.controlOwner()!,onAction:run(async()=>{await actions.releaseControl?.();})}]:[]),
       {id:"open-dsh",kind:"action",label:t("打开当前会话 / DSH"),onAction:run(actions.openDsh)},
       {id:"settings",kind:"action",label:t("更多设置 · 模型与许可"),onAction:run(actions.openSettings)},
     ]},

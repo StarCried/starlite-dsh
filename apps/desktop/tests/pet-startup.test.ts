@@ -4,6 +4,7 @@ import type { DesktopSettings, ModelAdjustments } from "../src/types.js";
 import type { WidgetController, VisitorToolbar, VisitorToolbarOptions } from "../src/vendor-types.js";
 import type {PetUiState} from "../src/quick-settings.js";
 import { startPet } from "../src/pet.js";
+import {CONTROL_LEASE_MS,type ControlFrame} from "@starcried/starlite-dsh-protocol";
 
 const native = vi.hoisted(() => ({
   invoke: vi.fn(), listen: vi.fn(), getCurrent: vi.fn(), onOpenUrl: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock("../src/connection.js", () => ({StatusConnection: class {
   constructor(callbacks: unknown) { return native.connection(callbacks); }
 }}));
 
-interface ConnectionCallbacks {onConnected(): void; onDisconnected(): void; onSnapshot(value: unknown): void; onConflict(): void}
+interface ConnectionCallbacks {onConnected(): void; onDisconnected(): void; onSnapshot(value: unknown): void; onConflict(): void;onControl(value:ControlFrame):void}
 const settings: DesktopSettings = {
   schemaVersion: 4,
   preferences: {fps: 30, maxDevicePixelRatio: 1.5, scale: .67, privacyMode: false, bubbleMode: "compact", performanceOverlay: false},
@@ -104,6 +105,7 @@ beforeEach(() => {
       callbacks.onSnapshot({protocolVersion: 1, sequence: 1, emittedAt: 1, state: "idle"});
     });return "accepted";}),
     connectPending: vi.fn(() => false), stop: vi.fn(), setInputAvailable: vi.fn(async () => undefined),
+    reportControl:vi.fn(async()=>undefined),acknowledgeControl:vi.fn(async()=>undefined),releaseControl:vi.fn(async()=>undefined),
   };});
 });
 
@@ -116,6 +118,39 @@ afterEach(async () => {
 });
 
 describe("desktop hidden-window startup", () => {
+  it("suspends automatic presentation during takeover and restores the latest state without persisting temporary geometry",async()=>{
+    const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    const callbacks=native.connection.mock.calls[0]![0] as ConnectionCallbacks,bridge=native.connection.mock.results[0]!.value;
+    const next=structuredClone(settings);next.preferences.sessionControlEnabled=true;next.preferences.bubbleMode="detailed";
+    next.models[0]!.mappings.working="Work";next.models[0]!.animations.push({name:"Wave",durationMs:1200},{name:"Work",durationMs:900});
+    controller.getAnimations=()=>next.models[0]!.animations;
+    vi.mocked(controller.playAnimation).mockImplementation(()=>new Promise(()=>{}));
+    settingsListener!({payload:next});
+    await vi.waitFor(()=>expect(bridge.reportControl).toHaveBeenLastCalledWith(expect.objectContaining({enabled:true,available:true})));
+    const leaseId="123e4567-e89b-42d3-a456-426614174000";
+    const envelope=(sequence:number)=>({controlVersion:1 as const,sequence,leaseId,commandId:`123e4567-e89b-42d3-a456-${String(sequence).padStart(12,"0")}`,leaseMs:CONTROL_LEASE_MS});
+    callbacks.onControl({...envelope(1),kind:"acquire",sessionTitle:"Character chat"});
+    await vi.waitFor(()=>expect(bridge.acknowledgeControl).toHaveBeenCalledWith(expect.objectContaining({commandId:envelope(1).commandId,status:"completed"})));
+    expect(document.querySelector(".session-control-badge")?.textContent).toContain("Character chat");
+    expect(bridge.setInputAvailable).toHaveBeenLastCalledWith(false);
+    callbacks.onControl({...envelope(2),kind:"perform",animation:"Wave",text:"My own bubble",durationMs:5000});
+    expect(document.getElementById("bubble")!.textContent).toContain("My own bubble");
+    callbacks.onSnapshot({protocolVersion:1,sequence:10,emittedAt:1,state:"working",session:{ref:leaseId,title:"Latest session"},bubble:{kind:"response",text:"Latest work"}});
+    expect(controller.playAnimation).not.toHaveBeenCalledWith("Work",expect.anything());
+    expect(document.getElementById("bubble")!.textContent).not.toContain("Latest work");
+    callbacks.onControl({...envelope(3),kind:"stage",scale:.8,pointerEnabled:false,position:{x:.2,y:.6}});
+    await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("set_session_stage_position",expect.objectContaining({x:.2,y:.6})));
+    expect(controller.setDisplaySize).toHaveBeenLastCalledWith(256,384);expect(controller.setPointerEnabled).toHaveBeenLastCalledWith(false);
+    expect(native.invoke.mock.calls.some(([command])=>command==="patch_preferences")).toBe(false);
+    document.querySelector<HTMLButtonElement>(".session-control-badge button")!.click();
+    await vi.waitFor(()=>expect(controller.playAnimation).toHaveBeenCalledWith("Work",{mode:"once",restart:true}));
+    expect(document.getElementById("bubble")!.textContent).toContain("Latest work");
+    expect(controller.setDisplaySize).toHaveBeenLastCalledWith(320*.67,480*.67);expect(controller.setPointerEnabled).toHaveBeenLastCalledWith(true);
+    expect(native.invoke).toHaveBeenCalledWith("end_session_stage",expect.objectContaining({restore:true}));
+    expect(bridge.releaseControl).toHaveBeenCalledWith({leaseId,reason:"user"});
+    await vi.waitFor(()=>expect(bridge.setInputAvailable).toHaveBeenLastCalledWith(true));
+  });
   it("shares visible toolbar coverage, persisted controls and paused hot resizing without remounting",async()=>{
     vi.stubGlobal("innerWidth",736);vi.stubGlobal("innerHeight",1444);
     try{

@@ -24,6 +24,14 @@ body {
   touch-action: none;
 }
 
+.session-control-badge {position:fixed;z-index:1001;height:30px;display:flex;align-items:center;gap:7px;padding:3px 5px 3px 10px;border:1px solid #aacde077;border-radius:10px;color:#effaff;background:#213b50e8;box-shadow:0 3px 12px #07151c40;font-size:11px;user-select:none;pointer-events:auto;}
+.session-control-badge[hidden] {display:none;}
+.session-control-badge span {flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.session-control-badge button {flex:none;width:24px;height:24px;padding:0;border:0;border-radius:7px;background:#ffffff18;color:inherit;font-size:20px;line-height:1;cursor:pointer;}
+.session-control-badge button:hover {background:#ffffff35;}
+.session-control-badge button:focus-visible {outline:2px solid #97e4ff;outline-offset:1px;}
+#bubble[data-bubble-kind="session"] .bubble-content {-webkit-line-clamp:6;}
+
 /* Transparent centres mark native-selected samples without painting over them.
    The native sampler also excludes these borders from subsequent captures. */
 [data-environment-samples] {position:fixed;inset:0;pointer-events:none;z-index:2147483646;overflow:hidden;}

@@ -2,6 +2,12 @@ import {describe,expect,it,vi} from "vitest";
 import {openDisplayedDsh} from "../src/pet.js";
 
 describe("double-click DSH destination",()=>{
+  it("opens the lease owner instead of an unrelated automatic snapshot while session control is active",async()=>{
+    const connection={openSession:vi.fn(async()=>{}),openWebUi:vi.fn(async()=>{}),openControlSession:vi.fn(async()=>{})};
+    await openDisplayedDsh(connection,"automatic-session","owner-lease");
+    expect(connection.openControlSession).toHaveBeenCalledExactlyOnceWith("owner-lease");
+    expect(connection.openSession).not.toHaveBeenCalled();expect(connection.openWebUi).not.toHaveBeenCalled();
+  });
   it("opens the Web UI when no session is displayed",async()=>{
     const connection={openSession:vi.fn(async()=>{}),openWebUi:vi.fn(async()=>{})};
     await openDisplayedDsh(connection);

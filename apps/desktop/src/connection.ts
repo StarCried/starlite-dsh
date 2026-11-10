@@ -9,17 +9,20 @@ import {
   type PetSnapshot,
   MAX_INTERACTION_BYTES,parsePetInteraction,parsePetAnswer,isOpaqueRef,
   type PetInteraction,type PetAnswer,
+  MAX_CONTROL_BYTES, parseControlFrame, parseControlDesktopReport, parseControlAck, parseControlRelease,
+  type ControlFrame, type ControlDesktopReport, type ControlAck, type ControlRelease,
 } from "@starcried/starlite-dsh-protocol";
 
 const HEARTBEAT_TIMEOUT_MS = 45_000;
 const MAX_RECONNECT_DELAY_MS = 5_000;
-const MAX_SSE_TAIL_BYTES = MAX_WIRE_BYTES * 4;
+const MAX_SSE_TAIL_BYTES = MAX_CONTROL_BYTES + 1024;
 
 export interface ConnectionCallbacks {
   onSnapshot(snapshot: PetSnapshot): void;
   onConnected(): void;
   onDisconnected(): void;
   onConflict?(): void;
+  onControl?(frame:ControlFrame):void;
 }
 
 export type ConnectionAdmission = "accepted" | "unchanged" | "conflict";
@@ -126,6 +129,13 @@ export class StatusConnection {
   }
   async openWebUi():Promise<void>{
     await this.#request("/v1/web/open",MAX_INTERACTION_BYTES,{});
+  }
+  async reportControl(value:ControlDesktopReport):Promise<void>{await this.#request("/v1/control/desktop",MAX_CONTROL_BYTES,parseControlDesktopReport(value));}
+  async acknowledgeControl(value:ControlAck):Promise<void>{await this.#request("/v1/control/ack",MAX_CONTROL_BYTES,parseControlAck(value));}
+  async releaseControl(value:ControlRelease):Promise<void>{await this.#request("/v1/control/release",MAX_CONTROL_BYTES,parseControlRelease(value));}
+  async openControlSession(leaseId:string):Promise<void>{
+    if(!isOpaqueRef(leaseId))throw Error("invalid control lease");
+    await this.#request("/v1/control/open",MAX_CONTROL_BYTES,{leaseId});
   }
   #cancelRequests():void{for(const abort of this.#requests)abort.abort();this.#requests.clear();}
   async #request(path:string,limit:number,body?:unknown,timeoutMs=10_000):Promise<unknown>{
@@ -254,6 +264,11 @@ export class StatusConnection {
             if (frame.data.trim() !== "{}") throw new Error("invalid Host shutdown frame");
             return true;
           }
+          if(frame.event==="control"){
+            if(new TextEncoder().encode(frame.data).byteLength>MAX_CONTROL_BYTES)throw Error("control frame too large");
+            this.#callbacks.onControl?.(parseControlFrame(JSON.parse(frame.data)));
+            continue;
+          }
           const snapshot = parsePetSnapshotJson(frame.data);
           // A disconnect clears the consumer's animation state. Each new stream
           // must restore it from the Host's cached snapshot, even if no event
@@ -278,11 +293,11 @@ export class StatusConnection {
   }
 }
 
-export function consumeSseFrames(input: string): { events: {event:"snapshot"|"host-stopped";data:string}[]; rest: string } {
+export function consumeSseFrames(input: string): { events: {event:"snapshot"|"host-stopped"|"control";data:string}[]; rest: string } {
   const normalized = input.replace(/\r\n/gu, "\n");
   const frames = normalized.split("\n\n");
   const rest = frames.pop() ?? "";
-  const events: {event:"snapshot"|"host-stopped";data:string}[] = [];
+  const events: {event:"snapshot"|"host-stopped"|"control";data:string}[] = [];
   for (const frame of frames) {
     let event = "message";
     const dataLines: string[] = [];
@@ -291,7 +306,7 @@ export function consumeSseFrames(input: string): { events: {event:"snapshot"|"ho
       if (line.startsWith("event:")) event = line.slice(6).trimStart();
       if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
     }
-    if ((event === "snapshot" || event === "host-stopped") && dataLines.length > 0) events.push({event,data:dataLines.join("\n")});
+    if ((event === "snapshot" || event === "host-stopped" || event === "control") && dataLines.length > 0) events.push({event,data:dataLines.join("\n")});
   }
   return { events, rest };
 }

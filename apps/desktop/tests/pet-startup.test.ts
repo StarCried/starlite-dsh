@@ -118,6 +118,48 @@ afterEach(async () => {
 });
 
 describe("desktop hidden-window startup", () => {
+  it("authorizes a drag on the enlarged silhouette before restoring session scale",async()=>{
+    vi.stubGlobal("innerWidth",736);vi.stubGlobal("innerHeight",1444);
+    try{
+      let publishMask:Parameters<WidgetController["observeInteractionMask"]>[0];
+      vi.mocked(controller.observeInteractionMask).mockImplementation(listener=>{publishMask=listener;});
+      const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+      await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+      const callbacks=native.connection.mock.calls[0]![0] as ConnectionCallbacks,bridge=native.connection.mock.results[0]!.value;
+      const next=structuredClone(settings);next.preferences.sessionControlEnabled=true;settingsListener!({payload:next});
+      await vi.waitFor(()=>expect(bridge.reportControl).toHaveBeenLastCalledWith(expect.objectContaining({enabled:true})));
+      const leaseId="123e4567-e89b-42d3-a456-426614174000";
+      const envelope=(sequence:number)=>({controlVersion:1 as const,sequence,leaseId,commandId:`123e4567-e89b-42d3-a456-${String(sequence).padStart(12,"0")}`,leaseMs:CONTROL_LEASE_MS});
+      callbacks.onControl({...envelope(1),kind:"acquire",sessionTitle:"Drag test"});
+      await vi.waitFor(()=>expect(bridge.acknowledgeControl).toHaveBeenCalledWith(expect.objectContaining({commandId:envelope(1).commandId,status:"completed"})));
+      callbacks.onControl({...envelope(2),kind:"stage",scale:1.5});
+      await vi.waitFor(()=>expect(controller.setDisplaySize).toHaveBeenLastCalledWith(480,720));
+      publishMask!({width:1,height:1,left:300,top:550,displayWidth:100,displayHeight:100,viewportWidth:736,viewportHeight:1444,bits:new Uint8Array([1])});
+      await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("set_model_hit_mask",expect.objectContaining({mask:expect.objectContaining({top:550})})));
+      const host=document.getElementById("model")!;
+      host.setPointerCapture=vi.fn();host.hasPointerCapture=()=>true;host.releasePointerCapture=vi.fn();
+      const original=native.invoke.getMockImplementation()!;
+      native.invoke.mockImplementation(async(command,...args)=>{
+        if(command==="begin_model_drag"){
+          // This head point lies above the baseline model's head. Restoring
+          // before native authorization would fail the real alpha hit test.
+          const size=vi.mocked(controller.setDisplaySize!).mock.calls.at(-1);
+          if(size?.[0]!==480)throw Error("pointer is outside the restored model");
+        }
+        return original(command,...args);
+      });
+      const event=(name:string,x:number)=>new PointerEvent(name,{button:0,pointerId:1,clientX:x,clientY:575,screenX:x,screenY:575});
+      host.dispatchEvent(event("pointerdown",350));host.dispatchEvent(event("pointermove",365));
+      await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("move_model_drag"));
+      expect(controller.setDisplaySize).toHaveBeenLastCalledWith(320*.67,480*.67);
+      expect(native.invoke).toHaveBeenCalledWith("end_session_stage",expect.objectContaining({restore:false}));
+      expect(bridge.releaseControl).toHaveBeenCalledWith({leaseId,reason:"user"});
+      const start=native.invoke.mock.calls.findIndex(([command])=>command==="begin_model_drag");
+      expect(native.invoke.mock.calls.slice(start).some(([command,args])=>command==="set_model_hit_mask"&&args?.mask===null)).toBe(false);
+      host.dispatchEvent(event("pointerup",380));await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("end_model_drag"));
+      expect(native.invoke.mock.calls.filter(([command])=>command==="move_model_drag").length).toBeGreaterThanOrEqual(2);
+    }finally{vi.unstubAllGlobals();}
+  });
   it("suspends automatic presentation during takeover and restores the latest state without persisting temporary geometry",async()=>{
     const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
     await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;

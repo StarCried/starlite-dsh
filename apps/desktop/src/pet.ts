@@ -571,7 +571,13 @@ export async function startPet(): Promise<void> {
   }),viewport.modelRect,updateMenuRegion);
   syncVisitorToolbar();
   cancelClick=installPointerBehavior(host, {
-    begin: async (x, y) => {await presenter?.release("user",false);await invoke("begin_model_drag",{x,y});},
+    begin: async (x, y) => {
+      // Authorize the visible silhouette before restoring a session's scale.
+      // Native viewport rebasing preserves this drag's physical displacement;
+      // restoring first can move an enlarged head away from the pressed point.
+      await invoke("begin_model_drag",{x,y});
+      await presenter?.release("user",false);
+    },
     move: () => invoke("move_model_drag"),
     end: async () => {
       try{return await invoke("end_model_drag");}

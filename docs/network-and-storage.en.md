@@ -10,8 +10,11 @@ StarLite does not download example models during npm installation. The npm packa
 | Signed-in DeepSeek account balance | Opening the billing card while signed in, with an expired cache | Calls the official Host's `deepseekAccount.getBalance`; DSH queries `/api/v0/users/get_user_summary` on its configured Platform origin for recharge and bonus wallets. DSH handles the login token; StarLite and the companion do not receive it. Cached for 60 seconds |
 | DeepSeek API-key balance | Signed out or no account service, a supported official key configured, and the billing card opened with an expired cache | GET `https://api.deepseek.com/user/balance`; the existing API key is sent only to this endpoint, without redirects. Cached for 60 seconds |
 | Status and question answers | While the Host and companion run | An ephemeral IPv4 `127.0.0.1` port with an in-memory process token. Sanitized status/content and explicit answers stay on the local connection |
+| Optional session control | Enabled by the user and invoked by a DSH session | The same authenticated local connection carries the animation catalog, bounded presentation commands, plain text and acknowledgments; no model files, screen pixels or real session IDs |
 
 This table covers the plugin, not the model/tool requests DSH makes for your tasks. StarLite has no telemetry or background update service. Opening a project link, browser, or DSH window is user-triggered navigation.
+
+Session control creates no model service. Tool calls/results follow DSH's existing conversation storage and provider request behavior. The companion does not separately log custom bubbles or persona content, or connect to chat platforms. Ownership, temporary layout and pending commands stay in memory.
 
 The public Weiguang source is pinned to:
 

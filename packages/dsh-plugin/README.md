@@ -60,6 +60,8 @@ dsh --profile web
 
 [安装、升级与卸载](https://github.com/StarCried/starlite-dsh/blob/main/docs/user-guide.md) · [换模型与动作](https://github.com/StarCried/starlite-dsh/blob/main/docs/model-import.md) · [气泡、费用与隐私](https://github.com/StarCried/starlite-dsh/blob/main/docs/companion-interactions.md)
 
+开发版支持可选的[会话控制](https://github.com/StarCried/starlite-dsh/blob/main/docs/session-control.md)，默认关闭。开启后，DSH 会话可临时调用已列出的动作、简短气泡与位置大小设置；用户操作始终优先，退出后恢复普通工作状态。仍使用同一个插件，无需另配 MCP。
+
 自己的标准人形 VRM 需要有效的人形映射，无动作时自动使用自带基础待机；眨眼和眼球跟随是可选能力，缺少时仍可使用。模型内的动作会自动列出供映射；模型卡片可移除不用的模型，源文件保留，重启不重新添加。桌宠准备、下载或兼容性检查失败时，DSH 仍可正常运行。API Key、用户提示、工具参数／结果和真实会话 ID 不发送给桌宠。桌面版关闭主窗口只隐藏界面，须从 DSH 托盘退出才停止 Host。
 
 程序 BSD-2-Clause；默认待机随程序提供，本版另提供三个可选通用动作，来源记录随程序保留。微光外观和专属动作独立授权，不打包在 npm 插件内。Windows 程序目前未签名。

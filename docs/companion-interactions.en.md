@@ -2,6 +2,8 @@
 
 [简体中文](companion-interactions.md) · English · [User guide](user-guide.en.md)
 
+Optional [session control](session-control.en.md) lets DSH temporarily control animations, bubbles and layout. It is off by default; manual visibility, pause, privacy and bubble preferences retain priority.
+
 Right-click the character for size, frame rate, tracking, bubbles, pause, and position controls. Changes save automatically without reloading the model or restarting its motions. Hover near the character to show smaller, larger, bubbles, and hide buttons below its feet. Resizing keeps the toolbar in place. Restore a hidden character from the tray.
 
 **Display → Show debug info** shows rendered FPS, frame intervals, and CPU-side frame timing in the model's corner. With **Environment lighting** also enabled, outlines show the actual sample regions around the character. Regions are laid out automatically and cannot be dragged or edited. Turning either option off, pausing, or hiding the character hides the outlines. Debug information stays local and is not uploaded. See [measurement details](upgrade.en.md#show-debug-info).

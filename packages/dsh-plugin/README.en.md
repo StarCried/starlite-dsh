@@ -1,5 +1,7 @@
 # StarLite for DSH
 
+Development builds also provide optional [session control](https://github.com/StarCried/starlite-dsh/blob/main/docs/session-control.en.md), off by default: let your DSH session use the current model's animations, plain-text bubbles and temporary layout. User controls retain priority; no separate MCP server is required.
+
 [简体中文](https://github.com/StarCried/starlite-dsh/blob/main/packages/dsh-plugin/README.md) · English
 
 A lightweight VRM companion for DeepSeek Harness. Install one plugin, start DSH, and the Weiguang example is prepared automatically. Bring your own model whenever you like.

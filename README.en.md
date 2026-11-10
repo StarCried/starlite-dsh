@@ -50,6 +50,8 @@ The interface follows the Windows display language: Chinese for Chinese Windows,
 
 ## Customize
 
+Development builds also offer optional [session control](docs/session-control.en.md), off by default, for DSH-driven animations and bubbles.
+
 Release 0.1.1 adds shared hover controls and keeps the character's foot point fixed while resizing. English controls, three optional bundled gestures and the separately licensed BlueFish example remain available.
 
 [Install, use, and uninstall](docs/user-guide.en.md) · [Models and motions](docs/model-import.en.md) · [Downloads and local storage](docs/network-and-storage.en.md) · [Upgrade and troubleshoot](docs/upgrade.en.md)

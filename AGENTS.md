@@ -87,8 +87,18 @@
   fixed activity codes, ephemeral random references, structured user questions
   and their explicit answers. Keep real session identities and Web credentials
   in the DSH Host (WSL or Windows), never in the companion. Answers must target
-  one still-pending request; do not add general
-  agent control or intercept tool permission approvals.
+  one still-pending request; never intercept tool permission approvals.
+- Optional session presentation control is approved, default off. Register
+  native DSH tools and an embedded Skill; derive ownership from exec.agent.session,
+  never caller-provided IDs. One lease owns the visible model. Only catalogued
+  animations, bounded plain-text bubbles and temporary size/position/gaze cross
+  the local channel. Do not expose files, scripts, screenshots, account credentials,
+  arbitrary parameters or external messaging tools through this feature.
+  Manual pause/hide/drag/model changes and bubble/privacy choices win. Release on
+  disconnect, cancellation, disposal or lease expiry; restore the latest DSH
+  snapshot rather than the state captured at acquisition. No replay or automatic
+  takeover after reconnect. Temporary stage changes must not persist as preferences
+  or normal-exit window state. Keep native permission approvals in DSH.
 - Render bubble content as plain text. Do not persist or log bubble text or the
   bearer token.
 - Login-account billing consumes only `deepseekAccount.getState/getBalance/watch`.

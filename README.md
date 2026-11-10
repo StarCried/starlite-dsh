@@ -63,6 +63,8 @@ dsh --profile web
 
 [安装、升级与卸载](docs/user-guide.md) · [自定义模型与动作](docs/model-import.md) · [气泡与互动](docs/companion-interactions.md) · [下载与联网说明](docs/network-and-storage.md) · [开发说明](docs/development.md)
 
+开发版另提供可选的[会话控制](docs/session-control.md)：让 DSH 用角色的动作和气泡与你互动，默认关闭。
+
 添加自己的标准人形 VRM：无动作时使用自带的基础待机，有动作时自动列出供映射。眨眼和眼球跟随按模型能力启用，缺少对应配置仍可使用；不再需要的模型可在卡片上移除，源文件保留。
 
 一次连接一个 DSH Host。切换时停止原 Host（桌面版从 DSH 托盘退出），正常退出会立即释放连接，快速重启复用模型；异常断线才保留重连期。

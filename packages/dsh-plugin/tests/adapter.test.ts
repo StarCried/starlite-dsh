@@ -2,8 +2,23 @@ import { describe, expect, it, vi } from "vitest";
 import type { PetSnapshot, PetStateSource } from "@starcried/starlite-dsh-protocol";
 import { startDshAdapter, type CordisContextLike } from "../src/adapter.js";
 import type { BillingSource } from "../src/billing.js";
+import type { SessionControl } from "../src/session-control.js";
 
 describe("DSH compatibility adapter", () => {
+  it("keeps takeover across successful turns but releases on explicit cancellation, errors and disposal", async () => {
+    const listeners = new Map<string, (...args: unknown[]) => unknown>(); let control: SessionControl | undefined;
+    const stop = await startDshAdapter({ on(event, listener) { listeners.set(event, listener); return () => listeners.delete(event); } }, {
+      host: () => "windows", launch: async () => undefined,
+      startServer: async (_source, options) => { control = options?.control; return { port: 41234, token: "a".repeat(43), close: async () => undefined }; },
+    });
+    try {
+      const release = vi.spyOn(control!, "releaseSession"), session = {}, agent = { session };
+      listeners.get("session/event")?.(session, { type: "turn/end", data: { reason: { kind: "completed" } } }); expect(release).not.toHaveBeenCalled();
+      listeners.get("session/event")?.(session, { type: "turn/end", data: { reason: { kind: "aborted", reason: { kind: "user" } } } }); expect(release).toHaveBeenLastCalledWith(session, "cancelled");
+      listeners.get("agent/error")?.({ agent }); expect(release).toHaveBeenLastCalledWith(session);
+      listeners.get("agent/disposed")?.({ agent }); expect(release).toHaveBeenLastCalledWith(session);
+    } finally { await stop(); }
+  });
   it.each(["deepseek-account/signed-out", "deepseek-account/session-expired"])("invalidates a non-cancellable account query on %s", async event => {
     const listeners = new Map<string, (...arguments_: unknown[]) => unknown>();
     let billing: BillingSource | undefined;

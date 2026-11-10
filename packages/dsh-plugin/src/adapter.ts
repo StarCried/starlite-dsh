@@ -6,6 +6,8 @@ import { DeepSeekBilling, type BillingContext } from "./billing.js";
 import {QuestionBridge} from "./questions.js";
 import {createDshNavigator} from "./navigation.js";
 import {DshStartupError} from "./startup-error.js";
+import {SessionControl} from "./session-control.js";
+import {registerSessionTools} from "./session-tools.js";
 
 type Listener = (...arguments_: unknown[]) => unknown;
 type Disposer = () => void | Promise<void>;
@@ -43,15 +45,16 @@ export async function startDshAdapter(
   const aggregator = new DshStateAggregator();
   const billing = new DeepSeekBilling(context);
   const questions = new QuestionBridge(aggregator,key=>navigator.open(key),context);
+  const control = new SessionControl(key => navigator.open(key));
   let server: StatusServer;
-  try {server = await (dependencies.startServer ?? startStatusServer)(aggregator, {billing,questions});}
-  catch (error) {questions.close(); billing.close(); await navigator.close(); throw error;}
+  try {server = await (dependencies.startServer ?? startStatusServer)(aggregator, {billing,questions,control});}
+  catch (error) {control.close(); questions.close(); billing.close(); await navigator.close(); throw error;}
   const refreshTitle=(key:unknown)=>{
     try{const service=asRecord(context.get?.("sessionTitle"));const value=typeof service?.get==="function"?asRecord(service.get.call(service,key)):undefined;
       aggregator.sessionInfo(key,typeof value?.title==="string"?value.title:undefined);
     }catch{aggregator.sessionInfo(key)}
   };
-  const disposers: Disposer[] = [() => navigator.close()];
+  const disposers: Disposer[] = [() => navigator.close(), registerSessionTools(context, control)];
   let approvalSequence = 0;
 
   try {
@@ -67,7 +70,7 @@ export async function startDshAdapter(
     });
     subscribeRequired(context, disposers, "agent/error", (...arguments_) => {
       const payload = asRecord(arguments_[0]);
-      if (payload?.agent) {const key=subjectKey(payload.agent);questions.cancelSession(key);refreshTitle(key);aggregator.handleAgentError(key);}
+      if (payload?.agent) {const key=subjectKey(payload.agent);control.releaseSession(key);questions.cancelSession(key);refreshTitle(key);aggregator.handleAgentError(key);}
     });
     subscribeRequired(context, disposers, "agent/assistant-stream", (...arguments_) => {
       const payload = asRecord(arguments_[0]);
@@ -81,7 +84,12 @@ export async function startDshAdapter(
       const event = asRecord(arguments_[1]);
       if (session && typeof event?.type === "string") {
         const key=subjectKey(session);refreshTitle(key);
-        if(event.type==="turn/end")questions.cancelForeground(key);
+        if(event.type==="turn/end"){
+          questions.cancelForeground(key);
+          const reason=asRecord(asRecord(event.data)?.reason)?.kind;
+          if(reason==="aborted")control.releaseSession(key,"cancelled");
+          else if(reason==="error")control.releaseSession(key);
+        }
         aggregator.handleSessionEvent(subjectKey(session), event as unknown as DshEventLike);
         questions.refresh();
         if (event.type === "assistant/message" || event.type === "assistant/attempt") billing.invalidate();
@@ -115,14 +123,14 @@ export async function startDshAdapter(
     },{prepend:true});
     subscribeOptional(context, disposers, "agent/disposed", (...arguments_) => {
       const payload = asRecord(arguments_[0]);
-      if (payload?.agent) {const key=subjectKey(payload.agent);questions.cancelSession(key);aggregator.disposeSession(key);}
+      if (payload?.agent) {const key=subjectKey(payload.agent);control.releaseSession(key);questions.cancelSession(key);aggregator.disposeSession(key);}
     });
     for (const event of ["settings/updated", "settings/document-updated", "credentials/reference-updated", "credentials/record-updated",
       "deepseek-account/signed-out", "deepseek-account/session-expired"]) {
       subscribeOptional(context, disposers, event, () => billing.invalidate(true));
     }
   } catch (error) {
-    questions.close();billing.close();
+    control.close();questions.close();billing.close();
     await closeAdapter(disposers, server);
     throw error;
   }
@@ -154,6 +162,7 @@ export async function startDshAdapter(
     closed = true;
     launchAbort.abort();
     billing.close();
+    control.close();
     questions.close();
     await closeAdapter(disposers, server);
   };

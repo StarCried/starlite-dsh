@@ -7,9 +7,11 @@ import {
   type PetSnapshot,
   type PetStateSource,
   MAX_INTERACTION_BYTES, isOpaqueRef, parsePetInteraction,
+  MAX_CONTROL_BYTES,
 } from "@starcried/starlite-dsh-protocol";
 import type { BillingSource } from "./billing.js";
 import type {QuestionBridge} from "./questions.js";
+import type {SessionControl} from "./session-control.js";
 
 const HEARTBEAT_MS = 15_000;
 const MAX_CLIENTS = 2;
@@ -41,12 +43,22 @@ export interface StatusServer {
   close(): Promise<void>;
 }
 
-export async function startStatusServer(source: PetStateSource, options: {billing?: BillingSource; questions?: QuestionBridge} = {}): Promise<StatusServer> {
+export async function startStatusServer(source: PetStateSource, options: {billing?: BillingSource; questions?: QuestionBridge; control?: SessionControl} = {}): Promise<StatusServer> {
   const token = randomBytes(32).toString("base64url");
   const clients = new Set<ServerResponse>();
   let latest: PetSnapshot | undefined;
   let closed = false;
   let closing: Promise<void> | undefined;
+  let inputAvailable = false;
+  const syncQuestions = () => options.questions?.setEnabled(inputAvailable && !options.control?.active);
+  const unsubscribeControlState = options.control?.onChange(syncQuestions);
+  const unsubscribeControl = options.control?.subscribe(frame => {
+    if (closed) return;
+    const data = `event: control\ndata: ${JSON.stringify(frame)}\n\n`;
+    for (const client of clients) if (!client.destroyed && !client.writableEnded) {
+      if (client.writableLength > MAX_CONTROL_BYTES) client.destroy(); else client.write(data);
+    }
+  });
 
   const server = createServer((request, response) => {
     const origin = request.headers.origin;
@@ -73,6 +85,18 @@ export async function startStatusServer(source: PetStateSource, options: {billin
     }
 
     const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+    if (options.control && request.method === "POST" && ["/v1/control/desktop", "/v1/control/ack", "/v1/control/release", "/v1/control/open"].includes(path)) {
+      const control = options.control;
+      void readBody(request).then(async body => {
+        if (closed || response.destroyed) return;
+        if (path === "/v1/control/desktop") control.report(body);
+        else if (path === "/v1/control/ack") control.acknowledge(body);
+        else if (path === "/v1/control/open") await control.open(body);
+        else control.userRelease(body);
+        response.writeHead(204, { "Cache-Control": "no-store", ...(origin ? corsHeaders(origin) : {}) }); response.end();
+      }).catch(() => { if (!response.destroyed && !response.headersSent) reject(response, 409); });
+      return;
+    }
     if (path === "/v1/health" && request.method === "GET") {
       response.writeHead(204, {
         "Cache-Control": "no-store",
@@ -111,7 +135,7 @@ export async function startStatusServer(source: PetStateSource, options: {billin
         const row=body as Record<string,unknown>;
         if(path==="/v1/interaction/answer")await bridge.answer(row);
         else if(path==="/v1/interaction/availability"){
-          if(typeof row.enabled!=="boolean"||Object.keys(row).some(k=>k!=="enabled"))throw Error("invalid availability");bridge.setEnabled(row.enabled);
+          if(typeof row.enabled!=="boolean"||Object.keys(row).some(k=>k!=="enabled"))throw Error("invalid availability");inputAvailable=row.enabled;syncQuestions();
         }else if(path==="/v1/web/open"){
           if(Object.keys(row).length!==0)throw Error("invalid navigation");await bridge.openWebUi();
         }else{
@@ -140,9 +164,10 @@ export async function startStatusServer(source: PetStateSource, options: {billin
     response.flushHeaders();
     clients.add(response);
     options.questions?.setConnected(true);
+    options.control?.setConnected(true);
     response.write(": connected\n\n");
     if (latest) writeSnapshot(response, latest);
-    request.on("close", () => {clients.delete(response);options.questions?.setConnected(clients.size>0)});
+    request.on("close", () => {clients.delete(response);options.questions?.setConnected(clients.size>0);options.control?.setConnected(clients.size>0)});
   });
 
   const heartbeat = setInterval(() => {
@@ -168,6 +193,7 @@ export async function startStatusServer(source: PetStateSource, options: {billin
     await listenLoopback(server);
   } catch (error) {
     clearInterval(heartbeat);
+    unsubscribeControl?.(); unsubscribeControlState?.(); options.control?.close();
     await source.stop().catch(() => undefined);
     server.close();
     throw error;
@@ -188,6 +214,7 @@ export async function startStatusServer(source: PetStateSource, options: {billin
       closing = (async () => {
         options.billing?.close();
         options.questions?.close();
+        options.control?.close(); unsubscribeControl?.(); unsubscribeControlState?.();
         await shutdown(server, clients, source, heartbeat, true);
       })();
       return closing;

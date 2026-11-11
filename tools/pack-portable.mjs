@@ -88,7 +88,7 @@ function portableInstructions(version) {
 删除程序目录不会删除 AppData 中的用户模型与设置。
 
 程序采用 BSD-2-Clause，见 LICENSE；依赖许可见 THIRD_PARTY_LICENSES.txt。
-程序仅内嵌基础待机；微光与其其他动作以单独授权的 VRM 交付。
+程序内嵌基础待机和三个可选通用动作；示例角色与其专属动作以单独授权的 VRM 交付。
 `;
 }
 

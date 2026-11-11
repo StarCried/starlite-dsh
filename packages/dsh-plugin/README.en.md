@@ -1,12 +1,12 @@
 # StarLite for DSH
 
-Development builds also provide optional [session control](https://github.com/StarCried/starlite-dsh/blob/main/docs/session-control.en.md), off by default: let your DSH session use the current model's animations, plain-text bubbles and temporary layout. User controls retain priority; no separate MCP server is required.
+Optional [session control](https://github.com/StarCried/starlite-dsh/blob/main/docs/session-control.en.md), off by default, lets your DSH session use the current model's animations, plain-text bubbles and temporary layout. User controls retain priority; no separate MCP server is required.
 
 [简体中文](https://github.com/StarCried/starlite-dsh/blob/main/packages/dsh-plugin/README.md) · English
 
 A lightweight VRM companion for DeepSeek Harness. Install one plugin, start DSH, and the Weiguang example is prepared automatically. Bring your own model whenever you like.
 
-Release `0.1.1`. Requires Windows 11 x64 and WebView2. Supports official Windows Desktop, native Windows CLI/Web, and WSL2 DSH.
+Release `0.1.2`. Requires Windows 11 x64 and WebView2. Supports official Windows Desktop, native Windows CLI/Web, and WSL2 DSH.
 
 ## Install
 
@@ -51,7 +51,7 @@ Release 0.1.0 includes English controls, three optional bundled gestures and the
 
 npm installation runs no model-download script. On DSH startup, the selected example is downloaded from a pinned GitHub Release URL only if it has not been imported and has no valid download cache. Imported models are reused without downloading them again after program upgrades. GitHub redirects to `release-assets.githubusercontent.com` are permitted. URL, length, and SHA-256 are recorded in the packaged `assets/windows-x64/manifest.json`; no cookies, API keys, or session content accompany model downloads.
 
-Program/example cache: `%LOCALAPPDATA%\StarCried\StarLite\companions`. User models/preferences: `%APPDATA%\com.starcried.dsh-inochi2d-pet`. WSL uses the same Windows program and cache. Status and explicit answers travel only over token-authenticated local `127.0.0.1` connections. User prompts, tool arguments/results, real session IDs, and API keys are not sent to the companion.
+Program/example cache: `%LOCALAPPDATA%\StarCried\StarLite\companions`. User models/preferences: `%APPDATA%\com.starcried.dsh-inochi2d-pet`. WSL uses the same Windows program and cache. Status and explicit answers travel only over token-authenticated local `127.0.0.1` connections. Raw user prompts, ordinary DSH tool arguments/results, real session IDs, and API keys are not forwarded to the companion. When session control is enabled, StarLite presentation tools send bounded animation, text, and layout instructions over the same local connection; privacy mode still blocks custom text.
 
 Environment lighting is enabled by default and can be disabled in the right-click menu or settings; previously disabled settings are preserved. It samples small nearby color patches locally at a low rate, never saves or uploads images, and stops while hidden, paused, or locked.
 

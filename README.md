@@ -6,7 +6,7 @@
 
 **[先看模型效果](https://starcried.github.io/)**：无需安装，用桌面浏览器体验博客中的微光；DSH 的工作状态与问答气泡需安装下方插件。
 
-正式版 `0.1.1`，需要 **Windows 11 x64 + WebView2**。支持官方 Windows 桌面版、Windows 原生 CLI/Web 和 WSL2 DSH。[版本变化](CHANGELOG.md)
+正式版 `0.1.2`，需要 **Windows 11 x64 + WebView2**。支持官方 Windows 桌面版、Windows 原生 CLI/Web 和 WSL2 DSH。[版本变化](CHANGELOG.md)
 
 **快速开始**：[自己安装](#安装并体验微光) · [让 Agent 安装](#让-agent-帮你)
 
@@ -63,7 +63,7 @@ dsh --profile web
 
 [安装、升级与卸载](docs/user-guide.md) · [自定义模型与动作](docs/model-import.md) · [气泡与互动](docs/companion-interactions.md) · [下载与联网说明](docs/network-and-storage.md) · [开发说明](docs/development.md)
 
-开发版另提供可选的[会话控制](docs/session-control.md)：让 DSH 用角色的动作和气泡与你互动，默认关闭。
+提供可选的[会话控制](docs/session-control.md)：让 DSH 用角色的动作和气泡与你互动，默认关闭。
 
 添加自己的标准人形 VRM：无动作时使用自带的基础待机，有动作时自动列出供映射。眨眼和眼球跟随按模型能力启用，缺少对应配置仍可使用；不再需要的模型可在卡片上移除，源文件保留。
 

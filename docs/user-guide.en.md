@@ -2,7 +2,7 @@
 
 [简体中文](user-guide.md) · English · [README](../README.en.md)
 
-Requires Windows 11 x64, WebView2, and one supported DSH Host: official Windows Desktop, native Windows CLI/Web, or WSL2 CLI/Web. This guide covers `0.1.1`; the install channel is `dsh-starlite`. Pin `dsh-starlite@0.1.1` when reproducibility is required.
+Requires Windows 11 x64, WebView2, and one supported DSH Host: official Windows Desktop, native Windows CLI/Web, or WSL2 CLI/Web. This guide covers `0.1.2`; installing `dsh-starlite` uses `latest`. Pin `dsh-starlite@0.1.2` when reproducibility is required.
 
 ## Install
 
@@ -47,7 +47,7 @@ The companion connects to one Host. Closing the DSH desktop window with × only 
 
 ## Controls and bubbles
 
-Development builds offer **Display → Environment lighting** in the model's right-click menu and full settings. It is on by default, with an initial strength of 100% and a 0%–200% range. Previously saved strengths and explicitly disabled settings are preserved. The 100% setting retains the previous full effect; higher values strengthen both color and brightness adaptation. Light-energy gain ranges from 80%–110% at 100% strength to 60%–120% at 200%; this is not a screen-pixel brightness guarantee. Zero strength or disabling the effect restores the original lighting. Changes apply immediately without reloading the model. Sampling is local and low frequency; see the [data disclosure](network-and-storage.en.md#storage-and-processes).
+Use **Display → Environment lighting** in the model's right-click menu or full settings. It is on by default, with an initial strength of 100% and a 0%–200% range. Previously saved strengths and explicitly disabled settings are preserved. The 100% setting retains the previous full effect; higher values strengthen both color and brightness adaptation. Light-energy gain ranges from 80%–110% at 100% strength to 60%–120% at 200%; this is not a screen-pixel brightness guarantee. Zero strength or disabling the effect restores the original lighting. Changes apply immediately without reloading the model. Sampling is local and low frequency; see the [data disclosure](network-and-storage.en.md#storage-and-processes).
 
 - Drag the model's body to move it. Transparent surroundings pass clicks through. Right-click opens quick settings; use More settings or the tray for the library and license controls.
 - A single click while idle plays a mapped gesture and shows official DeepSeek billing. While working it only queries billing. A pending question is never replaced by the billing card.
@@ -55,7 +55,7 @@ Development builds offer **Display → Environment lighting** in the model's rig
 - Compact bubbles show title and activity. Detailed bubbles also show bounded reasoning/response content. **Show bubbles** off suppresses every bubble while keeping animations active.
 - Ordinary single-choice, multiple-choice, and free-text questions can be answered in the bubble. Tool permission approvals stay in DSH.
 - Only idle loops. Other state motions play once, then return to idle. New states may interrupt; click/ambient gestures are suppressed during work. Thinking and output share Working.
-- **Hide session content** hides titles, reasoning, responses, questions, and billing, leaving fixed statuses. User prompts, tool arguments/results, real session identifiers, and credentials are never sent to the companion.
+- **Hide session content** hides titles, reasoning, responses, questions, and billing, leaving fixed statuses. Raw user prompts, ordinary DSH tool arguments/results, real session identifiers, and credentials are never forwarded to the companion. Separately enabling [session control](session-control.en.md) permits bounded animation, text, and temporary layout instructions from StarLite presentation tools; Hide session content still blocks custom text.
 
 Timed questions display the Host's remaining time. DSH decides when to continue. Questions that allow late answers remain answerable afterward. **Answer in DSH** hands off only after the exact session opens successfully; failure preserves the current draft. Newer questions, privacy changes, and disconnection revoke stale forms.
 

@@ -6,7 +6,7 @@ Bring your own VRM character to DeepSeek Harness. StarLite quietly shows task pr
 
 **[Try a model in your browser](https://starcried.github.io/)** before installing. The blog demo uses Weiguang; DSH task updates and question bubbles require the plugin below.
 
-Release `0.1.1`. Requires **Windows 11 x64 and WebView2**. Supports the official Windows desktop app, native Windows CLI/Web, and WSL2 DSH.
+Release `0.1.2`. Requires **Windows 11 x64 and WebView2**. Supports the official Windows desktop app, native Windows CLI/Web, and WSL2 DSH.
 
 ## Install and try Weiguang
 
@@ -50,9 +50,9 @@ The interface follows the Windows display language: Chinese for Chinese Windows,
 
 ## Customize
 
-Development builds also offer optional [session control](docs/session-control.en.md), off by default, for DSH-driven animations and bubbles.
+Optional [session control](docs/session-control.en.md), off by default, lets DSH use the character's animations and bubbles.
 
-Release 0.1.1 adds shared hover controls and keeps the character's foot point fixed while resizing. English controls, three optional bundled gestures and the separately licensed BlueFish example remain available.
+Shared hover controls keep the character's foot point fixed while resizing. English controls, three optional bundled gestures and the separately licensed BlueFish example are available.
 
 [Install, use, and uninstall](docs/user-guide.en.md) · [Models and motions](docs/model-import.en.md) · [Downloads and local storage](docs/network-and-storage.en.md) · [Upgrade and troubleshoot](docs/upgrade.en.md)
 

@@ -35,6 +35,11 @@ export async function checkPluginPackage(root, { allowLocalTest = true } = {}) {
     const staged = await ordinaryBuildFile(root, `${DESKTOP_ASSET_DIRECTORY}/${name}`, maximum);
     if (!packed.equals(staged)) throw Error(`packed desktop asset differs from staging: ${name}`);
   }
+  for (const name of ["README.md", "README.en.md"]) {
+    const packed = extract(`package/${name}`, 1024 * 1024);
+    const reviewed = await ordinaryBuildFile(root, `packages/dsh-plugin/${name}`, 1024 * 1024);
+    if (!packed.equals(reviewed)) throw Error(`packed documentation differs from reviewed source: ${name}`);
+  }
   return { archive, fileCount: entries.length, bytes: info.size, localTest: manifestDefaultModels(manifest).some(model => model.localTest === true) };
 }
 

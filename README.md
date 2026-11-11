@@ -6,7 +6,7 @@
 
 **[先看模型效果](https://starcried.github.io/)**：无需安装，用桌面浏览器体验博客中的微光；DSH 的工作状态与问答气泡需安装下方插件。
 
-正式版 `0.1.2`，需要 **Windows 11 x64 + WebView2**。支持官方 Windows 桌面版、Windows 原生 CLI/Web 和 WSL2 DSH。[版本变化](CHANGELOG.md)
+[最新正式版](https://github.com/StarCried/starlite-dsh/releases/latest)，需要 **Windows 11 x64 + WebView2**。支持官方 Windows 桌面版、Windows 原生 CLI/Web 和 WSL2 DSH。[版本变化](packages/dsh-plugin/CHANGELOG.md)
 
 **快速开始**：[自己安装](#安装并体验微光) · [让 Agent 安装](#让-agent-帮你)
 
@@ -25,7 +25,7 @@ dsh --profile web
 
 以后只需启动 DSH，桌宠随之出现。无需另装桌宠软件、手动解压模型或填写 EXE 路径。程序使用系统 WebView2，不打包浏览器。
 
-**使用微光即表示同意其独立许可；不同意请在模型列表选择「不显示模型」。** 每个模型都可查看自己的许可。本版本仅启用 VRM，Inochi2D 暂不提供导入和显示。
+**使用微光即表示同意其独立许可；不同意请在模型列表选择「不显示模型」。** 每个模型都可查看自己的许可。DSH 仅启用 VRM，不提供 Inochi2D 导入和显示。
 
 ## 让 Agent 帮你
 

@@ -4,7 +4,7 @@
 
 需要 Windows 11 x64、WebView2，以及以下任一种 DSH：官方 Windows 桌面版、Windows 原生 CLI/Web、WSL2 CLI/Web。只安装一个 `dsh-starlite` 插件：桌宠由插件准备和启动，不需要安装器、管理员权限或手动设置 EXE 路径。
 
-本文对应正式版 `0.1.2`。安装 `dsh-starlite` 默认使用 `latest`；需要固定版本时可换为 `dsh-starlite@0.1.2`。[版本变化](../CHANGELOG.md) · [兼容性与验收](dsh-compatibility.md) · [升级与排错](upgrade.md)
+安装 `dsh-starlite` 默认使用 `latest`；需要固定版本时，使用 `dsh-starlite@版本号`，版本号见[正式发行](https://github.com/StarCried/starlite-dsh/releases)。[版本变化](../packages/dsh-plugin/CHANGELOG.md) · [兼容性与验收](dsh-compatibility.md) · [升级与排错](upgrade.md)
 
 ## 安装
 
@@ -58,9 +58,9 @@ dsh plugin --profile web remove dsh-inochi2d-pet
 
 **默认使用微光，使用即表示同意其独立许可；不同意请在模型列表选择「不显示模型」。** 无需首次确认，模型、动作、角色配置与状态映射自动配置。模型卡片可查看许可；不显示这一选择会保存，之后启动不下载默认资源、不显示或渲染模型。DSH 继续正常运行。
 
-已经配置的 VRM 模型、映射、显示、隐私和气泡偏好保留。当前版本关闭 Inochi2D 导入与显示；旧模型文件和偏好保留，微光准备成功后可使用默认微光。
+已经配置的 VRM 模型、映射、显示、隐私和气泡偏好保留。DSH 不启用 Inochi2D 导入与显示；旧模型文件和偏好保留，微光准备成功后可使用默认微光。
 
-程序和微光独立授权、独立传输；npm 插件不包含微光角色外观。本版自带基础待机和三个可选通用动作，蓝色大肥鱼可在模型列表中选择获取。Windows 程序使用系统 WebView2，不打包浏览器。目前程序未签名；单独下载 Windows 程序时请核对项目 Release 来源与 SHA-256，不关闭系统防护。
+程序和微光独立授权、独立传输；npm 插件不包含微光角色外观。程序自带基础待机和三个可选通用动作，蓝色大肥鱼可在模型列表中选择获取。Windows 程序使用系统 WebView2，不打包浏览器。目前程序未签名；单独下载 Windows 程序时请核对项目 Release 来源与 SHA-256，不关闭系统防护。
 
 日常只需：
 

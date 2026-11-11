@@ -6,7 +6,7 @@ Bring your own VRM character to DeepSeek Harness. StarLite quietly shows task pr
 
 **[Try a model in your browser](https://starcried.github.io/)** before installing. The blog demo uses Weiguang; DSH task updates and question bubbles require the plugin below.
 
-Release `0.1.2`. Requires **Windows 11 x64 and WebView2**. Supports the official Windows desktop app, native Windows CLI/Web, and WSL2 DSH.
+[Latest release](https://github.com/StarCried/starlite-dsh/releases/latest). Requires **Windows 11 x64 and WebView2**. Supports the official Windows desktop app, native Windows CLI/Web, and WSL2 DSH.
 
 ## Install and try Weiguang
 

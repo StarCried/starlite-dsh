@@ -14,6 +14,7 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "scripts": {
+    "release": "node tools/release.mjs",
     "build": "pnpm --recursive --if-present run build",
     "lint": "oxlint --deny-warnings packages tools apps/desktop/src",
     "typecheck": "pnpm --recursive --if-present run typecheck",
@@ -35,6 +36,7 @@
     "test:dependency-audit": "node --test tools/check-dependency-audit.test.mjs"
   },
   "devDependencies": {
+    "@changesets/cli": "3.0.3",
     "@types/node": "^24.10.0",
     "esbuild": "0.28.2",
     "happy-dom": "21.0.4",

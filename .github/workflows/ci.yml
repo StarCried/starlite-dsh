@@ -14,7 +14,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      full: ${{ steps.classify.outputs.full }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - id: classify
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          node tools/check-release-docs.mjs
+          if [[ -n "$BASE" && "$BASE" != "0000000000000000000000000000000000000000" ]]; then
+            node tools/check-release-docs.mjs "$BASE"
+          else
+            echo "full=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release-pin:
+    needs: changes
+    if: needs.changes.outputs.full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -37,6 +62,8 @@ jobs:
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
 
   core:
+    needs: changes
+    if: needs.changes.outputs.full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -111,7 +138,7 @@ jobs:
           name: model-runtimes
           path: apps/desktop/public/runtime
       - run: pnpm install --frozen-lockfile
-      - run: pnpm check
+      - run: pnpm lint && pnpm typecheck && pnpm test
       - run: cargo fmt --check --manifest-path apps/desktop/src-tauri/Cargo.toml
       - run: cargo clippy --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
       - run: cargo clippy --locked --release --manifest-path apps/desktop/src-tauri/Cargo.toml -- -D warnings
@@ -139,15 +166,6 @@ jobs:
       - run: pnpm pack:plugin
       - name: Check local build gates (not a public release)
         run: pnpm check:release -- --local-test
-      - name: Generate checksums, SBOM and dependency license texts
-        shell: pwsh
-        run: |
-          $config = Get-Content -LiteralPath 'apps/desktop/src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json
-          $bridge = Get-Content -LiteralPath 'packages/dsh-plugin/package.json' -Raw | ConvertFrom-Json
-          $installer = Join-Path 'apps/desktop/src-tauri/target/release/bundle/nsis' "$($config.productName)_$($config.version)_x64-setup.exe"
-          $plugin = Join-Path 'packages/dsh-plugin/.pack' "$($bridge.name)-$($bridge.version).tgz"
-          pnpm release:metadata -- $plugin $installer
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Package the optional portable app and include its checksum
         shell: pwsh
         run: |
@@ -175,3 +193,20 @@ jobs:
             release-output/THIRD_PARTY_LICENSES.txt
           if-no-files-found: error
           retention-days: 7
+
+  result:
+    if: always()
+    needs: [changes, core, runtime, windows-desktop]
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          CHANGES: ${{ needs.changes.result }}
+          FULL: ${{ needs.changes.outputs.full }}
+          CORE: ${{ needs.core.result }}
+          RUNTIME: ${{ needs.runtime.result }}
+          WINDOWS: ${{ needs.windows-desktop.result }}
+        run: |
+          test "$CHANGES" = success
+          if [[ "$FULL" == true ]]; then
+            test "$CORE" = success && test "$RUNTIME" = success && test "$WINDOWS" = success
+          fi

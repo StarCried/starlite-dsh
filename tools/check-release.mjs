@@ -6,6 +6,7 @@ import { checkProgramAssets } from "./release-assets.mjs";
 import { checkReleaseInstaller } from "./release-installer.mjs";
 import { checkPluginPackage } from "./check-plugin-package.mjs";
 import { assertDesktopExecutable, assertDesktopManifest, MAX_MANIFEST_BYTES, ordinaryBuildFile } from "./plugin-desktop-assets.mjs";
+import { checkCurrentDocs, syncVersions } from "./release-state.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const failures = [];
@@ -13,29 +14,8 @@ const arguments_ = process.argv.slice(2).filter(argument => argument !== "--");
 if (arguments_.some(argument => argument !== "--local-test") || arguments_.length > 1) throw Error("usage: pnpm check:release [-- --local-test]");
 const localTest = arguments_.includes("--local-test");
 import { RUNTIMES, assertRuntime, assertRuntimeLayout } from "./model-runtime.mjs";
-const versionFiles = [
-  ["workspace", "package.json", "version"],
-  ["desktop", "apps/desktop/package.json", "version"],
-  ["protocol", "packages/protocol/package.json", "version"],
-  ["npm bundle", "packages/dsh-plugin/package.json", "version"],
-  ["Tauri", "apps/desktop/src-tauri/tauri.conf.json", "version"],
-];
-const versions = [];
-
-for (const [label, relativePath, key] of versionFiles) {
-  const json = await jsonFile(relativePath);
-  const value = json?.[key];
-  if (typeof value !== "string") failures.push(`${label} version is missing`);
-  else versions.push([label, value]);
-}
-const cargo = await textFile("apps/desktop/src-tauri/Cargo.toml");
-const cargoVersion = cargo?.match(/^version\s*=\s*"([^"]+)"/mu)?.[1];
-if (cargoVersion) versions.push(["Cargo", cargoVersion]);
-else failures.push("Cargo version is missing");
-const uniqueVersions = new Set(versions.map(([, version]) => version));
-if (uniqueVersions.size !== 1) {
-  failures.push(`release versions differ: ${versions.map(([name, value]) => `${name}=${value}`).join(", ")}`);
-}
+const version = await syncVersions(root).catch(error => { failures.push(String(error)); return "unknown"; });
+try { await checkCurrentDocs(root, version); } catch (error) { failures.push(String(error)); }
 
 const pin = (await textFile("release/starlite.rev"))?.trim();
 if (!pin || !/^[0-9a-f]{40}$/u.test(pin)) {
@@ -52,7 +32,6 @@ for (const name of RUNTIMES) {
 
 failures.push(...await checkProgramAssets(root));
 
-const version = versions[0]?.[1] ?? "unknown";
 await requiredFile(`packages/dsh-plugin/.pack/dsh-starlite-${version}.tgz`, 1);
 try {
   const manifest = assertDesktopManifest(JSON.parse(await ordinaryBuildFile(root, "packages/dsh-plugin/assets/windows-x64/manifest.json", MAX_MANIFEST_BYTES)), { expectedVersion: version, allowLocalTest: localTest });

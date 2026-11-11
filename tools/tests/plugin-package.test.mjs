@@ -33,6 +33,8 @@ async function fixture(defaultModel = model) {
   const manifest = { schemaVersion: 2, version, platform: "windows-x64", executable: { file: "dsh-inochi2d-pet.exe", bytes: exe.length, sha256: sha256(exe) }, defaultModel };
   const assets = { "dsh-inochi2d-pet.exe": exe, "manifest.json": json(manifest), "LICENSE": Buffer.from("Generated program notice"), "THIRD_PARTY_LICENSES.txt": Buffer.from("Generated dependency notice") };
   await file(root, "packages/dsh-plugin/package.json", json({ version }));
+  await file(root, "packages/dsh-plugin/README.md", "Generated instructions");
+  await file(root, "packages/dsh-plugin/README.en.md", "Generated English instructions");
   for (const name of DESKTOP_ASSET_FILES) await file(root, `packages/dsh-plugin/assets/windows-x64/${name}`, assets[name]);
   async function pack(changes = {}) {
     const files = {
@@ -54,6 +56,12 @@ async function fixture(defaultModel = model) {
 it("accepts a public archive whose four desktop assets exactly match staging", async () => {
   const { root } = await fixture();
   expect(await checkPluginPackage(root, { allowLocalTest: false })).toMatchObject({ fileCount: 12, localTest: false });
+});
+
+it.each(["README.md", "README.en.md"])("rejects stale packed documentation: %s", async name => {
+  const {root} = await fixture();
+  await file(root, `packages/dsh-plugin/${name}`, "Reviewed newer installation instructions");
+  await expect(checkPluginPackage(root, {allowLocalTest: false})).rejects.toThrow("packed documentation differs from reviewed source");
 });
 
 it("rejects an old local-only archive even after staging a public model source", async () => {

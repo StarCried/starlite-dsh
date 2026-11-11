@@ -9,6 +9,8 @@ on:
       - packages/dsh-plugin/**
       - packages/protocol/**
       - pnpm-lock.yaml
+      - '!packages/**/README*.md'
+      - '!packages/**/CHANGELOG.md'
   schedule:
     - cron: "17 20 * * *"
   workflow_dispatch:

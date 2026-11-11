@@ -1,0 +1,201 @@
+# StarLite for DSH project instructions
+
+## Product boundary
+
+- The product is a Windows 11 x64 companion for one DeepSeek Harness Host:
+  WSL2 CLI/Web, native Windows CLI/Web, or the official Windows Desktop app.
+  It is not a general desktop-pet framework. Do not silently replace a live
+  Host connection when another profile or installation starts.
+- An explicit `host-stopped` terminal event on the authenticated current SSE
+  stream releases ownership immediately and adopts the first queued successor.
+  Unexpected EOF/errors retain the 60-second lease; disconnected arrivals queue
+  silently, and only a live connected Host conflict warns. Never infer shutdown
+  from a timeout. Pause the retained renderer while offline and reuse it on
+  reconnect instead of remounting the model.
+- Keep the Cordis bundle, cross-process protocol, and Tauri desktop app in this
+  repository. Reusable Inochi2D/VRM rendering and model preparation stay in the
+  StarLite component repository (`StarCried/starlite`). Local checkout paths use
+  `starlite` and `starlite-dsh`. The GitHub repositories have been renamed to
+  `StarCried/starlite` and `StarCried/starlite-dsh` with user approval.
+  Pushing source and publishing releases require explicit user approval.
+- Do not add Linux/macOS desktop targets, remote Hosts, voice, chat,
+  memory, telemetry, or auto-update without an approved
+  scope change.
+- Model-only alpha hit testing and transparent background passthrough are approved.
+  Keep cursor coordinates in memory; do not log or transmit desktop input.
+- Optional environment lighting samples at most eight 12x12 visible patches
+  near the model's alpha bounds, at most four times a second. Compute those
+  bounds from mask bits, not the padded canvas or the large native window.
+  Restrict patches to the window client and real monitors; exclude the model,
+  visible bubbles (including noninteractive ones), controls, shadows and debug
+  frame strokes. Webview overlay rectangles can only exclude capture regions.
+  Native sampling must
+  respect the native enabled preference and stop when paused, hidden or on a secure
+  desktop. Return only reduced RGB, never pixels; do not write captures, upload
+  them, hide the pet to sample, or exclude it from other applications' recordings.
+  New or omitted strength settings default to 1.0 (100%), with a 0–2 range;
+  preserve explicit saved strengths and disabled choices. New or omitted enabled
+  settings default to true; the user approved default-on environment lighting.
+- Temporary sampling failure retains the last valid color only for the current
+  active controller. Clear it on disable, pause, model replacement and destroy;
+  generation checks must run before storing or applying an asynchronous result.
+  Window movement alone must not discard the whole sample. Keep each captured
+  patch associated with its rectangle when filtering possible self-overlap.
+- Name the lighting feature “环境光 / Environment lighting” and its intensity
+  “环境光强度 / Lighting strength” in current UI/docs; keep environmentLighting
+  API/config names and saved preference keys unchanged.
+- The user-facing toggle is “显示调试信息 / Show debug info”; preserve the existing
+  performanceOverlay setting and runtime API. Sampling frames show only with
+  debug and lighting enabled, using native-returned accepted patch geometry.
+  Frames have transparent centres, never receive pointer input, and their four
+  border strokes must be excluded from the next sample. Geometry updates must
+  not reset the native four-Hz sampling clock. No editable points/distance UI.
+  Refresh alpha coverage and await coalesced native writes before capture;
+  reject results if visible UI exclusion geometry changed during the request.
+  Retire disappearing UI from the first observed disappearance, not the last
+  visible poll (which can already be older than the compositor grace period).
+- Keep `docs/network-and-storage.md` and the packaged README's download disclosure
+  aligned with bootstrap, billing and launcher behavior. External directories may
+  compare static call-pattern scans with runtime events; do not invent unsupported
+  DSH permission fields or change request timing merely to avoid those scans.
+- Bubble placement uses the runtime's cached reference-pose `getBubbleAnchor()`
+  in host CSS pixels (no DPR or canvas padding). Reproject after resize, clear on
+  model replacement, and never resize the native window from animated bounds.
+- Visitor controls use shared `createVisitorToolbar` and `isModelDrag` exports.
+  Keep the toolbar's CSS size and portrait foot anchor fixed during scaling.
+  Reserve the full quick-control range before mount and scale the body inside
+  it around its bottom center; native geometry preserves that screen anchor.
+  Bubble and host position use the changing body top-left. Reset host motion
+  after viewport changes so size edits do not kick spring physics; compensate
+  an open menu if an external preference expands the reserved range.
+  Toolbar and context menu are mutually exclusive and share the native menu
+  region; never union their rectangles across transparent space. The shared
+  drag threshold is strictly greater than six CSS pixels, including native DPI conversion.
+- Resolve UI locale from the native Windows display language before importing
+  label modules; pass it explicitly to shared controls and VRM. Translate only
+  application-owned text, never session content or arbitrary model metadata.
+  Translate known example terms only when both model ID and canonical text match.
+
+## Security and privacy
+
+- Bind the status service to IPv4 loopback on an ephemeral port and require the
+  in-memory bearer token created for that DSH process.
+- The wire may contain only the aggregate state and sanitized model-visible
+  reasoning/text. Never send user prompts, tool arguments or results, error
+  stacks, file paths, credentials, or session identifiers.
+- User-authorized companion interactions additionally allow the session title,
+  fixed activity codes, ephemeral random references, structured user questions
+  and their explicit answers. Keep real session identities and Web credentials
+  in the DSH Host (WSL or Windows), never in the companion. Answers must target
+  one still-pending request; never intercept tool permission approvals.
+- Optional session presentation control is approved, default off. Register
+  native DSH tools and an embedded Skill; derive ownership from exec.agent.session,
+  never caller-provided IDs. One lease owns the visible model. Only catalogued
+  animations, bounded plain-text bubbles and temporary size/position/gaze cross
+  the local channel. Do not expose files, scripts, screenshots, account credentials,
+  arbitrary parameters or external messaging tools through this feature.
+  Manual pause/hide/drag/model changes and bubble/privacy choices win. Release on
+  disconnect, cancellation, disposal or lease expiry; restore the latest DSH
+  snapshot rather than the state captured at acquisition. No replay or automatic
+  takeover after reconnect. Temporary stage changes must not persist as preferences
+  or normal-exit window state. Keep native permission approvals in DSH.
+  The five-minute timeout measures owner inactivity: new assistant text/reasoning
+  and valid control commands renew it, unrelated sessions/heartbeats do not.
+  Synchronize the desktop watchdog with bounded content-free activity frames.
+  Show ownership only as the hover toolbar's robot action (click to release),
+  not a persistent strip. Session-controlled speech has no title header.
+- Render bubble content as plain text. Do not persist or log bubble text or the
+  bearer token.
+- Login-account billing consumes only `deepseekAccount.getState/getBalance/watch`.
+  Never resolve account tokens or parse credential files. Keep recharge and bonus
+  wallets separate, and never reuse API prices for account charges. Credential
+  changes must invalidate both cached and pending results, including same-status
+  account switches. Account queries need a dedicated timeout beyond the official
+  30-second balance request; navigation and question deadlines remain unchanged.
+- Treat VRM files, deep links, manifests, and status frames as untrusted.
+  Invalid inputs fail closed without preventing DSH itself from starting.
+
+## Assets and releases
+
+- Never commit Aka, private StarCried art, Creator projects, or unlicensed
+  puppets. Tests use generated artwork-free fixtures.
+- Program releases include the approved default humanoid Idle and three optional
+  generic gestures (CuriousPeek, HappyWave, SleepyStartle).
+  Preserve its recorded provenance; its breathing layer comes from Warudo,
+  so do not describe the motion as wholly original. Weiguang uses its own
+  license and stays in a separately delivered, self-contained VRM, never in
+  program artifacts. Other model artwork and unapproved motions stay out of the program.
+  The gestures live in the shared runtime; native catalogs add them to existing
+  imports without altering mappings or creating per-model motion files. Preserve
+  the recorded Warudo upper-body source for HappyWave.
+  When a program motion's duration changes, update the shared and native
+  catalogs together. Migrate only known previous durations on settings load;
+  keep mappings/resources unchanged and still reject malformed catalog values.
+- Creating a remote repository, pushing, publishing npm, publishing a Windows
+  installer, and releasing a model each require separate approval.
+- npm publish exit 0 / HTTP 202 can precede public visibility: wait for the canonical registry version and `latest`, then anonymously verify the archive and perform a fresh registry install; a local tarball does not bypass propagation.
+- Windows installers currently remain unsigned, including 0.1.0; document SmartScreen without asking users to disable system protections.
+- Use hyphens in public release asset filenames. GitHub changes uploaded spaces
+  to dots; generate flat `SHA256SUMS` against the final public names, then verify
+  every uploaded name, size and digest and the anonymously downloaded bytes.
+- Default examples remain separate VRMs. The launcher accepts legacy schema 2
+  Weiguang descriptors and schema 3 metadata catalogs with `weiguang-default`
+  and optional `bluefish-default`; acquire only the selected ID. Never add an
+  unverified URL/hash to make an unavailable example appear in settings.
+  Catalog licenses must be readable without downloading model bytes. The model
+  terms in `docs/` mirror the same documents in the StarLite component repository;
+  keep those texts synchronized without changing the program's BSD license.
+- Acquisition must mirror native `needs_default`: a selected example already
+  present in the user's model library needs no download. Program cache keys
+  include the EXE hash, so checking that cache alone causes needless downloads
+  and a 30-second launch delay after upgrades when GitHub is unavailable.
+  Keep model path/content validation in the native loader; the Host only reads
+  the bounded selection/library metadata and does not follow model paths.
+
+## Validation
+
+- Run narrow package tests first, then `pnpm check` and Rust checks.
+- Test the packed bundle in an isolated DSH profile and verify fail-open DSH
+  behavior when the adapter is incompatible.
+- DSH 0.2.2 moved nested PTC events to `dsh-tool-executor-ptc/types` and
+  projection values to the unmarked `SessionProjectionViewValues` alias.
+  Its registry-level `stateOf(session, key)` still folds registered state but
+  is deprecated and returns `unknown`; validate the owned question fold and
+  runtime value shape. Do not register a competing question projection to
+  obtain a reader handle. Keep contract checks against both declaration generations.
+  A question item's `intent.kind: "approval"` belongs to DSH, including mixed
+  batches and continued projections; reject it before wire parsing drops intent.
+- Native GUI acceptance uses `tauri build --no-bundle`; plain `cargo build
+  --release` can retain the development URL instead of embedded frontend assets.
+  For isolated native acceptance, override the Tauri identifier in a local-only
+  build config; changing APPDATA/USERPROFILE is not a reliable Windows Known
+  Folder or single-instance boundary. Never replace the daily companion instance.
+- Preserve exact-name animation validation. Disabled mappings stay neutral.
+  Model-only onboarding directly imports standard humanoid VRM 0/1 files.
+  Blink and eye tracking are optional capabilities; missing bindings disable
+  the corresponding behavior without rejecting an otherwise valid model.
+  Declared bindings must still reference valid resources. The bundled StarLiteIdle provides baseline
+  standing and breathing when the model has no Idle. List embedded standard
+  glTF motions and the three program gestures for optional mappings; never
+  invent missing event actions or automatically replace existing user choices.
+  Do not restore the retired custom ZIP resource-pack format or import UI.
+- `extras.starlite.adjustments` seeds a new import's model-local settings only.
+  Validate it with `ModelAdjustments`; never reapply it on load, selection or
+  upgrade, because clearing saved adjustments intentionally restores the program
+  baseline. Pose values directly calibrate `StarLiteIdle`, without rewriting
+  mappings. The runtime's three generated gestures rebase to the selected Idle
+  reference pose, including calibration; model-authored or imported clips are
+  not rebased. Animated forearms and fingers retain their authored gesture
+  shape between corrected entry and exit poses.
+
+## Commit discipline
+
+- Treat the protocol, DSH bundle, desktop webview, native Tauri backend,
+  reusable runtime integration, tests, and documentation/release tooling as
+  separate modules.
+- After completing and validating one module, commit that module before
+  starting the next. Keep each commit focused and include the module's tests
+  and documentation updates with the implementation they verify.
+- Do not combine unrelated modules in one catch-all commit, manufacture empty
+  commits, or rewrite already published history merely to reach a commit-count
+  threshold.

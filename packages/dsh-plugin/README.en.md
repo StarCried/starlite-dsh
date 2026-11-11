@@ -6,7 +6,7 @@ Optional [session control](https://github.com/StarCried/starlite-dsh/blob/main/d
 
 A lightweight VRM companion for DeepSeek Harness. Install one plugin, start DSH, and the Weiguang example is prepared automatically. Bring your own model whenever you like.
 
-Release `0.1.2`. Requires Windows 11 x64 and WebView2. Supports official Windows Desktop, native Windows CLI/Web, and WSL2 DSH.
+[Latest release](https://github.com/StarCried/starlite-dsh/releases/latest). Requires Windows 11 x64 and WebView2. Supports official Windows Desktop, native Windows CLI/Web, and WSL2 DSH.
 
 ## Install
 

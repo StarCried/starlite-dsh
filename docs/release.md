@@ -1,117 +1,111 @@
-# StarLite for DSH 发布检查
+# StarLite for DSH release workflow
 
-## 0.1.2 已发布（2026-11-11）
+One public package (`dsh-starlite`) includes the Windows program. Example VRMs
+remain separate downloads. Published artifacts and tags are immutable.
+[Current releases](https://github.com/StarCried/starlite-dsh/releases) and
+[historical evidence](release-history.md) describe past deliveries; a new release's
+`release-manifest.json` identifies exactly what is prepared and verified.
 
-[`dsh-starlite@0.1.2`](https://www.npmjs.com/package/dsh-starlite/v/0.1.2) 已发布到 npm `latest`，并提供 [GitHub 正式发行](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.2) 的 Windows 安装器和免安装版。新增可选会话接管、透明悬浮工具条，修复拖动中的环境光取色并更新通用困倦惊醒动作，详细行为见 [版本变化](../CHANGELOG.md#012--2026-11-11)。模型继续引用已公开的微光和蓝鱼固定资源，不另发模型或把角色文件打入程序。
-
-发行源码和不可变 tag `v0.1.2` 对应 [`82a5202`](https://github.com/StarCried/starlite-dsh/commit/82a52029abe5f0dea5c9a9c49750785c4f35faf3)，共享运行时固定为 [`125a66a`](https://github.com/StarCried/starlite/commit/125a66a3a42f6f71b44bb7724da37573be368d2d)，从独立干净 checkout 构建，provenance 为 `dirty: false`。精确源码的三项云端检查、匿名 npm 归档一致性、Windows／WSL2 的真实 registry 安装与生命周期均通过。微光和蓝鱼另通过空缓存 HTTPS 下载及离线复用。哈希、CI 链接及本轮验收范围见 [0.1.2 发布验收](dsh-compatibility.md#公开发行-0122026-11-11)，本机证据保存在 `release-output/release-0.1.2/`。后续文档提交不移动 tag 或重打发布件；Windows 文件仍未签名，保留 SmartScreen 说明。
-
-## 0.1.1 npm 已发布（2026-11-06）
-
-[`dsh-starlite@0.1.1`](https://www.npmjs.com/package/dsh-starlite/v/0.1.1) 已发布到 npm `latest`，`alpha` 保留 `0.1.0-alpha.2`。Windows 0.1.1 EXE 随插件提供；本轮没有另发 GitHub Windows 安装器或模型 Release。新增共享脚下工具条、固定脚点缩放和六像素拖动判定，并将 DSH 新增的 `approval` 意图问答交回官方界面；现有模型来源、许可和用户偏好保留。
-
-发行源码和不可变的 annotated tag `v0.1.1` 对应 [`b6a62e5`](https://github.com/StarCried/starlite-dsh/commit/b6a62e57f20fbe42c9c961177b81e570fc789d3f)，共享运行时固定为已公开的 [`073db625`](https://github.com/StarCried/starlite/commit/073db625111aba345032b5b718bc39e0e8de901d)，provenance 为 `dirty: false`。精确源码的主 CI、依赖审计和 DSH latest 检查均通过；匿名 registry 归档与本地发布件逐字一致，Windows／WSL2 均完成真实 registry 安装与生命周期验证。用户已确认脚下控件手验。哈希、CI 链接和验收边界见 [0.1.1 发布验收](dsh-compatibility.md#公开发行-0112026-11-06)，本机证据保存在 `release-output/release-0.1.1/`。后续文档提交不移动 tag 或替换发布件。
-
-`0.1.0` 已于 2026-11-03 发布到 npm `latest` 和 [GitHub 正式发行](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0)，包括统一插件、Windows 安装器和免安装版；蓝鱼另行发布为独立模型资源。变化见 [版本变化](../CHANGELOG.md)，精确源码、公开下载与实际 registry 安装结果见 [发布验收](dsh-compatibility.md#公开发行-0102026-11-03)。本页保留后续构建流程和历史发行证据。
-
-## 0.1.0 发行范围（2026-11-03）
-
-本版统一源码、npm 与 Windows 发行物版本为 0.1.0，npm 使用 latest。共享运行时以 release/starlite.rev 的精确源码构建；蓝鱼以独立模型发行物提供，微光仍为初始默认。新版本包含账号余额、默认环境补光、中文／英文界面、已调校的通用动作，以及正常退出重连和重复示例下载修复。
-
-发布前的模型与动作、启动重连、蓝鱼调校和环境补光候选已由用户验收。本次已完成自动化检查、Windows／WSL2 官方 DSH 的实际 registry 安装、公开下载及完整性验证，详见[兼容性记录](dsh-compatibility.md#公开发行-0102026-11-03)。未把既有 DPI、睡眠或长期性能结果改记为新包全面复验。Windows 安装器和免安装程序仍未代码签名。
-
-## 历史公开发行 alpha.2
-
-安装使用 [`dsh-starlite@alpha`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.2)，当时 `alpha` 为 alpha.2，`latest` 保留 alpha.0。发行源码为 [`80f9220`](https://github.com/StarCried/starlite-dsh/commit/80f92200393b58f617864af5b2fb910171b8347a)，共享运行时为 [`f83a4ec`](https://github.com/StarCried/starlite/commit/f83a4ec0f795a14f36d6724465e3a89f9c1e8529)。该精确源码的[主 CI](https://github.com/StarCried/starlite-dsh/actions/runs/39753442237)、[依赖审计](https://github.com/StarCried/starlite-dsh/actions/runs/39753442269) 与 [DSH latest 兼容检查](https://github.com/StarCried/starlite-dsh/actions/runs/39753656026) 全部成功。
-
-匿名公开 npm tarball 为 4,040,458 字节，SHA-256 `51641fd8539568f9d305c985ba35d89ca52734639b30003925ba55973f171bc7`，SHA-512/SRI 也与 registry 一致。这个真正公开下载的包已在 Windows DSH `0.2.1-rc.2`／Node 24.15.0 和 WSL2 DSH `0.2.0-rc.2`／Node 22.22.1 通过隔离安装、认证首页、fail-open 与退出回收；没有调用付费 API、启动桌宠或修改日常 profile。
-
-[GitHub 预发行 `v0.1.0-alpha.2`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.2) 的七个公开附件已匿名重新下载，逐项校验字节、哈希、平铺校验和及源码 tag；包括插件 tarball、未签名 Windows 安装器、免安装 ZIP、SHA256SUMS、SOURCE_REVISION、SBOM 和依赖许可。微光模型仍作为独立资产分发。完整 SRI、公开附件哈希与人工验收边界见[发布验收](dsh-compatibility.md#公开发行-010-alpha22026-10-22)，不将旧长测或新增手腕控件的浏览器验收改记为原生 GUI 全面通过。
-
-## 上次公开发行 alpha.1
-
-[`dsh-starlite@0.1.0-alpha.1`](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.1) 与 [Release `v0.1.0-alpha.1`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.1) 已公开，发行源码为 [`918f15c`](https://github.com/StarCried/starlite-dsh/commit/918f15ce1d342a79a90c9c1ac0d6646939ced2e6)，共享运行时为 [`903fe2c`](https://github.com/StarCried/starlite/commit/903fe2cab9e0f37ad36cd904e301fa482af2508e)。精确源码的[主 CI](https://github.com/StarCried/starlite-dsh/actions/runs/38703696617) 与 [DSH latest 兼容作业](https://github.com/StarCried/starlite-dsh/actions/runs/38704010721) 均成功；更改见[版本变化](../CHANGELOG.md)。
-
-匿名公开下载的 npm tarball 为 3,922,149 字节，SHA-256 `e7abb12285656a12bac3bd896c426755afd3d4bc9abcb7060f593d6a10d84e7d`，与最终本地发行包逐字节一致，SHA-512 完整性值与 registry 一致。这个真正公开下载的包已在官方 DSH `0.2.1-alpha.2` 的 Windows 与 WSL2 环境中通过隔离安装、认证首页、fail-open 和退出回收，未调用付费 API。该次发行后 `alpha` 指向 alpha.1，`latest` 仍保留 alpha.0；安装使用 `dsh-starlite@alpha`。完整 SRI、来源和验收边界见[发布验收](dsh-compatibility.md)。旧版和本地开发候选的记录保留原身份，没有改写为本次程序的全面复验。
-
-## 首次发行基线
-
-`dsh-starlite@0.1.0-alpha.0` 已发布到 [npm alpha 渠道](https://www.npmjs.com/package/dsh-starlite/v/0.1.0-alpha.0)，[软件 Release `v0.1.0-alpha.0`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.0-alpha.0) 对应源码 `ee86d3984d300621812f16016b08450ec860ec13`。从公开 registry 全新下载的 tarball 与正式包完全一致，并通过官方 npm DSH `0.2.1-alpha.2` 的隔离安装和 fail-open 检查，详见[发布验收](dsh-compatibility.md)。
-
-以下流程用于后续版本。统一插件包含 Windows 程序、通知及下载清单；程序内嵌已批准的基础待机和三个通用动作，微光角色及其专属动作仍作为独立授权的单文件 VRM 下载。本地脚本只构建和校验，不自动推送、发布或部署博客。
-
-## 构建来源
-
-发布使用独立干净 checkout，只 staging 同一 revision 的 `core` 与 `vrm`。`release/starlite.rev` 固定共享源码，provenance 记录真实 revision、文件哈希及 `dirty: false`。正式发布前，该源码 revision 必须已公开；不手改 provenance、不使用旧 dist，也不重置用户工作区满足检查。
-
-当前 DSH 不包含 Inochi2D 或 WASM。程序基础待机来源见 [记录](../apps/desktop/src-tauri/assets/default-idle.md)，包含第三方呼吸层，不称为完全原创。程序源码 BSD-2-Clause 与模型、动作的许可分别处理。
-
-## 构建与校验
-
-1. 构建并验证共享运行时，更新 pin，再同步其 revision 和哈希。
-2. 通过 `pnpm check`、Rust fmt／clippy／test、DSH 契约检查及隔离 profile 的实际 tarball 安装和 fail-open 检查。
-3. `pnpm desktop:build` 生成 Windows x64 GUI EXE 和可选未签名 NSIS。生成依赖通知后，用明确的单文件 VRM 来源描述 staging，再打包。tarball 必须恰好包含 12 个允许文件（含英文 README），EXE 的版本、GUI 子系统、长度和 SHA-256 匹配，不夹带角色资源。发布门直接检查 tarball 的模型来源；内含的程序、清单和通知必须与 staging 逐字节一致，重新 staging 后须重新打包。安装器时效检查也包含内嵌的基础待机文件。
-4. 运行安装 CI，检查新装、合成基线升级、重装、卸载及用户数据保留；该结果不代替真实旧设置迁移和 Windows 人工验收。
-5. 保持 workspace、desktop、protocol、plugin、Cargo、Tauri 版本一致。正式升级使用新版本。
-
-```powershell
-pnpm release:metadata -- apps/desktop/src-tauri/target/release/dsh-inochi2d-pet.exe
-pnpm stage:plugin -- release-output/default-model.json
-pnpm pack:plugin
-pnpm check:release
-pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.2.tgz apps/desktop/src-tauri/target/release/dsh-inochi2d-pet.exe
-```
-
-旧单模型资源描述包含 `title`、固定 HTTPS `url`、VRM 的 `sha256` 和 `bytes`；程序清单 schema 2 的 `defaultModel` 继续兼容。两个示例使用 schema 3 的 `defaultModels` 数组，每项另有固定 `id` 和完整 `license: { title, text }`，由 staging 原样验证。保留微光为初始默认，只获取当前选择。程序包可包含条款元数据，不包含模型、贴图或角色工程。正式发布门逐项拒绝本机来源；蓝鱼只有取得实际发布文件的地址、字节数和 SHA-256 后才能加入公开目录。本地目录的准备方法见 [开发说明](development.md)。首次元数据命令提供 staging 所需的依赖通知，打包后再生成最终 SHA256SUMS、CycloneDX SBOM 和第三方许可证。
-
-模型地址可使用直接返回 VRM 的固定 HTTPS 来源，或规范的 `https://github.com/{owner}/{repo}/releases/download/{tag}/{file}.vrm` Release 资产地址。只有后者允许手动跟随最多 3 次跳转，且每次目标必须是 `release-assets.githubusercontent.com` 的 HTTPS 地址，无用户信息、非 443 端口或片段；不携带 Cookie、Authorization 等请求头。其他来源仍拒绝重定向，不使用泛用分享链接。所有请求和内容下载共用一次 30 秒超时，最终仍严格校验长度及 SHA-256；临时签名地址不写入缓存或日志。正式打包前在全新缓存中验证实际下载，再验证离线缓存；仅通过 URL 格式检查不代表资源可用。
-
-本地验收来源使用 `localTest: true` 及只监听 `127.0.0.1` 的资源服务，可执行 `pnpm check:release -- --local-test` 检查其余发布门。默认发布门拒绝本机来源，该开关不构成发布批准。CI 仅用无角色、不可下载的测试清单检查结构，产物为 `local-only-windows-validation`，不能公开发行。私有模型不进入 CI。
-
-## 人工验收
-
-给用户阅读和逐项检查的简版见[本地候选验收](release-candidate-review.md)。测试结果与当前候选的来源、哈希记录放在本机 `release-output`，不把早期 ZIP 或旧产品名的报告当作本轮发布通过。
-
-- WSL2、Windows 原生 CLI/Web、官方 Windows Desktop 自动准备同一 Windows 程序；默认 VRM 下载、离线缓存、下载／长度／哈希失败以及 DSH 继续启动。
-- 模型列表切换、许可排版、不显示后重启保持、已有模型与偏好迁移；移除确认的取消与提交、只清理程序管理副本、源文件保留、重启不重新获取微光。
-- 单个 VRM 直接导入；无动作时基础站姿、呼吸与限角头部跟随；缺少可选眨眼／眼球配置时仍能使用，有动作时完整目录和精确映射；损坏引用仍拒绝并保留旧模型。
-- 微光 14 个动作、手指、表情、耳尾物理、大动作边界、中途切换及低帧率恢复。
-- 透明区域穿透、拖动、DPI、多显示器、睡眠、重连与关闭 DSH 后退出。
-- 工作、费用、普通问题表单、隐私、单击与双击；不使用付费模型请求来替代可模拟的检查。
-- Desktop 插件页安装／启停、指定会话及无会话双击导航、客户端重载；× 隐藏不停止桌宠、真正退出销毁桥接。
-- 多 Host 启动不抢占、重复深链接不重置、按重连期退出后切换 Host；分别记录源码、npm 包和实际桌面安装包版本。
-- Windows SmartScreen 与未签名说明。时间戳检查只防止明显过期产物，不证明可复现或安装验收。
-
-普通用户只安装统一 DSH 插件，NSIS 是独立程序验收方式，不是使用前置条件。安装 CI 只在无现有协议注册或用户数据的 runner 执行；合成升级基线不保证旧产品名的快捷方式和卸载项自动迁移。
-
-## 微光单文件
-
-微光 VRM 包含运行所需的模型、贴图、标准 glTF 动作以及可选角色、许可和默认映射元数据，不包含 Blender 母版、VRChat／Warudo 工程或原始动作库。记录模型、贴图、动作和呼吸层的来源、哈希、授权及署名。
-
-微光使用与普通 VRM 相同的验证和事务安装。使用即同意独立许可，不同意可选择「不显示模型」；已有 VRM、映射和偏好保留。程序提供基础待机与三个可选通用动作，模型自带的事件动作也会列出，但不自动改写已有映射。角色授权不代替第三方动作授权，格式转换和烘焙不改变这一点。
-
-## 发布顺序
-
-先公开并验证固定 pin 的共享源码，再核验既有获准模型的固定 HTTPS 来源、全新缓存下载和离线复用；模型来源变化时才单独准备模型发行。本轮沿用已公开的微光和蓝鱼。推送同版本 DSH 源码并确认 CI，通过默认发布门后发布已校验的 tarball：
+## Record and review changes
 
 ```sh
-npm publish packages/dsh-plugin/.pack/dsh-starlite-0.1.2.tgz --tag latest --access public
+pnpm exec changeset
+pnpm release plan
+pnpm release version
 ```
 
-发布后核对 `npm view dsh-starlite version` 为 `0.1.2`，验证 registry tarball 与本地包一致，并在隔离 profile 安装 `dsh-starlite@0.1.2`。这些是发布后的验证步骤，不以文档中的安装命令代替实际结果。npm 发布指定 `latest` 标签；升级必须使用新版本。本轮同时发布匹配的 Windows 安装器、免安装包、SHA256SUMS、SBOM 和依赖许可，并逐项匿名下载复核。模型作为独立授权资产分发，不夹进程序包。没有公开模型来源时仍只能验证本地候选。
+Select only `dsh-starlite`. Changesets owns its version and
+[changelog](../packages/dsh-plugin/CHANGELOG.md); the version command synchronizes
+workspace/private packages, Tauri and owned Cargo entries. It does not commit.
+Review the diff and both packaged READMEs: install commands, released/development
+wording and data disclosure. Guides normally use `latest`, avoiding routine number
+rewrites. Historical records and compatibility names retain their original versions.
 
-公开附件采用连字符文件名，例如 `StarLite-for-DSH_0.1.2_x64-setup.exe`。GitHub 上传会将文件名中的空格替换为点，不能直接沿用构建目录中的空格名称生成公开校验和；先确定最终附件名称，再生成平铺的 `SHA256SUMS`，上传后逐项核对名称、大小和哈希，并匿名重新下载验证。
+## Prepare a reviewable batch
 
-首次发行的实际标签（2026-10-15）：`alpha` 和 `latest` 均指向 `0.1.0-alpha.0`。npm 对新包首次发布会额外创建 `latest`，即使指定其他标签，见[上游记录](https://github.com/npm/cli/issues/8490)。本次删除 `latest` 返回 HTTP 400，保留现状，不重复删除或通过新增版本绕过。此前没有稳定版本，未覆盖已有稳定版的 `latest`；当时安装明确使用 `dsh-starlite@alpha`。本段为历史记录，0.1.0 使用 latest。
+Requires Windows x64, Node 24, pinned pnpm, Git, Rust/MSVC, WebView2 and cargo-audit
+(CI uses 0.22.2; set `CARGO_AUDIT_BIN` for a separate local binary). The shared pin
+must be committed and publicly available.
 
-安装见 [用户指南](user-guide.md)，模型约定见 [模型导入](model-import.md)。发布检查失败不得阻止 DSH 本身运行。
+```sh
+pnpm release doctor
+pnpm release prepare --dry-run
+pnpm release prepare --out release-output/candidate
+```
 
-## 依赖审计记录
+Commit reviewed source before real preparation. The command creates new clean DSH
+and shared checkouts, installs locked dependencies, rebuilds core/VRM at the pin,
+runs existing checks, builds Tauri, stages the tracked public model catalog and
+packs the plugin/portable app. It never touches the daily installation.
+`--core-source /path/to/starlite` can clone an existing Git checkout; it still checks
+out the pin and rebuilds. Existing output directories are not overwritten. Inspect
+failed preparations and retry with a new output directory.
 
-2026-11-03：正式版重新审计，更新已撤回的 async-executor 1.14.0 至兼容补丁 1.14.1。JavaScript 未报告漏洞，Rust 未报告漏洞或撤回版本；原有精确的维护／非 Windows 告警规则保留，未新增例外。RustSec 数据库 revision 为 `263a4d951a0867d4bddc29dddd6d59427c78f9a7`。
+The output has `release-manifest.json` and seven public files: npm archive, NSIS,
+portable ZIP, `SOURCE_REVISION`, `SHA256SUMS`, SBOM and third-party notices. The
+manifest binds version, source SHA, runtime pin, channel and hashes. Model metadata
+comes from [the public catalog](../release/default-models.json); program releases do
+not modify model files. Public release gates reject private/local model references.
 
-2026-10-22 已更新 Vite 8.2.4 和 Vitest 4.1.12，修复新披露的开发服务器公告。完整在线审计未报告 JavaScript 或 Rust 漏洞；既有 Rust 维护与非 Windows 警告保留到期复核规则，并重新核对 Windows 依赖树。精确数据库 revision、范围和例外见[依赖维护](dependency-audit.md)。以下日期记录只代表各次扫描，不替代每次发行前的最新检查。
+## Publish the same batch
 
-2026-10-14 已修复可用的构建依赖补丁，并将撤回的 `chacha20 0.10.1` 更新为 `0.10.2`。DSH 的 npm 完整／生产依赖审计均无已知漏洞；共享包的浏览器运行时和插件自身不携带 Hexo 主程序，私有 Hexo 7 示例及使用者的 Hexo 依赖仍有 9 条上游审计记录，不能称整个 Hexo 生态已无告警。
+After reviewing the manifest, notes and artifacts, with publication approval:
 
-使用隔离的 cargo-audit 0.22.2 与官方 RustSec 数据库 `6aed84668c23d7f535077a9fe918bf1fa0f6a5bc` 检查两个 Cargo.lock，未发现已知漏洞或仍撤回的版本。Windows 运行链中的 5 个 `unic` 库仍有停止维护提示；其他目标的 `glib`／`proc-macro-error` 警告不在 Windows x64 依赖树。保留真实审计结果，后续发布仍须重新扫描，不强行替换不兼容的传递依赖。
+```sh
+pnpm release publish --manifest release-output/candidate/release-manifest.json --dry-run
+pnpm release publish --manifest release-output/candidate/release-manifest.json
+pnpm release verify --manifest release-output/candidate/release-manifest.json
+```
+
+Publish uploads archived bytes, never rebuilds or repacks. Identical published npm
+versions and GitHub assets are verified and skipped; differing content or tag targets
+fail. Upload all GitHub assets to a draft before publishing, including for immutable
+releases. Retries use the same manifest. Do not solve timeouts by repacking or
+overwriting a version. Verify anonymously downloads all public artifacts, checks the
+channel/source tag and writes `publication-result.json`. Registry propagation can
+lag; rerun verify later.
+
+For a real isolated registry installation/lifecycle check, add
+`--dsh /path/to/node_modules/@deepseek-ai/dsh` to verify on Windows or WSL2. It reuses
+the official DSH smoke test without launching the daily desktop or calling model
+APIs. NSIS lifecycle tests run only on isolated GitHub-hosted Windows runners.
+Manual DPI/sleep/long tests remain change-dependent and are not implied by CI.
+
+## Workflow and npm OIDC
+
+Dispatch `release.yml` on `main`. It only prepares downloadable artifacts and never
+publishes. Review the `prepared-release` artifact, then dispatch `publish.yml` on
+`main` with that preparation's `run_id` (the number in its Actions URL). Publication
+checks the successful preparation's repository, workflow, branch and source SHA
+against the manifest, then waits for the `npm-release` environment. It downloads
+that same run's files without rebuilding. Retry with the same `run_id`; artifacts
+are retained for 14 days, so retain a local reviewed copy for longer recovery.
+Configure required reviewers for that environment. In npm configure the trusted
+publisher for `StarCried/starlite-dsh`, workflow `publish.yml`, environment
+`npm-release`, allowing `npm publish` and `npm dist-tag`. This is account-side setup
+after pushing the workflow, **not already verified by adding the file**.
+The workflow uses GitHub-hosted runners, Node 24, npm 11.21.0 (OIDC dist-tag support)
+and `id-token: write`,
+without persistent npm tokens. [Official setup](https://docs.npmjs.com/trusted-publishers/).
+
+Documentation-only CI returns a lightweight check without native builds. Product,
+lockfile, pin and release-tool changes run full checks. Scheduled dependency audits
+and upstream DSH checks remain. Windows files are unsigned; do not disable SmartScreen.
+
+After publication, the workflow requires a fresh registry installation and lifecycle
+check with official DSH on an isolated Windows runner. WSL2 checks can use the same
+verify command locally; this workflow does not claim a new WSL2 GUI or sleep test.
+
+## Historical links
+
+<a id="012-已发布2026-11-11"></a>
+<a id="011-npm-已发布2026-11-06"></a>
+<a id="010-发行范围2026-11-03"></a>
+<a id="历史公开发行-alpha2"></a>
+<a id="上次公开发行-alpha1"></a>
+<a id="首次发行基线"></a>
+<a id="依赖审计记录"></a>
+
+Original publication records and test boundaries remain in [release history](release-history.md).
+[Compatibility evidence](dsh-compatibility.md) retains existing anchors; no historical
+result is promoted to a newer version.

@@ -1,0 +1,55 @@
+name: Prepare release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-prepare-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.7.0
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - run: pnpm install --frozen-lockfile
+      - run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Build one clean, reviewable release batch
+        shell: pwsh
+        run: pnpm release prepare --out "$env:RUNNER_TEMP/starlite-release"
+      - name: Verify isolated installer lifecycle
+        shell: pwsh
+        working-directory: ${{ runner.temp }}/starlite-release/checkout
+        run: ./tools/test-installer.ps1
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prepared-release
+          path: |
+            ${{ runner.temp }}/starlite-release/release-manifest.json
+            ${{ runner.temp }}/starlite-release/*.tgz
+            ${{ runner.temp }}/starlite-release/*-setup.exe
+            ${{ runner.temp }}/starlite-release/*-portable.zip
+            ${{ runner.temp }}/starlite-release/SOURCE_REVISION
+            ${{ runner.temp }}/starlite-release/SHA256SUMS
+            ${{ runner.temp }}/starlite-release/sbom.cdx.json
+            ${{ runner.temp }}/starlite-release/THIRD_PARTY_LICENSES.txt
+          if-no-files-found: error
+          retention-days: 14

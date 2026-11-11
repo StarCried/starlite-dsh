@@ -1,0 +1,118 @@
+name: Publish prepared release
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Prepare release run ID whose artifacts were reviewed
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+jobs:
+  source:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v8
+        with:
+          name: prepared-release
+          path: prepared
+          repository: StarCried/starlite-dsh
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Check preparation run provenance before approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREPARE_RUN_ID: ${{ inputs.run_id }}
+        run: node tools/check-release-run.mjs "$PREPARE_RUN_ID" prepared/release-manifest.json
+
+  publish:
+    needs: source
+    runs-on: ubuntu-24.04
+    environment: npm-release
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11.21.0
+      - uses: actions/download-artifact@v8
+        with:
+          name: prepared-release
+          path: prepared
+          repository: StarCried/starlite-dsh
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Bind the reviewed archive to its preparation source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREPARE_RUN_ID: ${{ inputs.run_id }}
+        run: node tools/check-release-run.mjs "$PREPARE_RUN_ID" prepared/release-manifest.json
+      - name: Publish only the approved archived files with OIDC
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/release.mjs publish --manifest prepared/release-manifest.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: publication-result
+          path: prepared/publication-result.json
+          if-no-files-found: warn
+
+  verify-install:
+    needs: publish
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.7.0
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v8
+        with:
+          name: prepared-release
+          path: prepared
+          repository: StarCried/starlite-dsh
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Install official DSH into an isolated temporary directory
+        shell: pwsh
+        run: npm install --prefix "$env:RUNNER_TEMP/starlite-official" --no-audit --no-fund @deepseek-ai/dsh@latest
+      - name: Verify public archive and actual registry installation without model API calls
+        shell: pwsh
+        run: node tools/release.mjs verify --manifest prepared/release-manifest.json --dsh "$env:RUNNER_TEMP/starlite-official/node_modules/@deepseek-ai/dsh"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: registry-install-result
+          path: |
+            prepared/publication-result.json
+            prepared/dsh-registry-windows.json
+          if-no-files-found: warn

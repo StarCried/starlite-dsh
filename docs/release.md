@@ -1,5 +1,11 @@
 # StarLite for DSH 发布检查
 
+## 0.1.2 发布准备（2026-11-11）
+
+本轮已获准发布源码、npm 和 Windows 安装器／免安装版，版本统一为 `0.1.2`。新增可选会话接管、透明悬浮工具条，修复拖动中的环境光取色并更新通用困倦惊醒动作，详细行为见 [版本变化](../CHANGELOG.md#012--2026-11-11)。模型继续引用已公开的微光和蓝鱼固定资源，不另发模型或把角色文件打入程序。
+
+发行物必须从固定共享源码与独立干净 checkout 构建；下列步骤通过后，再记录精确源码、哈希、云端 CI、公开下载与实际 registry 安装结果。本段是发布范围与流程，不表示尚未运行的验证已通过。Windows 文件仍未签名，保留现有 SmartScreen 说明。
+
 ## 0.1.1 npm 已发布（2026-11-06）
 
 [`dsh-starlite@0.1.1`](https://www.npmjs.com/package/dsh-starlite/v/0.1.1) 已发布到 npm `latest`，`alpha` 保留 `0.1.0-alpha.2`。Windows 0.1.1 EXE 随插件提供；本轮没有另发 GitHub Windows 安装器或模型 Release。新增共享脚下工具条、固定脚点缩放和六像素拖动判定，并将 DSH 新增的 `approval` 意图问答交回官方界面；现有模型来源、许可和用户偏好保留。
@@ -53,7 +59,7 @@ pnpm release:metadata -- apps/desktop/src-tauri/target/release/dsh-inochi2d-pet.
 pnpm stage:plugin -- release-output/default-model.json
 pnpm pack:plugin
 pnpm check:release
-pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.1.tgz apps/desktop/src-tauri/target/release/dsh-inochi2d-pet.exe
+pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.2.tgz apps/desktop/src-tauri/target/release/dsh-inochi2d-pet.exe
 ```
 
 旧单模型资源描述包含 `title`、固定 HTTPS `url`、VRM 的 `sha256` 和 `bytes`；程序清单 schema 2 的 `defaultModel` 继续兼容。两个示例使用 schema 3 的 `defaultModels` 数组，每项另有固定 `id` 和完整 `license: { title, text }`，由 staging 原样验证。保留微光为初始默认，只获取当前选择。程序包可包含条款元数据，不包含模型、贴图或角色工程。正式发布门逐项拒绝本机来源；蓝鱼只有取得实际发布文件的地址、字节数和 SHA-256 后才能加入公开目录。本地目录的准备方法见 [开发说明](development.md)。首次元数据命令提供 staging 所需的依赖通知，打包后再生成最终 SHA256SUMS、CycloneDX SBOM 和第三方许可证。
@@ -86,15 +92,15 @@ pnpm release:metadata -- packages/dsh-plugin/.pack/dsh-starlite-0.1.1.tgz apps/d
 
 ## 发布顺序
 
-先公开并验证固定 pin 的共享源码，再核验既有获准模型的固定 HTTPS 来源、全新缓存下载和离线复用；模型来源变化时才单独准备模型发行。本轮沿用已公开的微光和蓝鱼。推送同版本 DSH 源码并确认 CI，通过默认发布门后发布已校验的 tarball；以下 0.1.1 命令已完成，后续发行应换用新版本，不重复发布：
+先公开并验证固定 pin 的共享源码，再核验既有获准模型的固定 HTTPS 来源、全新缓存下载和离线复用；模型来源变化时才单独准备模型发行。本轮沿用已公开的微光和蓝鱼。推送同版本 DSH 源码并确认 CI，通过默认发布门后发布已校验的 tarball：
 
 ```sh
-npm publish packages/dsh-plugin/.pack/dsh-starlite-0.1.1.tgz --tag latest --access public
+npm publish packages/dsh-plugin/.pack/dsh-starlite-0.1.2.tgz --tag latest --access public
 ```
 
-发布后核对 `npm view dsh-starlite version` 为 `0.1.1`，验证 registry tarball 与本地包一致，并在隔离 profile 安装 `dsh-starlite@0.1.1`。这些是发布后的验证步骤，不以文档中的安装命令代替实际结果。npm 发布指定 `latest` 标签；升级必须使用新版本。只有另行获准发布 Windows Release 时，才上传匹配的安装器、可选免安装包、SHA256SUMS、SBOM 和依赖许可；本次 npm 更新未创建此类 Release。模型作为独立授权资产分发，不夹进程序包。没有公开模型来源时仍只能验证本地候选。
+发布后核对 `npm view dsh-starlite version` 为 `0.1.2`，验证 registry tarball 与本地包一致，并在隔离 profile 安装 `dsh-starlite@0.1.2`。这些是发布后的验证步骤，不以文档中的安装命令代替实际结果。npm 发布指定 `latest` 标签；升级必须使用新版本。本轮同时发布匹配的 Windows 安装器、免安装包、SHA256SUMS、SBOM 和依赖许可，并逐项匿名下载复核。模型作为独立授权资产分发，不夹进程序包。没有公开模型来源时仍只能验证本地候选。
 
-公开附件采用连字符文件名，例如 `StarLite-for-DSH_0.1.1_x64-setup.exe`。GitHub 上传会将文件名中的空格替换为点，不能直接沿用构建目录中的空格名称生成公开校验和；先确定最终附件名称，再生成平铺的 `SHA256SUMS`，上传后逐项核对名称、大小和哈希，并匿名重新下载验证。
+公开附件采用连字符文件名，例如 `StarLite-for-DSH_0.1.2_x64-setup.exe`。GitHub 上传会将文件名中的空格替换为点，不能直接沿用构建目录中的空格名称生成公开校验和；先确定最终附件名称，再生成平铺的 `SHA256SUMS`，上传后逐项核对名称、大小和哈希，并匿名重新下载验证。
 
 首次发行的实际标签（2026-10-15）：`alpha` 和 `latest` 均指向 `0.1.0-alpha.0`。npm 对新包首次发布会额外创建 `latest`，即使指定其他标签，见[上游记录](https://github.com/npm/cli/issues/8490)。本次删除 `latest` 返回 HTTP 400，保留现状，不重复删除或通过新增版本绕过。此前没有稳定版本，未覆盖已有稳定版的 `latest`；当时安装明确使用 `dsh-starlite@alpha`。本段为历史记录，0.1.0 使用 latest。
 

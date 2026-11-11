@@ -19,8 +19,9 @@ function snapshot(state: PetSnapshot["state"], sequence: number): PetSnapshot {
 }
 
 function harness(config: AnimationMappings = mappings) {
-  const pending: Array<(value: "completed") => void> = [];
-  const playAnimation = vi.fn<WidgetController["playAnimation"]>(() => new Promise<"completed">((resolve) => pending.push(resolve)));
+  type Result = Awaited<ReturnType<WidgetController["playAnimation"]>>;
+  const pending: Array<(value: Result) => void> = [];
+  const playAnimation = vi.fn<WidgetController["playAnimation"]>(() => new Promise<Result>((resolve) => pending.push(resolve)));
   const stopAnimation = vi.fn();
   const controller = {
     playAnimation,
@@ -41,10 +42,12 @@ describe("StateAnimator", () => {
   });
 
   it("samples a click pool anew on every trigger", async () => {
+    vi.useFakeTimers();
     const { animator, playAnimation, pending } = harness({...mappings,click:["Click","Wave"]});
     vi.spyOn(Math,"random").mockReturnValueOnce(0).mockReturnValueOnce(.99);
     animator.apply(snapshot("idle",0));
     const first=animator.click();pending[1]?.("completed");await first;
+    await vi.advanceTimersByTimeAsync(500);
     const second=animator.click();pending[3]?.("completed");await second;
     expect(playAnimation.mock.calls.map(call => call[0])).toEqual(["Idle","Click","Idle","Wave","Idle"]);
     animator.disconnected();
@@ -148,11 +151,40 @@ describe("StateAnimator", () => {
     expect(playAnimation).toHaveBeenLastCalledWith("Idle",{mode:"loop",restart:false});
   });
 
-  it("ignores repeated clicks while the current response finishes",async()=>{
+  it.each(["completed", "interrupted"] as const)("replaces a click after 500ms without letting its old %s result replace the new action",async(result)=>{
+    vi.useFakeTimers();
     const {animator,playAnimation,pending}=harness();
-    animator.apply(snapshot("idle",0));const first=animator.click();await animator.click();
-    expect(playAnimation).toHaveBeenCalledTimes(2);pending[1]?.("completed");await first;
+    animator.apply(snapshot("idle",0));
+    const first=animator.click();
+    await vi.advanceTimersByTimeAsync(499);
+    await animator.click();
+    expect(playAnimation).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    const second=animator.click();
     expect(playAnimation).toHaveBeenCalledTimes(3);
+    pending[1]?.(result);await first;
+    expect(playAnimation).toHaveBeenCalledTimes(3);
+    expect(playAnimation).toHaveBeenLastCalledWith("Click",{mode:"once",restart:true});
+    await animator.click();
+    expect(playAnimation).toHaveBeenCalledTimes(3);
+    pending[2]?.("completed");await second;
+    expect(playAnimation).toHaveBeenLastCalledWith("Idle",{mode:"loop",restart:false});
+  });
+
+  it("lets a click interrupt ambient but never lets ambient interrupt the click",async()=>{
+    vi.useFakeTimers();vi.spyOn(Math,"random").mockReturnValue(0);
+    const {animator,playAnimation,pending}=harness({...mappings,ambient:["Yawn"]});
+    animator.apply(snapshot("idle",0));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(playAnimation).toHaveBeenLastCalledWith("Yawn",{mode:"once",restart:true});
+    const click=animator.click();
+    pending[1]?.("interrupted");
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(playAnimation.mock.calls.map(call=>call[0])).toEqual(["Idle","Yawn","Click"]);
+    pending[2]?.("completed");await click;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(playAnimation).toHaveBeenLastCalledWith("Yawn",{mode:"once",restart:true});
+    animator.disconnected();
   });
 
   it("does not resume Idle after disconnection or a disabled mapping cancels a state",async()=>{

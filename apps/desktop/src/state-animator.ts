@@ -12,6 +12,7 @@ export class StateAnimator {
   #ambientTimer: ReturnType<typeof setTimeout> | undefined;
   #paused = false;
   #foreground: "state" | "gesture" | undefined;
+  #lastClickAt = -Infinity;
 
   constructor(controller: WidgetController, mappings: AnimationMappings) {
     this.#controller = controller;
@@ -22,6 +23,7 @@ export class StateAnimator {
     this.#clearAmbient();
     this.#generation += 1;
     this.#foreground = undefined;
+    this.#lastClickAt = -Infinity;
     this.#mappings = mappings;
     this.#state = undefined;
     this.#controller.stopAnimation();
@@ -51,8 +53,13 @@ export class StateAnimator {
   }
 
   async click(): Promise<void> {
-    if (this.#state !== "idle" || this.#foreground || this.#paused || !this.#mappings.click.length) return;
-    await this.#gesture(this.#mappings.click);
+    if (this.#state !== "idle" || this.#foreground === "state" || this.#paused || !this.#mappings.click.length) return;
+    const now = performance.now();
+    if (now - this.#lastClickAt < 500) return;
+    this.#lastClickAt = now;
+    // Direct interaction can replace another gesture; task states still win.
+    const pool = this.#mappings.click;
+    await this.#playOnce(pool[Math.floor(Math.random() * pool.length)]!, "gesture");
   }
 
   async #gesture(pool: readonly string[]): Promise<void> {
@@ -106,6 +113,7 @@ export class StateAnimator {
     this.#generation += 1;
     this.#foreground = undefined;
     this.#state = undefined;
+    this.#lastClickAt = -Infinity;
     this.#controller.stopAnimation();
   }
 }

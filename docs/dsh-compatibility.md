@@ -1,6 +1,28 @@
 # DSH 兼容性与发布验收
 
-`0.1.1` 已于 2026-11-06 发布到 npm `latest`，Windows EXE 随插件提供，本轮没有另发 GitHub Windows 安装器或模型 Release。维护、模型诊断、性能与安装依据见 [本地稳定化验收](stabilization.md)。本页公开下载与早期设备手验保留各自的源码、哈希和范围。
+`0.1.2` 已于 2026-11-11 发布到 npm `latest` 和 GitHub 正式发行，提供统一插件及 Windows 安装器／免安装版。微光和蓝鱼仍沿用独立模型发行物。维护、模型诊断、性能与安装依据见 [本地稳定化验收](stabilization.md)。本页公开下载与早期设备手验保留各自的源码、哈希和范围。
+
+## 公开发行 0.1.2（2026-11-11）
+
+[`dsh-starlite@0.1.2`](https://www.npmjs.com/package/dsh-starlite/v/0.1.2) 与 [Release `v0.1.2`](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.2) 已公开，`latest` 指向 `0.1.2`，旧 `alpha` 保留 `0.1.0-alpha.2`。发行源码、`SOURCE_REVISION` 和 tag 均对应 [`82a5202`](https://github.com/StarCried/starlite-dsh/commit/82a52029abe5f0dea5c9a9c49750785c4f35faf3)，共享运行时固定到 [`125a66a`](https://github.com/StarCried/starlite/commit/125a66a3a42f6f71b44bb7724da37573be368d2d)，provenance 为 `dirty: false`。发行物从独立干净 checkout 构建；后续文档提交不移动 tag 或替换已公开文件。
+
+- 精确源码的[主 CI](https://github.com/StarCried/starlite-dsh/actions/runs/42946688414)、[依赖审计](https://github.com/StarCried/starlite-dsh/actions/runs/42946688167)和 [DSH latest 兼容检查](https://github.com/StarCried/starlite-dsh/actions/runs/42946688236)全部通过。主 CI 包含 Windows 原生构建与隔离安装器生命周期；本地通过 743 项 JavaScript 测试、14 项审计测试、Rust 108 项测试、fmt、debug／release 严格 Clippy 和发布门。1 项私有模型 fixture 测试保持忽略，不计为通过。JS／Rust 漏洞数均为零，10 项已审查的 Rust 维护或非目标平台警告仍在复审期限内，详见[依赖维护](dependency-audit.md)。
+- 匿名从公共 registry 下载最终归档，长度、SHA-256、SHA-512/SRI 与本地发布件一致，并逐字节比较通过。归档满足 12 文件白名单，包含 Windows 0.1.2 EXE 和两个独立示例的来源／许可清单，不含角色模型、私有人格或测试资产。
+- GitHub 正式发行的七个附件均已匿名下载，长度、SHA-256 与本地最终文件逐项一致，且逐字节比较通过；包含插件归档、Windows 安装器、免安装 ZIP、`SHA256SUMS`、`SOURCE_REVISION`、SBOM 和依赖许可。annotated tag 解析后指向上述发行源码，Release 不是草稿或预发行。
+- Windows 与 WSL2 均使用官方 DSH `0.2.2-rc.1`、Node `24.15.0`，在空认证配置、全新缓存和独立 profile 中实际安装 registry 规格 `dsh-starlite@0.1.2`。安装锁的 SRI 与公共归档相同，认证首页、适配失败不阻塞 DSH及退出回收均通过；没有付费模型请求、实际桌宠启动或日常 profile 修改。
+- 新增会话控制在官方 `0.2.2-rc.1` 原生工具执行器中完成五项零 API 检查：默认关闭时无工具、四项工具 schema 准入、内置 Skill 加载、实际 inspect／acquire／perform／stage／release 执行，以及关闭后注销。此自动检查使用生成的模型目录和回执，不代替真实 LLM 选择动作或原生画面手验。
+- 微光和蓝鱼沿用既有公开 HTTPS 地址，分别重新通过全新缓存下载、仅获取所选模型、长度／SHA-256 校验，以及禁止网络请求后的缓存复用。验证使用本机既有代理（Node `--use-env-proxy`）；直连 GitHub 曾超时，未放宽程序的 30 秒下载时限或完整性检查，也不保证其他网络的首次下载速度。没有新发模型资源。
+
+| 发行归档或其内含程序 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| `dsh-starlite-0.1.2.tgz` | 4,250,487 | `4c3962685a05d93a1beb6c8319378a7987531a4d1e31d164d4443470ae4fbdd2` |
+| `StarLite-for-DSH_0.1.2_x64-setup.exe` | 2,898,456 | `ce2cdb5fababb4f317356c5bc10a293a012f5120ced5f388dc93450eca3e1179` |
+| `StarLite-for-DSH_0.1.2_x64-portable.zip` | 4,123,520 | `7de5bc61975730023832e405dd6a2aef69102746eba1cb9ba184e958a3e0cc3b` |
+| 内含 `dsh-inochi2d-pet.exe` | 12,067,328 | `fa43bed77f4b5d758c451dc08a94f730c0c2f1dbf557bce758ac21f1095847f3` |
+
+归档 SRI 为 `sha512-2ckfnkavGu1X7fiY8ZYFQcy1qyXQhiXexmuFiO6YIvERN9TsjaDJuU0cq9RVUuB+7obl4eVrYy00TJ7d/Pr42Q==`。本机忽略目录 `release-output/release-0.1.2/` 保留 `artifact-manifest.json`、`ci-proof.json`、`npm-public-verification.json`、`github-dsh-proof.json`、`dsh-registry-windows.json`、`dsh-registry-wsl.json` 和 `default-download-validation.json`。
+
+Windows 程序仍未代码签名。安装器新装／升级／卸载使用云端隔离 runner，本轮没有对日常安装运行这些操作，也没有重做完整 DPI／多显示器、睡眠或长期 CPU／GPU／内存矩阵；早期设备手验和本轮功能候选验收保留各自范围，不改写为最终包全面复测。
 
 ## 公开发行 0.1.1（2026-11-06）
 

@@ -1,10 +1,10 @@
 # StarLite for DSH 发布检查
 
-## 0.1.2 发布准备（2026-11-11）
+## 0.1.2 已发布（2026-11-11）
 
-本轮已获准发布源码、npm 和 Windows 安装器／免安装版，版本统一为 `0.1.2`。新增可选会话接管、透明悬浮工具条，修复拖动中的环境光取色并更新通用困倦惊醒动作，详细行为见 [版本变化](../CHANGELOG.md#012--2026-11-11)。模型继续引用已公开的微光和蓝鱼固定资源，不另发模型或把角色文件打入程序。
+[`dsh-starlite@0.1.2`](https://www.npmjs.com/package/dsh-starlite/v/0.1.2) 已发布到 npm `latest`，并提供 [GitHub 正式发行](https://github.com/StarCried/starlite-dsh/releases/tag/v0.1.2) 的 Windows 安装器和免安装版。新增可选会话接管、透明悬浮工具条，修复拖动中的环境光取色并更新通用困倦惊醒动作，详细行为见 [版本变化](../CHANGELOG.md#012--2026-11-11)。模型继续引用已公开的微光和蓝鱼固定资源，不另发模型或把角色文件打入程序。
 
-发行物必须从固定共享源码与独立干净 checkout 构建；下列步骤通过后，再记录精确源码、哈希、云端 CI、公开下载与实际 registry 安装结果。本段是发布范围与流程，不表示尚未运行的验证已通过。Windows 文件仍未签名，保留现有 SmartScreen 说明。
+发行源码和不可变 tag `v0.1.2` 对应 [`82a5202`](https://github.com/StarCried/starlite-dsh/commit/82a52029abe5f0dea5c9a9c49750785c4f35faf3)，共享运行时固定为 [`125a66a`](https://github.com/StarCried/starlite/commit/125a66a3a42f6f71b44bb7724da37573be368d2d)，从独立干净 checkout 构建，provenance 为 `dirty: false`。精确源码的三项云端检查、匿名 npm 归档一致性、Windows／WSL2 的真实 registry 安装与生命周期均通过。微光和蓝鱼另通过空缓存 HTTPS 下载及离线复用。哈希、CI 链接及本轮验收范围见 [0.1.2 发布验收](dsh-compatibility.md#公开发行-0122026-11-11)，本机证据保存在 `release-output/release-0.1.2/`。后续文档提交不移动 tag 或重打发布件；Windows 文件仍未签名，保留 SmartScreen 说明。
 
 ## 0.1.1 npm 已发布（2026-11-06）
 

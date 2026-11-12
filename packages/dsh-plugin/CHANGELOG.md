@@ -1,5 +1,11 @@
 # 版本变化
 
+## 0.1.3
+
+### Patch Changes
+
+- 4be06e2: Let a click during idle interrupt an ambient gesture or the previous click response, with a 500 ms cooldown between accepted clicks. Task-state animations retain priority, and stale animation completions cannot replace a newer response.
+
 ## 0.1.2
 
 - 新增默认关闭的「允许会话控制角色」。启用后，DSH 会话可通过内置工具和 Skill 播放模型已有动作、发送纯文本气泡，并临时调整位置、大小和光标跟随；不新增语音、记忆或外部聊天连接器。

@@ -5,6 +5,7 @@
 ### Patch Changes
 
 - 4be06e2: Let a click during idle interrupt an ambient gesture or the previous click response, with a 500 ms cooldown between accepted clicks. Task-state animations retain priority, and stale animation completions cannot replace a newer response.
+- Update rustix to 1.1.6, fixing [RUSTSEC-2026-0486](https://rustsec.org/advisories/RUSTSEC-2026-0486.html) in the desktop dependency lockfile.
 
 ## 0.1.2
 

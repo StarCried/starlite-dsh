@@ -2,9 +2,17 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { assertPreparedRun, checkCurrentDocs, compareVersions, CURRENT_DOCS, digest, docsOnly, integrity, registryPackage, syncVersions, verifyFiles, VERSION_FILES, writeJson } from "../release-state.mjs";
+import { assertPreparedRun, checkCurrentDocs, compareVersions, CURRENT_DOCS, digest, docsOnly, integrity, registryPackage, syncVersions, verifyFiles, VERSION_FILES, windowsPackageManagerScript, writeJson } from "../release-state.mjs";
 
 const directories = [];
+
+it("uses the running pnpm entrypoint when Windows CI keeps its shim elsewhere", () => {
+  const shim = "C:\\runner\\pnpm\\bin\\pnpm.cmd";
+  const active = "C:\\runner\\pnpm\\.tools\\11.7.0\\node_modules\\pnpm\\bin\\pnpm.cjs";
+  expect(windowsPackageManagerScript("pnpm", shim, active)).toBe(active);
+  expect(windowsPackageManagerScript("npm", "C:\\Node\\npm.cmd", active)).toBe("C:\\Node\\node_modules\\npm\\bin\\npm-cli.js");
+  expect(windowsPackageManagerScript("pnpm", "C:\\Node\\pnpm.cmd")).toBe("C:\\Node\\node_modules\\pnpm\\bin\\pnpm.cjs");
+});
 afterEach(async () => { vi.unstubAllGlobals(); for (const directory of directories.splice(0)) await rm(directory, {recursive: true, force: true}); });
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "starlite-release-state-")); directories.push(root);

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { basename, resolve, win32 } from "node:path";
 
 export const REPOSITORY = "StarCried/starlite-dsh";
 export const PACKAGE = "dsh-starlite";
@@ -10,6 +10,13 @@ export const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 export const integrity = bytes => `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
 export const json = async path => JSON.parse(await readFile(path, "utf8"));
 export const writeJson = (path, value) => writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
+
+export function windowsPackageManagerScript(name, shim, activeScript) {
+  const filename = name === "npm" ? "npm-cli.js" : "pnpm.cjs";
+  // pnpm/action-setup installs its shim separately from the running package.
+  if (activeScript && win32.basename(activeScript) === filename) return activeScript;
+  return win32.join(win32.dirname(shim), "node_modules", name, "bin", filename);
+}
 
 export function compareVersions(left, right) {
   const split = value => { const [main, ...pre] = value.split("-"); return {main: main.split(".").map(Number), pre: pre.join("-").split(".").filter(Boolean)}; };

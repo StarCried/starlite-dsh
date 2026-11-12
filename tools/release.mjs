@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkCurrentDocs, compareVersions, digest, integrity, json, PACKAGE, REPOSITORY, registryPackage, syncVersions, verifyFiles, writeJson, anonymous } from "./release-state.mjs";
+import { checkCurrentDocs, compareVersions, digest, integrity, json, PACKAGE, REPOSITORY, registryPackage, syncVersions, verifyFiles, windowsPackageManagerScript, writeJson, anonymous } from "./release-state.mjs";
 import { assertDefaultModelCatalog } from "./plugin-desktop-assets.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -19,7 +19,7 @@ function run(executable, argv, cwd = root, env = process.env, capture = false) {
   // Execute package-manager JS directly on Windows; no shell interpolation of paths.
   if (process.platform === "win32" && ["npm", "pnpm"].includes(executable)) {
     const where = execFileSync("where.exe", [`${executable}.cmd`], {encoding: "utf8", windowsHide: true}).trim().split(/\r?\n/u)[0];
-    const script = join(dirname(where), "node_modules", executable, executable === "npm" ? "bin/npm-cli.js" : "bin/pnpm.cjs");
+    const script = windowsPackageManagerScript(executable, where, env.npm_execpath);
     argv = [script, ...argv]; executable = process.execPath;
   }
   return execFileSync(executable, argv, {cwd, env, encoding: "utf8", windowsHide: true, stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit", maxBuffer: 32 * 1024 * 1024})?.trim();

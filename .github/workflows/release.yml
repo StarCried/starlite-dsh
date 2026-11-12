@@ -37,8 +37,7 @@ jobs:
         run: pnpm release prepare --out "$env:RUNNER_TEMP/starlite-release"
       - name: Verify isolated installer lifecycle
         shell: pwsh
-        working-directory: ${{ runner.temp }}/starlite-release/checkout
-        run: ./tools/test-installer.ps1
+        run: ./tools/test-installer.ps1 -BuildRoot "$env:RUNNER_TEMP/starlite-release/checkout"
       - uses: actions/upload-artifact@v7
         with:
           name: prepared-release

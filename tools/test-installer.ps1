@@ -1,6 +1,6 @@
 #Requires -Version 7.2
 [CmdletBinding()]
-param()
+param([string] $BuildRoot)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -76,9 +76,19 @@ function Assert-GuiExecutable([string] $Path) {
     }
 }
 
-$workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-if (-not $workspace.Equals([IO.Path]::GetFullPath($env:GITHUB_WORKSPACE), [StringComparison]::OrdinalIgnoreCase)) {
+$scriptWorkspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+if (-not $scriptWorkspace.Equals([IO.Path]::GetFullPath($env:GITHUB_WORKSPACE), [StringComparison]::OrdinalIgnoreCase)) {
     throw 'The installer acceptance script must belong to the checked-out CI workspace.'
+}
+$workspace = $scriptWorkspace
+if ($BuildRoot) {
+    $workspace = Assert-PathInside (Resolve-Path -LiteralPath $BuildRoot).Path (Resolve-Path -LiteralPath $env:RUNNER_TEMP).Path
+    $expectedRevision = & git -C $scriptWorkspace rev-parse HEAD
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot identify the CI source revision.' }
+    $buildRevision = & git -C $workspace rev-parse HEAD
+    if ($LASTEXITCODE -ne 0 -or $buildRevision -ne $expectedRevision) {
+        throw 'The prepared installer must come from the same source revision as CI.'
+    }
 }
 $config = Get-Content -LiteralPath (Join-Path $workspace 'apps/desktop/src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
 if ($config.productName -ne 'StarLite for DSH' -or $config.identifier -ne 'com.starcried.dsh-inochi2d-pet' -or
@@ -219,8 +229,8 @@ function Assert-Sentinels {
 }
 
 function New-SyntheticBaseline {
-    # There is no previously released StarLite version. Recompile a temporary
-    # copy of this exact generated installer template with lower install metadata.
+    # Recompile a temporary copy of this exact generated installer template
+    # with lower install metadata; this is not a historical release binary.
     # Its payload is a candidate copy with an inert trailer, never executed; the
     # differing hash proves that upgrading actually replaces the old test file.
     # This covers NSIS upgrade mechanics, not old application/schema migration.

@@ -2,6 +2,8 @@
 
 [简体中文](upgrade.md) · English · [User guide](user-guide.en.md)
 
+Installing `dsh-starlite` selects `latest`. Check [npm](https://www.npmjs.com/package/dsh-starlite), the [changelog](../packages/dsh-plugin/CHANGELOG.md), and [releases](https://github.com/StarCried/starlite-dsh/releases) for exact versions and sources. Historical checks remain in the [compatibility record](dsh-compatibility.md).
+
 ## Upgrade safely
 
 1. Fully exit the DSH Host. For Desktop, use the tray; × only hides its window.

@@ -2,13 +2,13 @@
 
 简体中文 · [English](upgrade.en.md)
 
-本文介绍 StarLite for DSH 正式版 `0.1.1`。安装 `dsh-starlite` 使用 `latest`；精确版本与来源查看 [npm](https://www.npmjs.com/package/dsh-starlite) 和[发行验收](dsh-compatibility.md#公开发行-0112026-11-06)。旧 alpha 记录保留在[兼容性记录](dsh-compatibility.md)。
+安装 `dsh-starlite` 使用 `latest`；精确版本、变化与来源查看 [npm](https://www.npmjs.com/package/dsh-starlite)、[版本变化](../packages/dsh-plugin/CHANGELOG.md) 和[正式发行](https://github.com/StarCried/starlite-dsh/releases)。历史验收保留在[兼容性记录](dsh-compatibility.md)。
 
 支持 Windows 11 x64 + WebView2，Host 可以是同机的官方 Windows DSH 桌面版、Windows 原生 CLI/Web 或 WSL2 CLI/Web。不同 Host／profile 要分别安装插件，但使用同一 Windows 用户的模型和偏好；一次只连接一个 Host。支持范围与实测 DSH 版本见 [兼容性记录](dsh-compatibility.md)。
 
 ## 更新插件
 
-1. 查看 [版本变化](../CHANGELOG.md) 和对应发行说明。
+1. 查看 [版本变化](../packages/dsh-plugin/CHANGELOG.md) 和对应发行说明。
 2. 完全退出正在使用的 DSH 和 Windows 托盘中的 StarLite。DSH 桌面窗口的 × 只隐藏窗口，请从 DSH 托盘退出。
 3. 在原来的 Host／profile 中更新插件，重新启动该 DSH。
 
@@ -45,7 +45,7 @@ dsh --profile web
 
 调试信息只在本地显示，不上传；关闭时不显示调试浮层或采样框。VRM 原有诊断历史仍保留。排查卡顿时说明帧率、DPR、Windows 缩放、显示器刷新率和显卡；截图只保留模型及调试信息，避免包含会话正文。
 
-## 模型姿态与跟随（alpha.2 起）
+## 模型姿态与跟随
 
 选中模型后展开「姿态与跟随」，可调双臂抬高、掌心朝向、手腕抬高、手部张合及独立的头部／眼球灵敏度；「更多调节」提供肘部弯曲和跟随平滑时间。掌心朝向左右对称，手腕抬高只调整手腕弯曲，不抬动手臂；手腕范围为 −45～45°。调节即时预览并自动保存到当前模型，切换模型不会共用这些值；每项可还原，也可恢复此模型默认值。
 
@@ -53,7 +53,7 @@ dsh --profile web
 
 ## 反馈问题
 
-alpha.2 的模型卡片提供「模型信息」，可查看必需／可选人形骨骼数、Blink 和眼球跟随能力、动作及几何统计；导入不会额外弹窗。缺少可选眨眼或眼球配置时，其他能力仍可使用。统计按网格 primitive 累加，不等于 GPU 或进程内存。导入错误会指出缺失的标准骨骼等原因；失败保持原有模型与设置。
+模型卡片提供「模型信息」，可查看必需／可选人形骨骼数、Blink 和眼球跟随能力、动作及几何统计；导入不会额外弹窗。缺少可选眨眼或眼球配置时，其他能力仍可使用。统计按网格 primitive 累加，不等于 GPU 或进程内存。导入错误会指出缺失的标准骨骼等原因；失败保持原有模型与设置。
 
 信息按资源数字卡、基础能力和可展开的详细统计分组，颜色同时配文字。三角面单项参考 [VRChat PC 档位](https://creators.vrchat.com/avatars/avatar-performance-ranking-system/)：不超过 32,000 为「优秀」，不超过 70,000 为「良好」，更高显示「偏高」。这是资源规模参考，不是整体 VRChat 评级或 FPS 预测；材质数并非材质槽、人形映射数并非整个骨架的骨骼数，不能照搬评级。动作等数量使用中性色，眨眼／眼球跟随分别显示「可用」「部分可用」或「未配置」，详细说明保留缺失能力的修复建议。
 

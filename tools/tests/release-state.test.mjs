@@ -7,10 +7,12 @@ import { assertPreparedRun, checkCurrentDocs, compareVersions, CURRENT_DOCS, dig
 const directories = [];
 
 it("uses the running pnpm entrypoint when Windows CI keeps its shim elsewhere", () => {
-  const shim = "C:\\runner\\pnpm\\bin\\pnpm.cmd";
-  const active = "C:\\runner\\pnpm\\.tools\\11.7.0\\node_modules\\pnpm\\bin\\pnpm.cjs";
-  expect(windowsPackageManagerScript("pnpm", shim, active)).toBe(active);
-  expect(windowsPackageManagerScript("npm", "C:\\Node\\npm.cmd", active)).toBe("C:\\Node\\node_modules\\npm\\bin\\npm-cli.js");
+  const shim = "C:\\runner\\setup-pnpm\\node_modules\\.bin\\bin\\pnpm.cmd";
+  for (const filename of ["pnpm.mjs", "pnpm.cjs"]) {
+    const active = `C:\\runner\\pnpm\\.tools\\11.7.0\\node_modules\\pnpm\\bin\\${filename}`;
+    expect(windowsPackageManagerScript("pnpm", shim, active)).toBe(active);
+    expect(windowsPackageManagerScript("npm", "C:\\Node\\npm.cmd", active)).toBe("C:\\Node\\node_modules\\npm\\bin\\npm-cli.js");
+  }
   expect(windowsPackageManagerScript("pnpm", "C:\\Node\\pnpm.cmd")).toBe("C:\\Node\\node_modules\\pnpm\\bin\\pnpm.cjs");
 });
 afterEach(async () => { vi.unstubAllGlobals(); for (const directory of directories.splice(0)) await rm(directory, {recursive: true, force: true}); });

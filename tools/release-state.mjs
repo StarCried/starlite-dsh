@@ -14,7 +14,8 @@ export const writeJson = (path, value) => writeFile(path, `${JSON.stringify(valu
 export function windowsPackageManagerScript(name, shim, activeScript) {
   const filename = name === "npm" ? "npm-cli.js" : "pnpm.cjs";
   // pnpm/action-setup installs its shim separately from the running package.
-  if (activeScript && win32.basename(activeScript) === filename) return activeScript;
+  const activeName = activeScript && win32.basename(activeScript);
+  if (activeName === filename || (name === "pnpm" && activeName === "pnpm.mjs")) return activeScript;
   return win32.join(win32.dirname(shim), "node_modules", name, "bin", filename);
 }
 

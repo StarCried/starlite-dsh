@@ -414,12 +414,13 @@ struct CursorPoint {
 }
 
 #[cfg(windows)]
-fn primary_button_down() -> bool {
+fn model_button_down() -> bool {
     use windows_sys::Win32::UI::{
-        Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON},
+        Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_MBUTTON, VK_RBUTTON},
         WindowsAndMessaging::{GetSystemMetrics, SM_SWAPBUTTON},
     };
     // Read only the current high bit, not the unreliable "pressed since last call" bit.
+    // Both body dragging and middle-button camera inspection retain capture.
     // Respect the user's logical primary-button mapping.
     unsafe {
         GetAsyncKeyState(if GetSystemMetrics(SM_SWAPBUTTON) == 0 {
@@ -428,6 +429,7 @@ fn primary_button_down() -> bool {
             VK_RBUTTON
         } as i32)
             < 0
+            || GetAsyncKeyState(VK_MBUTTON as i32) < 0
     }
 }
 
@@ -447,7 +449,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
                     break;
                 };
                 if !window.is_visible().unwrap_or(false) {
-                    latch.down = primary_button_down();
+                    latch.down = model_button_down();
                     latch.on_model = false;
                     std::thread::sleep(std::time::Duration::from_millis(100));
                     continue;
@@ -477,7 +479,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
                     if let Some((hit, gaze)) = coverage {
                         let hit = hit || state.controls_contain(x, y, size.width, size.height);
                         let force = app.state::<crate::tray::UiState>().click_through();
-                        let down = primary_button_down();
+                        let down = model_button_down();
                         let active_drag = state.drag.lock().is_ok_and(|drag| drag.is_some());
                         let ignore =
                             latch.ignore(hit, down, force) && !(active_drag && down && !force);

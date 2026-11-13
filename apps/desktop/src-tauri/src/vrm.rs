@@ -141,6 +141,9 @@ pub fn inspect(
             let adjustments: ModelAdjustments = serde_json::from_value(value.clone())
                 .map_err(|_| "invalid embedded model adjustments".to_owned())?;
             adjustments.validate()?;
+            if let Some(tail) = &adjustments.tail_sway {
+                validate_tail_root(&parsed.json, &tail.root_bone)?;
+            }
             Ok::<_, String>(adjustments)
         })
         .transpose()?;
@@ -1161,6 +1164,23 @@ fn validate_blink_bindings(model: &Value) -> Result<(), String> {
     }
     Ok(())
 }
+pub fn validate_tail_root_file(path: &Path, name: &str) -> Result<(), String> {
+    let bytes = read_limited(path, MODEL_LIMIT)?;
+    validate_tail_root(&parse_glb(&bytes, false)?.json, name)
+}
+
+fn validate_tail_root(model: &Value, name: &str) -> Result<(), String> {
+    if array(model, "nodes")?
+        .iter()
+        .filter(|node| node["name"].as_str() == Some(name))
+        .count()
+        != 1
+    {
+        return Err("tailSway.rootBone must identify one model node".into());
+    }
+    Ok(())
+}
+
 fn inspect_capabilities(model: &Value, bones: &BTreeMap<String, usize>) -> Result<Value, String> {
     validate_blink_bindings(model)?;
     let usable = |name, blink| {
@@ -2187,6 +2207,41 @@ mod tests {
             let (installed, _) = prepared.write(&temp.path().join("installed")).unwrap();
             assert_eq!(fs::read(&source).unwrap(), bytes);
             assert_eq!(fs::read(installed).unwrap(), bytes);
+        }
+    }
+    #[test]
+    fn tail_sway_import_preserves_model_bytes_and_checks_the_unique_root() {
+        for mut value in [model(), model_vrm1()] {
+            value["nodes"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({"name":"Tail.Root"}));
+            value["extras"]["starlite"]["adjustments"] = json!({"tailSway":{"rootBone":"Tail.Root","amplitudeDegrees":35,"periodSeconds":10}});
+            let temp = tempfile::tempdir().unwrap();
+            let source = temp.path().join("model.vrm");
+            let bytes = glb(value.clone(), vec![]);
+            fs::write(&source, &bytes).unwrap();
+            let prepared = inspect(&source, &[], None).unwrap();
+            assert_eq!(
+                prepared
+                    .default_adjustments
+                    .as_ref()
+                    .unwrap()
+                    .tail_sway
+                    .as_ref()
+                    .unwrap()
+                    .amplitude_degrees,
+                Some(35.0)
+            );
+            let (installed, _) = prepared.write(&temp.path().join("installed")).unwrap();
+            assert_eq!(fs::read(installed).unwrap(), bytes);
+            assert!(validate_tail_root_file(&source, "Missing").is_err());
+            value["nodes"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({"name":"Tail.Root"}));
+            fs::write(&source, glb(value, vec![])).unwrap();
+            assert!(inspect(&source, &[], None).is_err());
         }
     }
     #[test]

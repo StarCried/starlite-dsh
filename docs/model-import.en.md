@@ -28,6 +28,12 @@ rightUpperLeg, rightLowerLeg, rightFoot
 
 Shoulders, chest, neck, toes, eyes, and fingers are optional. Missing finger mappings cannot provide finger animation automatically.
 
+# Tail sway
+
+Open **Pose and tracking → Tail sway** and enter the exact, unique root node name from the VRM. A blank name disables it. Angle is the maximum to either side (0–50°, default 10°); period is seconds per complete left/right cycle (3–30, default 10). Values are saved per model. Authors can seed new imports using `extras.starlite.adjustments.tailSway`, for example `{"rootBone":"Tail","amplitudeDegrees":35,"periodSeconds":10}`.
+
+Any standard humanoid VRM 0/1 with tail bones can opt in. Model up determines the rotation axis. Sway runs only in the baseline Idle loop, fades during foreground actions, and resumes afterward. Pausing/hiding stops updates; authored motion and breathing durations are unchanged. Springs, gravity, colliders and simulation roots remain entirely model-owned. Missing or duplicate root names cannot be saved.
+
 # Blinking and cursor tracking
 
 Blinking is optional. Models without blink expressions still support idle, breathing, and head tracking. To enable blinking, register either:

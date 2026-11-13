@@ -84,6 +84,21 @@ it("reports failed persistence and restores the saved live values", async () => 
   expect(host.textContent).toContain("调节未保存，已恢复保存的设置");
 });
 
+it("edits tail sway separately from the idle pose and restores model-local values", async () => {
+  panel.update({...structuredClone(model),mappings:{...model.mappings,idle:"AuthoredIdle"}});await open();
+  expect(field("amplitudeDegrees").disabled).toBe(true);
+  const root=document.getElementById("adjust-tailRoot") as HTMLInputElement;
+  root.value="Tail.Root";root.dispatchEvent(new Event("change"));
+  expect(preview).toHaveBeenLastCalledWith("first",{tailSway:{rootBone:"Tail.Root"}});
+  expect(field("amplitudeDegrees").disabled).toBe(false);
+  edit("amplitudeDegrees",35,"change");edit("periodSeconds",10,"change");
+  expect(persist).toHaveBeenLastCalledWith("first",{tailSway:{rootBone:"Tail.Root",amplitudeDegrees:35,periodSeconds:10}});
+  edit("amplitudeDegrees",0,"change");expect(preview).toHaveBeenLastCalledWith("first",{tailSway:{rootBone:"Tail.Root",amplitudeDegrees:0,periodSeconds:10}});
+  root.value="";root.dispatchEvent(new Event("change"));expect(persist).toHaveBeenLastCalledWith("first",{});
+  panel.update({...structuredClone(model),id:"second",adjustments:{tailSway:{rootBone:"尾巴",amplitudeDegrees:20,periodSeconds:12}}});
+  expect(root.value).toBe("尾巴");expect(field("amplitudeDegrees").value).toBe("20");
+});
+
 it("ignores late inspection results after changing models", async () => {
   let finish!:(report: ModelInspection)=>void;inspect.mockImplementationOnce(() => new Promise(resolve => {finish=resolve;}));
   await open();panel.update({...structuredClone(model),id:"second",title:"Second"});await Promise.resolve();await Promise.resolve();

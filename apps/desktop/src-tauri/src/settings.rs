@@ -207,6 +207,18 @@ pub struct ModelAdjustments {
     pub idle: Option<IdleAdjustments>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gaze: Option<GazeAdjustments>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tail_sway: Option<TailSwayAdjustments>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TailSwayAdjustments {
+    pub root_bone: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amplitude_degrees: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub period_seconds: Option<f64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -247,12 +259,20 @@ impl ModelAdjustments {
             gaze.head_strength.is_none()
                 && gaze.eye_strength.is_none()
                 && gaze.smoothing_ms.is_none()
-        })
+        }) && self.tail_sway.is_none()
     }
 
     pub fn validate(&self) -> Result<(), String> {
         let idle = self.idle.clone().unwrap_or_default();
         let gaze = self.gaze.clone().unwrap_or_default();
+        if let Some(tail) = &self.tail_sway {
+            if tail.root_bone.trim().is_empty()
+                || tail.root_bone.encode_utf16().count() > 128
+                || tail.root_bone.chars().any(|c| c.is_ascii_control())
+            {
+                return Err("invalid model adjustment: tailSway.rootBone".into());
+            }
+        }
         for (name, value, min, max) in [
             ("armLiftDegrees", idle.arm_lift_degrees, -30.0, 45.0),
             ("palmTwistDegrees", idle.palm_twist_degrees, -45.0, 45.0),
@@ -262,6 +282,20 @@ impl ModelAdjustments {
             ("headStrength", gaze.head_strength, 0.0, 2.0),
             ("eyeStrength", gaze.eye_strength, 0.0, 2.0),
             ("smoothingMs", gaze.smoothing_ms, 20.0, 1000.0),
+            (
+                "amplitudeDegrees",
+                self.tail_sway
+                    .as_ref()
+                    .and_then(|tail| tail.amplitude_degrees),
+                0.0,
+                50.0,
+            ),
+            (
+                "periodSeconds",
+                self.tail_sway.as_ref().and_then(|tail| tail.period_seconds),
+                3.0,
+                30.0,
+            ),
         ] {
             if value.is_some_and(|value| !value.is_finite() || !(min..=max).contains(&value)) {
                 return Err(format!("invalid model adjustment: {name}"));
@@ -365,6 +399,18 @@ impl DesktopSettings {
             .ok_or(crate::locale::message("没有找到该模型，请重新打开设置。"))?;
         if model.data.backend != ModelBackend::Vrm {
             return Err(crate::locale::message("本版本仅支持调整 VRM 模型。").into());
+        }
+        if let Some(tail) = &adjustments.tail_sway {
+            let previous = model
+                .adjustments
+                .as_ref()
+                .and_then(|value| value.tail_sway.as_ref());
+            if previous.is_none_or(|value| value.root_bone != tail.root_bone) {
+                crate::vrm::validate_tail_root_file(
+                    Path::new(&model.data.model_path),
+                    &tail.root_bone,
+                )?;
+            }
         }
         model.adjustments = (!adjustments.is_empty()).then_some(adjustments);
         Ok(())
@@ -1487,6 +1533,9 @@ mod tests {
             serde_json::json!({"gaze":{"headStrength":2.1}}),
             serde_json::json!({"gaze":{"eyeStrength":-0.1}}),
             serde_json::json!({"gaze":{"smoothingMs":0}}),
+            serde_json::json!({"tailSway":{"rootBone":""}}),
+            serde_json::json!({"tailSway":{"rootBone":"Tail","amplitudeDegrees":51}}),
+            serde_json::json!({"tailSway":{"rootBone":"Tail","periodSeconds":0}}),
         ] {
             let adjustments: ModelAdjustments = serde_json::from_value(value.clone()).unwrap();
             assert!(current.set_model_adjustments("first", adjustments).is_err());
@@ -1499,6 +1548,7 @@ mod tests {
             serde_json::json!({"other":1}),
             serde_json::json!({"idle":{"handCurl":"open"}}),
             serde_json::json!({"gaze":{"other":1}}),
+            serde_json::json!({"tailSway":{"rootBone":"Tail","axis":"y"}}),
         ] {
             assert!(serde_json::from_value::<ModelAdjustments>(value).is_err());
         }

@@ -47,6 +47,8 @@ rightUpperLeg, rightLowerLeg, rightFoot
 
 程序还提供 `StarLiteCuriousPeek`（好奇探头）、`StarLiteHappyWave`（开心招手）、`StarLiteSleepyStartle`（困倦惊醒）三个通用人形动作，可在动作映射中选择。现有映射保持不变；新导入普通模型的点击／偶发动作默认不选。映射修改后自动保存。
 
+「姿态与跟随 → 主动摆尾」可为有尾骨的模型添加待机摆动：填写唯一尾根原名，再调角度和周期。留空关闭；物理和碰撞仍由 VRM 决定。
+
 # 许可与本地文件
 
 导入只在本机建立副本，不上传或修改源文件。检查失败时保留当前模型。

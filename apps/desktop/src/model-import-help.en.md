@@ -47,6 +47,8 @@ Embedded standard glTF animations are listed automatically. Use unique English n
 
 Mappings save automatically. **Pose and tracking** adjusts the bundled idle's arms, palms, wrists, fingers, elbows, and independent head/eye tracking. Pose changes do not alter authored motions or the source file. Each model keeps its own adjustments; each setting can be reset.
 
+**Pose and tracking → Tail sway** adds idle sway to models with tails. Enter the unique root bone name, then adjust angle and period. A blank name disables it; the VRM retains ownership of physics and collisions.
+
 # License and local files
 
 Import creates a local copy without uploading or modifying the source. A failed import leaves the active model unchanged.

@@ -1,10 +1,10 @@
 import { t, format } from "./i18n.js";
 import type { LibraryModel, ModelAdjustments, ModelInspection } from "./types.js";
 
-type Group = "idle" | "gaze";
+type Group = "idle" | "gaze" | "tailSway";
 interface AdjustmentField {
   group: Group; key: string; label: string; min: number; max: number; step: number; initial: number;
-  capability: "idle" | "fingers" | "head" | "eyes" | "tracking"; advanced?: boolean; unit: "angle" | "percent" | "time";
+  capability: "idle" | "fingers" | "head" | "eyes" | "tracking" | "tail"; advanced?: boolean; unit: "angle" | "percent" | "time" | "seconds";
 }
 const FIELDS: readonly AdjustmentField[] = [
   {group:"idle",key:"armLiftDegrees",label:"双臂抬高",min:-30,max:45,step:1,initial:0,capability:"idle",unit:"angle"},
@@ -15,9 +15,11 @@ const FIELDS: readonly AdjustmentField[] = [
   {group:"gaze",key:"eyeStrength",label:"眼球灵敏度",min:0,max:2,step:.05,initial:1,capability:"eyes",unit:"percent"},
   {group:"idle",key:"elbowBendDegrees",label:"肘部弯曲",min:-20,max:45,step:1,initial:0,capability:"idle",unit:"angle",advanced:true},
   {group:"gaze",key:"smoothingMs",label:"跟随平滑时间",min:20,max:1000,step:10,initial:100,capability:"tracking",unit:"time",advanced:true},
+  {group:"tailSway",key:"amplitudeDegrees",label:"摆尾角度",min:0,max:50,step:1,initial:10,capability:"tail",unit:"angle"},
+  {group:"tailSway",key:"periodSeconds",label:"摆尾周期",min:3,max:30,step:.5,initial:10,capability:"tail",unit:"seconds"},
 ];
 const clone = (value: ModelAdjustments | undefined): ModelAdjustments => structuredClone(value ?? {});
-const record = (value: ModelAdjustments, group: Group) => value[group] as Record<string, number> | undefined;
+const record = (value: ModelAdjustments, group: Group) => value[group] as Record<string, number | string> | undefined;
 
 /** Small model-local editor; preview is transient, native persistence is debounced. */
 export class ModelAdjustmentsPanel {
@@ -27,6 +29,7 @@ export class ModelAdjustmentsPanel {
   readonly #status = document.createElement("p");
   readonly #rows = new Map<AdjustmentField, {input: HTMLInputElement; output: HTMLOutputElement; reset: HTMLButtonElement; hint: HTMLElement}>();
   readonly #reset = document.createElement("button");
+  readonly #tailRoot = document.createElement("input");
   readonly #reports = new Map<string, Promise<ModelInspection>>();
   #model: LibraryModel | undefined;
   #draft: ModelAdjustments = {};
@@ -49,6 +52,21 @@ export class ModelAdjustmentsPanel {
     const more = document.createElement("summary"); more.textContent = t("更多调节");
     const extra = document.createElement("div"); extra.className = "adjustments-fields"; advanced.append(more, extra);
     this.#details.append(summary, this.#title, this.#hint, basic, advanced);
+    const tail = document.createElement("details"); tail.className = "adjustments-advanced";
+    const tailTitle = document.createElement("summary"); tailTitle.textContent = t("主动摆尾");
+    const rootLabel = document.createElement("label"); rootLabel.textContent = t("尾根骨骼名称");
+    this.#tailRoot.id = "adjust-tailRoot"; this.#tailRoot.maxLength = 128; this.#tailRoot.type = "text";
+    this.#tailRoot.setAttribute("aria-label", t("尾根骨骼名称")); rootLabel.append(this.#tailRoot);
+    const tailHint = document.createElement("p"); tailHint.className = "adjustments-hint";
+    tailHint.textContent = t("填写 VRM 中唯一的尾根骨骼原名，留空关闭。仅待机时主动摆动；物理与碰撞由模型决定。");
+    const tailFields = document.createElement("div"); tailFields.className = "adjustments-fields";
+    tail.append(tailTitle, rootLabel, tailHint, tailFields); this.#details.append(tail);
+    this.#tailRoot.addEventListener("change", () => {
+      const rootBone = this.#tailRoot.value.trim();
+      this.#draft = {...this.#draft};
+      if (rootBone) this.#draft.tailSway = {...this.#draft.tailSway, rootBone}; else delete this.#draft.tailSway;
+      this.#changed(true);
+    });
     for (const field of FIELDS) {
       const row = document.createElement("div"); row.className = "adjustment-row";
       const id = "adjust-" + field.key;
@@ -62,7 +80,7 @@ export class ModelAdjustmentsPanel {
       input.addEventListener("change", () => this.#edit(field, Number(input.value), true));
       input.addEventListener("blur", () => this.#flush());
       reset.addEventListener("click", () => this.#edit(field, undefined, true));
-      row.append(label, output, input, reset, hint); (field.advanced ? extra : basic).append(row);
+      row.append(label, output, input, reset, hint); (field.group === "tailSway" ? tailFields : field.advanced ? extra : basic).append(row);
       this.#rows.set(field, {input, output, reset, hint});
     }
     this.#reset.type = "button"; this.#reset.className = "adjustments-reset"; this.#reset.textContent = t("恢复此模型默认值");
@@ -93,7 +111,7 @@ export class ModelAdjustmentsPanel {
     const group = {...record(this.#draft, field.group)};
     if (value === undefined) delete group[field.key]; else group[field.key] = value;
     this.#draft = {...this.#draft};
-    if (Object.keys(group).length) this.#draft[field.group] = group; else delete this.#draft[field.group];
+    if (Object.keys(group).length) Object.assign(this.#draft, {[field.group]: group}); else delete this.#draft[field.group];
     this.#changed(immediate);
   }
 
@@ -142,13 +160,15 @@ export class ModelAdjustmentsPanel {
     const builtIn = model?.mappings.idle === "StarLiteIdle";
     const fingers = caps?.humanoid.optionalBones.filter(name => /(?:Thumb|Index|Middle|Ring|Little)(?:Metacarpal|Proximal|Intermediate|Distal)$/u.test(name)).length ?? 0;
     this.#title.textContent = model?.title ?? "";
+    this.#tailRoot.value = this.#draft.tailSway?.rootBone ?? "";
     this.#hint.textContent = builtIn ? t("姿态调节用于 StarLite 默认站姿；三个内置互动动作会从调节后的站姿开始和结束。") : t("当前待机使用模型自带动作，保留原有姿态；视线仍可调节。");
     for (const [field, row] of this.#rows) {
-      const value = record(this.#draft, field.group)?.[field.key];
+      const value = record(this.#draft, field.group)?.[field.key] as number | undefined;
       row.input.value = String(value ?? field.initial);
-      row.output.textContent = field.key === "handCurl" && value === undefined ? t("原动作") : field.unit === "angle" ? `${value ?? field.initial}°` : field.unit === "time" ? `${value ?? field.initial} ms` : `${Math.round((value ?? field.initial) * 100)}%`;
-      const allowed = !!caps && (field.capability === "idle" ? builtIn : field.capability === "fingers" ? builtIn && fingers > 0 : field.capability === "eyes" ? caps.lookAt.eyes : field.capability === "head" ? caps.lookAt.head : caps.lookAt.head || caps.lookAt.eyes);
+      row.output.textContent = field.key === "handCurl" && value === undefined ? t("原动作") : field.unit === "angle" ? `${value ?? field.initial}°` : field.unit === "time" ? `${value ?? field.initial} ms` : field.unit === "seconds" ? `${value ?? field.initial} s` : `${Math.round((value ?? field.initial) * 100)}%`;
+      const allowed = field.capability === "tail" ? !!this.#draft.tailSway : !!caps && (field.capability === "idle" ? builtIn : field.capability === "fingers" ? builtIn && fingers > 0 : field.capability === "eyes" ? caps.lookAt.eyes : field.capability === "head" ? caps.lookAt.head : caps.lookAt.head || caps.lookAt.eyes);
       row.input.disabled = !allowed; row.reset.disabled = value === undefined;
+      if (field.capability === "tail") { row.hint.textContent = ""; continue; }
       row.hint.textContent = !caps ? t("展开后检查模型能力") : (field.capability === "idle" || field.capability === "fingers") && !builtIn ? t("仅用于 StarLite 默认站姿") : field.capability === "fingers" ? fingers === 0 ? t("未配置标准手指骨骼") : fingers < 30 ? t("仅调整已映射的手指；0% 张开，100% 握拳") : t("0% 张开，100% 握拳；还原后保留原动作") : field.capability === "eyes" && !caps.lookAt.eyes ? t("未配置有效眼球骨骼或视线表情") : field.capability === "eyes" && (!caps.lookAt.horizontal || !caps.lookAt.vertical) ? t("按模型支持的视线方向调节") : field.key === "smoothingMs" ? t("数值越小，跟随越快") : field.group === "gaze" ? t("0% 不跟随；仍保留角度限制") : "";
     }
     this.#reset.disabled = !Object.keys(this.#draft).length;

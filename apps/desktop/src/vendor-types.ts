@@ -29,6 +29,7 @@ export interface ModelHitMask {
 export interface ModelAdjustments {
   idle?: { armLiftDegrees?: number; palmTwistDegrees?: number; wristLiftDegrees?: number; handCurl?: number; elbowBendDegrees?: number };
   gaze?: { headStrength?: number; eyeStrength?: number; smoothingMs?: number };
+  tailSway?: { rootBone: string; amplitudeDegrees?: number; periodSeconds?: number };
 }
 
 export interface WidgetController {

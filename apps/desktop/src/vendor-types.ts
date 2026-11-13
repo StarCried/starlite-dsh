@@ -42,6 +42,8 @@ export interface WidgetController {
   ): Promise<AnimationPlaybackResult>;
   stopAnimation(): void;
   resetCamera(): void;
+  readonly inspecting?: boolean;
+  rotateInspection?(dx: number, dy: number): void;
   getBubbleAnchor?(): ModelBubbleAnchor | undefined;
   observeInteractionMask(listener?: (mask: ModelHitMask | undefined) => void): void;
   setPointerPosition(clientX: number, clientY: number): void;

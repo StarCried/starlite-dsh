@@ -219,6 +219,7 @@ export async function startPet(): Promise<void> {
   // The runtime emits this after resize/reprojection. Read the current mounted
   // controller rather than retaining a callback into a replaced model.
   host.addEventListener("model-viewport-change",syncBubbleAnchor);
+  host.addEventListener("model-camera-change",syncBubbleAnchor);
   await listen<{x: number; y: number}>("pet-cursor", ({payload}) => {
     controller?.setPointerPosition(payload.x, payload.y);
     visitorToolbar?.pointer(payload.x,payload.y,viewport.modelRect);
@@ -243,6 +244,7 @@ export async function startPet(): Promise<void> {
 
   const syncRendering = () => {
     const paused = !connected || !modelAvailable() || !ui.visible || pausedByTray || document.visibilityState !== "visible";
+    if ((!connected || !ui.visible) && controller?.inspecting) controller.resetCamera();
     if(paused&&presenter?.owner)void presenter.release("unavailable");
     animator?.setPaused(paused);
     if (paused) controller?.pause();
@@ -405,7 +407,7 @@ export async function startPet(): Promise<void> {
   };
   const closeQuickMenu=()=>{++menuOpenGeneration;quickMenu?.close();visitorToolbar?.clear();cancelClick();syncMenuSurface();};
   globalThis.addEventListener("blur",closeQuickMenu);
-  globalThis.addEventListener("pagehide", () => { closing=true;presenter?.disconnect(); environmentLighting.destroy(); samplingOverlay.destroy(); if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu);host.removeEventListener("model-viewport-change",syncBubbleAnchor); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();visitorToolbar?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
+  globalThis.addEventListener("pagehide", () => { closing=true;presenter?.disconnect(); environmentLighting.destroy(); samplingOverlay.destroy(); if(offlineTimer)clearTimeout(offlineTimer); connectLive=undefined; earlyUrls.clear(); removeDeepLinks?.(); ++mountGeneration; document.removeEventListener("visibilitychange",syncRendering); globalThis.removeEventListener("resize",syncWindowGeometry);globalThis.removeEventListener("blur",closeQuickMenu);host.removeEventListener("model-viewport-change",syncBubbleAnchor);host.removeEventListener("model-camera-change",syncBubbleAnchor); hostPosition.invalidate(); stopMovement(); cancelClick(); fees.cancel(); bubbleObserver.disconnect(); menuResize.disconnect();menuMutation.disconnect();quickMenu?.destroy();visitorToolbar?.destroy();void geometryInvoke("set_menu_interaction_region",{region:null});workBubble.clear(); connection?.stop(); animator?.disconnected(); slot.destroy(); interaction.update(undefined); void viewport.destroy(); }, {once:true});
   let settingsRevision = 0;
   let preparing = true;
   await listen<{modelId: string; adjustments: ModelAdjustments}>("model-adjustments-preview", async ({payload}) => {

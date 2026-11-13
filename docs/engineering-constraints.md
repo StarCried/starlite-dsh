@@ -71,6 +71,11 @@
   Toolbar and context menu are mutually exclusive and share the native menu
   region; never union their rectangles across transparent space. The shared
   drag threshold is strictly greater than six CSS pixels, including native DPI conversion.
+- Middle-button inspection is a shared VRM camera gesture, not window dragging.
+  Retain native hit ownership while either the logical primary or middle button
+  is held. Inspection must not release an Agent lease or write gaze/position
+  preferences. Reproject bubbles on `model-camera-change` without resizing the
+  native window; exclude the transient inspection hint from environment samples.
 - Resolve UI locale from the native Windows display language before importing
   label modules; pass it explicitly to shared controls and VRM. Translate only
   application-owned text, never session content or arbitrary model metadata.

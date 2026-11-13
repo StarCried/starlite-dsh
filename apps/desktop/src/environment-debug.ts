@@ -7,7 +7,7 @@ export interface EnvironmentOverlays {
 }
 
 const FRAME_GAP = 6;
-const VISIBLE_UI = "#bubble,[data-starlite-menu],[data-starlite-visitor-toolbar],[data-model-performance],[data-environment-exclusion]";
+const VISIBLE_UI = "#bubble,[data-starlite-menu],[data-starlite-visitor-toolbar],[data-model-performance],[data-starlite-inspection-hint],[data-environment-exclusion]";
 
 function clip(rect: EnvironmentPatch, width: number, height: number): EnvironmentPatch | undefined {
   const left=Math.max(0,rect.left),top=Math.max(0,rect.top);

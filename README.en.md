@@ -44,6 +44,7 @@ To understand the project first, ask the Agent to read that guide and explain in
 - **Drag the body:** move the character. Transparent areas let clicks reach the application behind it.
 - **Hover near the character:** use the compact − / + / bubbles / hide controls below its feet. Their position stays fixed while resizing; hiding bubbles keeps animations active. Restore a hidden character from the tray.
 - **Right-click:** change size, frame rate, tracking, and bubbles; restore position or open full settings.
+- **Middle-drag the body:** orbit the camera, release to keep the view, and middle-click to return. The entry hint hides after three seconds. Pointer gaze pauses; animation, bubbles and Agent control continue. Returning restores the current tracking preference.
 - **Answer a question:** choose options or type in the bubble. Tool permission approvals remain in DSH.
 
 The interface follows the Windows display language: Chinese for Chinese Windows, English otherwise. Model names, session content, and third-party license text stay unchanged.

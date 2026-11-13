@@ -90,11 +90,22 @@ describe("dedicated fee card", () => {
     const output=document.createElement("output");
     renderBillingBubble(output,{status:"ready",snapshot:{...account,balance:{...account.balance,balances:[{currency:"USD",remaining:4.5},{currency:"CNY",remaining:-.25}],bonusBalances:[]}}});
     expect(output.querySelector(".billing-wallet-recharge")?.textContent).toBe("充值余额-¥0.25CNY$4.50USD");
-    expect(output.querySelector(".billing-wallet-bonus")?.textContent).toBe("赠金余额暂无钱包记录");
+    expect(output.querySelector(".billing-wallet-bonus")).toBeNull();
     renderBillingBubble(output,{status:"ready",snapshot:{...account,balance:{...account.balance,balances:[],bonusBalances:[]}}});
-    expect(output.querySelectorAll(".billing-wallet-empty")).toHaveLength(2);
+    expect(output.querySelectorAll(".billing-wallet-empty")).toHaveLength(1);
     expect(output.querySelector(".billing-amount")).toBeNull();
     expect(output.textContent).not.toContain("暂时无法查询");
+  });
+  it("removes a depleted bonus card and restores it when any currency has a balance", () => {
+    const output=document.createElement("output");
+    renderBillingBubble(output,{status:"ready",snapshot:account});
+    renderBillingBubble(output,{status:"ready",snapshot:{...account,balance:{...account.balance,
+      bonusBalances:[{currency:"CNY",remaining:0},{currency:"USD",remaining:0}]}}});
+    expect(output.querySelector(".billing-wallet-bonus")).toBeNull();
+    expect(output.querySelector(".billing-wallet-recharge")?.textContent).toBe("充值余额¥109.89CNY");
+    renderBillingBubble(output,{status:"ready",snapshot:{...account,balance:{...account.balance,
+      bonusBalances:[{currency:"CNY",remaining:0},{currency:"USD",remaining:.21}]}}});
+    expect(output.querySelector(".billing-wallet-bonus")?.textContent).toContain("$0.21USD");
   });
   it.each([
     ["109.899", "¥109.89"], ["109.89", "¥109.89"], ["109.899999999999999999999999", "¥109.89"],
@@ -107,7 +118,11 @@ describe("dedicated fee card", () => {
     renderBillingBubble(output,{status:"ready",snapshot:{...account,balance:{...account.balance,
       balances:[{currency:"CNY",remaining:Number(decimal),decimal}],bonusBalances:[{currency:"USD",remaining:Number(decimal),decimal}]}}});
     expect(output.querySelector(".billing-wallet-recharge .billing-wallet-amount")?.textContent).toBe(`${expected}CNY`);
-    expect(output.querySelector(".billing-wallet-bonus .billing-wallet-amount")?.textContent).toBe(`${expected.replace("¥","$")}USD`);
+    if (expected === "¥0.00") {
+      expect(output.querySelector(".billing-wallet-bonus")).toBeNull();
+    } else {
+      expect(output.querySelector(".billing-wallet-bonus .billing-wallet-amount")?.textContent).toBe(`${expected.replace("¥","$")}USD`);
+    }
   });
   it("preserves the existing API-key formatting without applying account rounding rules", () => {
     const output=document.createElement("output");

@@ -9,6 +9,12 @@ function money(amount: number): string {
 
 function symbol(currency: BillingCurrency): string {return currency === "CNY" ? "¥" : "$";}
 
+function hasBalance(wallet: BillingSnapshot["balance"]["balances"][number]): boolean {
+  // Keep nonzero decimals even when their numeric value underflows to zero.
+  const coefficient = (wallet.decimal ?? String(wallet.remaining)).split(/[eE]/u)[0] ?? "";
+  return /[1-9]/u.test(coefficient);
+}
+
 /** Match DSH's wallet display without rounding the original decimal through a float. */
 function accountMoney(wallet: BillingSnapshot["balance"]["balances"][number]): {prefix: string; amount: string} {
   const currency = symbol(wallet.currency);
@@ -76,6 +82,7 @@ export function renderBillingBubble(element: HTMLElement, view: BillingBubbleVie
         ["recharge", t("充值余额"), balances],
         ["bonus", t("赠金余额"), [...(snapshot.balance.bonusBalances ?? [])].sort((a, b) => Number(b.currency === "CNY") - Number(a.currency === "CNY"))],
       ] as const) {
+        if (kind === "bonus" && !wallets.some(hasBalance)) continue;
         const group = node("div", `billing-wallet billing-wallet-${kind}`);
         group.append(node("span", "billing-label", label));
         if (!wallets.length) group.append(node("span", "billing-wallet-empty", t("暂无钱包记录")));

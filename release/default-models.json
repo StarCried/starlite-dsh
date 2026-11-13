@@ -3,9 +3,9 @@
   "defaultModels": [
     {
       "title": "微光v3.0",
-      "url": "https://github.com/StarCried/starlite/releases/download/weiguang-v3.0.0-starlite.1/Weiguang-StarLite.vrm",
-      "sha256": "0c24f9e785b3184936ae40fcdf6231c84d91de9d3c62fae107e79a24b1150999",
-      "bytes": 10907568,
+      "url": "https://github.com/StarCried/starlite/releases/download/weiguang-v3.0.0-starlite.2/Weiguang-StarLite.vrm",
+      "sha256": "b03db20c2d1ab4b96e99601aee1ffa71711c7f8516471a366fb0a794eca26c29",
+      "bytes": 10900544,
       "id": "weiguang-default",
       "license": {
         "title": "微光 v3.0",

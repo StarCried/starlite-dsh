@@ -1,5 +1,19 @@
 # 版本变化
 
+## 0.2.0
+
+### Minor Changes
+
+- d70afb8: Inspect a character with middle-button dragging and return with a middle-click, while animations, bubbles and Agent presentation control continue. Preserve transparent-window input capture throughout the orbit and hide the entry hint after three seconds.
+
+### Patch Changes
+
+- 25e2bc6: Hide the account bonus-balance card when there is no nonzero bonus balance.
+- 573ed0e: Add model-local tail sway controls for a named tail root, amplitude and cycle period. Preserve imported physics settings and support defaults embedded in VRM metadata.
+
+  Refresh the independently licensed default Weiguang asset with the approved 35-degree, ten-second tail sway preset.
+- ee3a705: Make tray Reset model restore the camera, reveal the character and return it to the primary display's bottom-right work area. Check the portrait rather than transparent window margins when recovering a saved off-screen position at startup.
+
 ## 0.1.3
 
 ### Patch Changes

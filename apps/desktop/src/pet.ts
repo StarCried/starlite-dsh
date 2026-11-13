@@ -2,10 +2,8 @@ import { t, uiLocale } from "./i18n.js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
-  PhysicalPosition,
   availableMonitors,
   getCurrentWindow,
-  primaryMonitor,
   type Monitor,
   type Window,
 } from "@tauri-apps/api/window";
@@ -533,12 +531,24 @@ export async function startPet(): Promise<void> {
   connectLive = connectUrls;
   connectUrls(await getCurrent());
 
+  const restorePosition = async (primary = false) => {
+    cancelClick(); quickMenu?.close(); visitorToolbar?.clear();
+    await presenter?.release("user",false);
+    await viewport.ready();
+    await geometryTask(()=>invoke("restore_default_position",{modelRect:portraitWithToolbar(viewport.modelRect,visitorToolbar?.rect),primary}));
+    resetHostMotion=true;await hostPosition.sync();
+    controller?.refreshInteractionMask?.();
+  };
   await listen<string>("tray-action", ({ payload }) => {
-    if(payload==="pause"||payload==="resume"||payload==="reset")void presenter?.release();
+    if(payload==="pause"||payload==="resume")void presenter?.release();
     if (payload === "pause") pausedByTray = true;
     if (payload === "resume") pausedByTray = false;
     if (payload === "pause" || payload === "resume") syncRendering();
-    if (payload === "reset") controller?.resetCamera();
+    if (payload === "reset") void (async()=>{
+      await restorePosition(true);
+      controller?.resetCamera();
+      if(connected&&modelAvailable())await invoke("set_pet_visible",{visible:true});
+    })().catch(()=>{void invoke("open_settings");});
   });
   await listen<PetUiState>("pet-ui-state",({payload})=>{
     if(payload.paused!==ui.paused||payload.visible!==ui.visible||payload.clickThrough!==ui.clickThrough)void presenter?.release();
@@ -554,7 +564,7 @@ export async function startPet(): Promise<void> {
     patch:async patch=>{await presenter?.release();await invoke("patch_preferences",{patch});},
     pause:async paused=>{await presenter?.release();await invoke("set_pet_paused",{paused});},
     hide:async()=>{await presenter?.release();await invoke("set_pet_visible",{visible:false});},
-    restorePosition:async()=>{await presenter?.release("user",false);await geometryTask(()=>invoke("restore_default_position",{modelRect:portraitWithToolbar(viewport.modelRect,visitorToolbar?.rect)}));void hostPosition.sync().catch(()=>{});},
+    restorePosition:()=>restorePosition(),
     openSettings:async()=>{await presenter?.release();await invoke("open_settings");},
     openDsh:async()=>{if(connection&&connected)await openDisplayedDsh(connection,latestSnapshot?.session?.ref,presenter?.owner?.leaseId);},
     selectModel:async modelId=>{await presenter?.release("model-changed");await invoke("select_model",{modelId});},
@@ -607,7 +617,7 @@ export async function startPet(): Promise<void> {
       if(!presenter?.busy&&settings.preferences.bubblesVisible!==false&&latestSnapshot?.session?.ref===ref&&!latestSnapshot?.inputRequest){renderPlainBubble(bubble,ref?t("暂时无法打开 DSH 会话"):t("暂时无法打开 DSH"),"notice",settings.preferences.privacyMode?"DSH":latestSnapshot?.session?.title);updateRegion();}
     });
   });
-  await keepWindowVisible(window);
+  await keepWindowVisible(window,viewport.modelRect,()=>restorePosition(true));
 }
 
 export function openDisplayedDsh(connection: Pick<StatusConnection,"openSession"|"openWebUi"> & Partial<Pick<StatusConnection,"openControlSession">>, sessionRef?: string,leaseId?:string): Promise<void> {
@@ -689,29 +699,22 @@ export function installPointerBehavior(
   return cancel;
 }
 
-async function keepWindowVisible(window: Window): Promise<void> {
+async function keepWindowVisible(window: Window, model: {left:number;top:number;width:number;height:number}, restore:()=>Promise<void>): Promise<void> {
   try {
-    const [position, size, monitors] = await Promise.all([
+    const [position, scale, monitors] = await Promise.all([
       window.outerPosition(),
-      window.outerSize(),
+      window.scaleFactor(),
       availableMonitors(),
     ]);
+    // A large transparent gesture/bubble margin may still intersect a display
+    // after its portrait has disappeared onto a removed monitor.
+    const x=position.x+(model.left+model.width/2)*scale;
+    const y=position.y+(model.top+model.height/2)*scale;
     const visible = (monitors as Monitor[]).some((monitor) => {
-      const left = Math.max(position.x, monitor.position.x);
-      const top = Math.max(position.y, monitor.position.y);
-      const right = Math.min(position.x + size.width, monitor.position.x + monitor.size.width);
-      const bottom = Math.min(position.y + size.height, monitor.position.y + monitor.size.height);
-      return right - left >= 64 && bottom - top >= 64;
+      const {position:origin,size}=monitor.workArea;
+      return x>=origin.x&&x<origin.x+size.width&&y>=origin.y&&y<origin.y+size.height;
     });
-    if (!visible) {
-      const primary = await primaryMonitor();
-      if (primary) {
-        await window.setPosition(new PhysicalPosition(
-          primary.position.x + primary.size.width - size.width - 24,
-          primary.position.y + primary.size.height - size.height - 48,
-        ));
-      }
-    }
+    if (!visible && monitors.length) await restore();
   } catch {
     // Window APIs can fail briefly during monitor or sleep transitions.
   }

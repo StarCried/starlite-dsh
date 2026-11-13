@@ -71,6 +71,12 @@
   Toolbar and context menu are mutually exclusive and share the native menu
   region; never union their rectangles across transparent space. The shared
   drag threshold is strictly greater than six CSS pixels, including native DPI conversion.
+- Tray reset is the off-screen recovery path: release temporary session placement
+  before moving to the primary work area's bottom-right, rebase host motion,
+  restore the camera and reveal the pet without clearing preferences or pause.
+  Startup visibility checks use the fixed portrait centre in physical pixels,
+  not the padded transparent window. The context-menu position action retains
+  its current-monitor behavior. Preserve taskbar work areas and negative origins.
 - Middle-button inspection is a shared VRM camera gesture, not window dragging.
   Retain native hit ownership while either the logical primary or middle button
   is held. Inspection must not release an Agent lease or write gaze/position

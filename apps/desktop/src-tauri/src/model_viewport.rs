@@ -261,6 +261,7 @@ pub fn restore_default_position(
     window: tauri::WebviewWindow,
     interaction: tauri::State<crate::hit_test::HitTestState>,
     model_rect: ModelBodyRect,
+    primary: Option<bool>,
 ) -> Result<(), String> {
     if window.label() != "main" {
         return Err("model position belongs to the pet window".into());
@@ -287,16 +288,29 @@ pub fn restore_default_position(
         .map_err(|_| "window position unavailable")?;
     let center_x = f64::from(origin.x) + (model_rect.left + model_rect.width / 2.0) * scale;
     let center_y = f64::from(origin.y) + (model_rect.top + model_rect.height / 2.0) * scale;
-    let monitor = window
-        .monitor_from_point(center_x, center_y)
-        .map_err(|_| "monitor unavailable")?
-        .or(window
-            .current_monitor()
-            .map_err(|_| "monitor unavailable")?)
-        .or(window
+    // Tray recovery always uses the primary display, even when a detached
+    // display's saved coordinates overlap only our transparent margins.
+    let monitor = if primary.unwrap_or(false) {
+        window
             .primary_monitor()
-            .map_err(|_| "monitor unavailable")?)
-        .ok_or("monitor unavailable")?;
+            .map_err(|_| "monitor unavailable")?
+    } else {
+        window
+            .monitor_from_point(center_x, center_y)
+            .map_err(|_| "monitor unavailable")?
+            .or(window
+                .current_monitor()
+                .map_err(|_| "monitor unavailable")?)
+            .or(window
+                .primary_monitor()
+                .map_err(|_| "monitor unavailable")?)
+    }
+    .or(window
+        .available_monitors()
+        .map_err(|_| "monitor unavailable")?
+        .into_iter()
+        .next())
+    .ok_or("monitor unavailable")?;
     let area = monitor.work_area();
     let position =
         default_body_position(model_rect, monitor.scale_factor(), area.position, area.size)?;

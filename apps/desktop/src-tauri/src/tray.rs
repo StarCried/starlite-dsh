@@ -113,6 +113,9 @@ pub fn set_pet_visible(app: AppHandle, visible: bool) -> Result<PetUiState, Stri
         window
             .show()
             .map_err(|_| "pet window visibility unavailable")?;
+        window
+            .unminimize()
+            .map_err(|_| "pet window visibility unavailable")?;
     } else {
         window
             .hide()

@@ -66,12 +66,13 @@ beforeEach(() => {
     observeInteractionMask: vi.fn(), setPointerPosition: vi.fn(), setPerformanceVisible: vi.fn(),setFrameRate:vi.fn(),setDisplaySize:vi.fn(),setPointerEnabled:vi.fn(),setModelAdjustments:vi.fn(),refreshInteractionMask:vi.fn(), destroy: vi.fn(),
     setHostPosition:vi.fn(),
   };
-  const monitor = {position: {x: 0, y: 0}, size: {width: 1920, height: 1080}, workArea: {position: {x: 0, y: 0}}};
+  const monitor = {position: {x: 0, y: 0}, size: {width: 1920, height: 1080}, workArea: {position: {x: 0, y: 0},size:{width:1920,height:1040}}};
   native.availableMonitors.mockResolvedValue([monitor]); native.primaryMonitor.mockResolvedValue(monitor);
   show = vi.fn(async () => changeVisibility("visible"));
   native.getCurrentWindow.mockReturnValue({
     show, hide: vi.fn(async () => changeVisibility("hidden")),
-    onMoved: vi.fn(async () => () => undefined), outerPosition: vi.fn(async () => ({x: 400, y: 400})),
+    onMoved: vi.fn(async () => () => undefined), outerPosition: vi.fn(async () => ({x: 400, y: -500})),
+    scaleFactor:vi.fn(async()=>1),
     outerSize: vi.fn(async () => ({width: 320, height: 480})), setPosition: vi.fn(async () => undefined),
   });
   native.invoke.mockImplementation(async command => command === "get_settings" || command === "prepare_model" ? structuredClone(settings) : command === "get_initial_connection" ? INITIAL_URL : command === "get_pet_ui_state" ? {paused:false,visible:true,clickThrough:false}:undefined);
@@ -118,6 +119,36 @@ afterEach(async () => {
 });
 
 describe("desktop hidden-window startup", () => {
+  it.each([1,1.5,2])("recovers an off-screen portrait even when transparent window margins remain visible at DPI %s",async dpi=>{
+    const window=native.getCurrentWindow();
+    window.outerPosition.mockResolvedValue({x:400,y:400});
+    window.outerSize.mockResolvedValue({width:736*dpi,height:1444*dpi});
+    window.scaleFactor.mockResolvedValue(dpi);
+    const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    expect(native.invoke).toHaveBeenCalledWith("restore_default_position",{primary:true,modelRect:expect.objectContaining({width:214,height:374})});
+    expect(controller.setHostPosition).toHaveBeenCalledWith(expect.any(Number),expect.any(Number),{resetMotion:true});
+  });
+  it("preserves a visible portrait on a negative-origin secondary display",async()=>{
+    native.getCurrentWindow().outerPosition.mockResolvedValue({x:-1800,y:-500});
+    native.availableMonitors.mockResolvedValue([{position:{x:-1920,y:0},size:{width:1920,height:1080},workArea:{position:{x:-1920,y:0},size:{width:1920,height:1040}}}]);
+    const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    expect(native.invoke.mock.calls.some(([command])=>command==="restore_default_position")).toBe(false);
+  });
+  it("tray reset restores position and visibility without reloading the model or clearing pause and calibration",async()=>{
+    const ready=startPet();await vi.waitFor(()=>expect(show).toHaveBeenCalledOnce());finishDeepLinks!();
+    await vi.waitFor(()=>expect(finishTraySubscription).toBeDefined());finishTraySubscription!();await ready;
+    uiListener!({payload:{paused:true,visible:false,clickThrough:false}});
+    native.invoke.mockClear();vi.mocked(controller.setModelAdjustments!).mockClear();
+    trayListener!({payload:"reset"});
+    await vi.waitFor(()=>expect(native.invoke).toHaveBeenCalledWith("set_pet_visible",{visible:true}));
+    expect(native.invoke).toHaveBeenCalledWith("restore_default_position",expect.objectContaining({primary:true}));
+    expect(controller.resetCamera).toHaveBeenCalledOnce();
+    expect(native.mountModel).toHaveBeenCalledOnce();expect(controller.status).toBe("paused");
+    expect(controller.setModelAdjustments).not.toHaveBeenCalled();
+    expect(native.invoke.mock.calls.some(([command])=>command==="patch_preferences")).toBe(false);
+  });
   it("authorizes a drag on the enlarged silhouette before restoring session scale",async()=>{
     vi.stubGlobal("innerWidth",736);vi.stubGlobal("innerHeight",1444);
     try{

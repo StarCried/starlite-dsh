@@ -21,12 +21,12 @@ with a stale/offline database. New vulnerabilities or informational warnings,
 changed warning kinds/versions, expired exceptions, scanner/network failures,
 and incomplete reports fail the check.
 
-## Reviewed baseline: 2026-10-31
+## Reviewed baseline: 2026-11-20
 
 | Scan | Result |
 | --- | --- |
-| `pnpm audit --json` | 173 dependencies, no reported vulnerabilities |
-| Full desktop Cargo.lock, cargo-audit 0.22.2 | 500 dependencies, 0 vulnerability entries, 9 unmaintained notices, 1 unsoundness warning |
+| `pnpm audit --json` | 208 dependencies, no reported vulnerabilities |
+| Full desktop Cargo.lock, cargo-audit 0.22.2 | 500 dependencies, 0 vulnerability entries, 10 unmaintained notices, 1 unsoundness warning |
 
 Happy DOM is updated from 20.11.0 to 21.0.4, including the upstream fix for
 [ESM import-alias code execution](https://github.com/advisories/GHSA-834v-8h66-3h79).
@@ -40,17 +40,21 @@ adding another exception. Cargo also resolves four existing Windows dependency
 edges to the already installed windows-sys 0.61.2 within their declared ranges;
 no new windows-sys version is introduced.
 
-The complete online gate passed against RustSec database
-`2295466c4e9df26647fd67d8fa1c705ac2fc7f81`, including the supported Windows
-target-graph check. No new advisory exception was added. Raw findings and the
-summary remain in the ignored `target/dependency-audit/` directory. These are
-point-in-time results; run the online gate again for each release.
+The review used RustSec database
+`074ea9a7ed619f511b5b7374c7a97e98d1e98be4` and the locked Windows target graph.
+The existing warnings retain their exact versions, kinds and target exposure.
+The new `chrono` maintenance notice is also absent from the supported Windows
+graph. Raw findings and the gate summary remain in the ignored
+`target/dependency-audit/` directory. These are point-in-time results; run the
+online gate again for each release.
 
 The Rust warnings are intentionally visible in the report and summary. The
-following narrowly scoped maintenance decisions expire on **2026-11-18**:
+following narrowly scoped decisions have individual review deadlines in
+[`dependency-audit-policy.json`](../tools/dependency-audit-policy.json):
 
 | Exact package | RustSec ID | Exposure |
 | --- | --- | --- |
+| chrono 0.4.45 | [RUSTSEC-2026-0543](https://rustsec.org/advisories/RUSTSEC-2026-0543.html) | Maintenance notice issued 2026-11-17; absent from supported Windows graph |
 | unic-char-property 0.9.0 | [RUSTSEC-2025-0081](https://rustsec.org/advisories/RUSTSEC-2025-0081.html) | Supported Windows graph |
 | unic-char-range 0.9.0 | [RUSTSEC-2025-0075](https://rustsec.org/advisories/RUSTSEC-2025-0075.html) | Supported Windows graph |
 | unic-common 0.9.0 | [RUSTSEC-2025-0080](https://rustsec.org/advisories/RUSTSEC-2025-0080.html) | Supported Windows graph |

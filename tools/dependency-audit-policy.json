@@ -10,12 +10,21 @@
   "rust": {
     "warnings": [
       {
+        "id": "RUSTSEC-2026-0543",
+        "package": "chrono",
+        "version": "0.4.45",
+        "kind": "unmaintained",
+        "inactiveOnTarget": true,
+        "reviewBy": "2026-12-20",
+        "reason": "Maintenance notice issued on 2026-11-17. This exact cross-platform lockfile dependency is absent from the supported x86_64-pc-windows-msvc graph, rechecked on 2026-11-20 and by every audit. Keep the warning visible pending migration through the Tauri dependency chain."
+      },
+      {
         "id": "RUSTSEC-2024-0370",
         "package": "proc-macro-error",
         "version": "1.0.4",
         "kind": "unmaintained",
         "inactiveOnTarget": true,
-        "reviewBy": "2026-11-18",
+        "reviewBy": "2026-12-20",
         "reason": "Transitive non-Windows dependency retained in the cross-platform Tauri lockfile; absent from the supported x86_64-pc-windows-msvc graph, which this gate rechecks. Keep the exact warning visible and revisit upstream migration."
       },
       {
@@ -24,7 +33,7 @@
         "version": "0.9.0",
         "kind": "unmaintained",
         "inactiveOnTarget": false,
-        "reviewBy": "2026-11-18",
+        "reviewBy": "2026-12-20",
         "reason": "Unmaintained Unicode crate via urlpattern 0.3.0 and tauri-utils 2.9.3 in the supported Windows build. This is a maintenance notice, not a reported security vulnerability; migration belongs to the compatible Tauri dependency chain."
       },
       {
@@ -33,7 +42,7 @@
         "version": "0.9.0",
         "kind": "unmaintained",
         "inactiveOnTarget": false,
-        "reviewBy": "2026-11-18",
+        "reviewBy": "2026-12-20",
         "reason": "Unmaintained Unicode crate via urlpattern 0.3.0 and tauri-utils 2.9.3 in the supported Windows build. This is a maintenance notice, not a reported security vulnerability; migration belongs to the compatible Tauri dependency chain."
       },
       {
@@ -42,7 +51,7 @@
         "version": "0.9.0",
         "kind": "unmaintained",
         "inactiveOnTarget": false,
-        "reviewBy": "2026-11-18",
+        "reviewBy": "2026-12-20",
         "reason": "Unmaintained Unicode crate via urlpattern 0.3.0 and tauri-utils 2.9.3 in the supported Windows build. This is a maintenance notice, not a reported security vulnerability; migration belongs to the compatible Tauri dependency chain."
       },
       {
@@ -51,7 +60,7 @@
         "version": "0.9.0",
         "kind": "unmaintained",
         "inactiveOnTarget": false,
-        "reviewBy": "2026-11-18",
+        "reviewBy": "2026-12-20",
         "reason": "Unmaintained Unicode crate via urlpattern 0.3.0 and tauri-utils 2.9.3 in the supported Windows build. This is a maintenance notice, not a reported security vulnerability; migration belongs to the compatible Tauri dependency chain."
       },
       {
@@ -60,7 +69,7 @@
         "version": "0.9.0",
         "kind": "unmaintained",
         "inactiveOnTarget": false,
-        "reviewBy": "2026-11-18",
+        "reviewBy": "2026-12-20",
         "reason": "Unmaintained Unicode crate via urlpattern 0.3.0 and tauri-utils 2.9.3 in the supported Windows build. This is a maintenance notice, not a reported security vulnerability; migration belongs to the compatible Tauri dependency chain."
       },
       {
@@ -69,7 +78,7 @@
         "version": "4.3.4",
         "kind": "unmaintained",
         "inactiveOnTarget": true,
-        "reviewBy": "2026-11-18",
+        "reviewBy": "2026-12-20",
         "reason": "Transitive non-Windows dependency retained in the cross-platform Tauri lockfile; absent from the supported x86_64-pc-windows-msvc graph, which this gate rechecks. Keep the exact warning visible and revisit upstream migration."
       },
       {
@@ -78,7 +87,7 @@
         "version": "5.14.0",
         "kind": "unmaintained",
         "inactiveOnTarget": true,
-        "reviewBy": "2026-11-18",
+        "reviewBy": "2026-12-20",
         "reason": "Transitive non-Windows dependency retained in the cross-platform Tauri lockfile; absent from the supported x86_64-pc-windows-msvc graph, which this gate rechecks. Keep the exact warning visible and revisit upstream migration."
       },
       {
@@ -87,7 +96,7 @@
         "version": "5.14.0",
         "kind": "unmaintained",
         "inactiveOnTarget": true,
-        "reviewBy": "2026-11-18",
+        "reviewBy": "2026-12-20",
         "reason": "Transitive non-Windows dependency retained in the cross-platform Tauri lockfile; absent from the supported x86_64-pc-windows-msvc graph, which this gate rechecks. Keep the exact warning visible and revisit upstream migration."
       },
       {
@@ -96,7 +105,7 @@
         "version": "0.18.5",
         "kind": "unsound",
         "inactiveOnTarget": true,
-        "reviewBy": "2026-11-18",
+        "reviewBy": "2026-12-20",
         "reason": "Transitive non-Windows dependency retained in the cross-platform Tauri lockfile; absent from the supported x86_64-pc-windows-msvc graph, which this gate rechecks. Keep the exact warning visible and revisit upstream migration."
       }
     ],

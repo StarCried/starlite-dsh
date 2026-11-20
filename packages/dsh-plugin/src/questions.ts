@@ -11,7 +11,7 @@ interface ProjectionService {
   stateOf(session:unknown,key:"userQuestions"):unknown;
   onChanged(listener:(session:unknown,key:string)=>void):()=>void;
 }
-interface AgentDirectory {get(id:string):unknown;roots():readonly unknown[]}
+interface AgentDirectory {get(id:string):unknown;roots?():readonly unknown[];list?():readonly unknown[]}
 interface LateQuestion {agent:unknown;key:unknown;callId:string;request:PetInteraction}
 interface Pending {
   key:unknown;request:PetInteraction;late?:LateQuestion;deadline?:number;
@@ -159,18 +159,27 @@ export class QuestionBridge {
   }
   #directory():AgentDirectory|undefined{
     const service=this.#service("agents");
-    return typeof service?.get==="function"&&typeof service.roots==="function"?service as unknown as AgentDirectory:undefined;
+    return typeof service?.get==="function"&&(typeof service.roots==="function"||typeof service.list==="function")?service as unknown as AgentDirectory:undefined;
   }
   #service(name:string):Record<string,unknown>|undefined{try{return record(this.services.get?.(name));}catch{return undefined;}}
   #liveRoot(agent:unknown,key:unknown):boolean{
-    try{const row=record(agent),directory=this.#directory();return Boolean(row&&directory&&row.session===key&&typeof row.id==="string"&&directory.get(row.id)===agent&&directory.roots().includes(agent));}catch{return false;}
+    try{
+      const row=record(agent),directory=this.#directory();
+      if(!row||!directory||row.session!==key||typeof row.id!=="string"||directory.get(row.id)!==agent)return false;
+      if(typeof directory.roots==="function")return directory.roots().includes(agent);
+      // Current DSH lists every live agent. Match its question eligibility:
+      // origin marks delegated sessions; parentSession alone also occurs on ordinary forks.
+      const header=record(record(key)?.header);
+      return Boolean(header&&header.origin!=="subagent");
+    }catch{return false;}
   }
   #lateQuestions():LateQuestion[]{
     const service=this.#questionService(),projections=this.#projectionService(),directory=this.#directory();
     if(!service||!projections||!directory)return [];
     const result:LateQuestion[]=[];
     try{
-      for(const agent of directory.roots().slice(0,128)){
+      const agents=typeof directory.roots==="function"?directory.roots():directory.list!();
+      for(const agent of agents.slice(0,128)){
         const key=record(agent)?.session;if(!key||!this.#liveRoot(agent,key))continue;
         const active=record(record(projections.stateOf(key,"userQuestions"))?.questions)?.active;
         if(!Array.isArray(active)||active.length>MAX_PENDING)continue;

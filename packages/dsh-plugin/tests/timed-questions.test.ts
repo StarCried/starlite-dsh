@@ -4,9 +4,9 @@ import {DshStateAggregator} from "../src/aggregator.js";
 import {QuestionBridge} from "../src/questions.js";
 const questions=[{id:"q",question:"Choose",detail:"Supporting detail",options:[{label:"Yes"},{label:"No"}],multiSelect:true}];
 const settle=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
-async function fixture(remainingMs=500){
+async function fixture(remainingMs=500,directory:"roots"|"list"="roots"){
   const snapshots:PetSnapshot[]=[],aggregator=new DshStateAggregator();await aggregator.start(value=>snapshots.push(value));
-  const session={id:"PRIVATE-session"},agent={id:"PRIVATE-agent",session};
+  const session={id:"PRIVATE-session",header:{} as {origin?:"subagent";parentSession?:string}},agent={id:"PRIVATE-agent",session};
   let roots:unknown[]=[agent],registered:unknown=agent;
   let active:Array<{callId:string;state:string;questions:unknown}>=[];
   let listener:((session:unknown,key:string)=>void)|undefined,claims=0;
@@ -18,7 +18,7 @@ async function fixture(remainingMs=500){
   const answer=vi.fn(async()=>true);
   const unsubscribe=vi.fn(()=>{listener=undefined;});
   const services:Record<string,unknown>={
-    agents:{get:()=>registered,roots:()=>roots},
+    agents:{get:()=>registered,[directory]:()=>roots},
     userQuestions:{attachWait,answer},
     sessionProjections:{stateOf:()=>({questions:{active}}),onChanged:(value:typeof listener)=>{listener=value;return unsubscribe;}},
   };
@@ -37,6 +37,33 @@ function reply(request:PetInteraction):PetAnswer{return {requestId:request.reque
 afterEach(()=>vi.useRealTimers());
 
 describe("official timed and continued user questions",()=>{
+  it.each([false,true])("supports list-based timed and continued questions on ordinary sessions (historical fork: %s)",async fork=>{
+    const f=await fixture(500,"list");try{
+      if(fork)f.session.header.parentSession="PRIVATE-parent";
+      const wait=f.wait();await settle();const timed=f.request();
+      expect(f.claims()).toBe(1);await f.bridge.answer(reply(timed));
+      expect(await wait.result).toEqual({answers:reply(timed).answers});expect(wait.next).not.toHaveBeenCalled();
+      f.project();await settle();const continued=f.request();
+      expect(continued.wait).toEqual({state:"continued"});await f.bridge.answer(reply(continued));
+      expect(f.answer).toHaveBeenCalledExactlyOnceWith(f.agent,"PRIVATE-call",{answers:reply(continued).answers});
+    }finally{await f.close();}
+  });
+  it("excludes subagent-origin sessions from list-based timed and continued input",async()=>{
+    const f=await fixture(500,"list");try{
+      f.session.header.origin="subagent";
+      const wait=f.wait();expect(await wait.result).toBe("official-answer");expect(wait.next).toHaveBeenCalledOnce();
+      f.project();await settle();expect(f.request()).toBeUndefined();
+      expect(f.attachWait).not.toHaveBeenCalled();expect(f.answer).not.toHaveBeenCalled();
+    }finally{await f.close();}
+  });
+  it("still rejects a stale live identity in the list-based registry",async()=>{
+    const f=await fixture(500,"list");try{
+      f.project();await settle();const request=f.request();f.owner({...f.agent});
+      await expect(f.bridge.answer(reply(request))).rejects.toThrow("no longer pending");
+      const wait=f.wait();expect(await wait.result).toBe("official-answer");
+      expect(f.attachWait).not.toHaveBeenCalled();expect(f.answer).not.toHaveBeenCalled();
+    }finally{await f.close();}
+  });
   it("does not claim or expose approval intent even when a request carries timed metadata",async()=>{
     const f=await fixture();try{
       const next=vi.fn(async()=>"official-permission"),count=f.snapshots.length;

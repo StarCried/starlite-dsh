@@ -41,6 +41,7 @@ const questionLifecycle = questionLifecycleContract({
   fold: await optionalSource("dsh-user-questions/lib/types/projection.d.ts"),
   projections: await optionalSource("dsh-session-projection/lib/types/index.d.ts"),
   agents: await source("dsh-agent/lib/types/index.d.ts"),
+  sessions: sessionTypes,
 });
 const titles = await source("dsh-session-title/lib/types/index.d.ts");
 const clientSessions = await source("dsh-api-session-controller/lib/types/client/contract/sessions.d.ts");

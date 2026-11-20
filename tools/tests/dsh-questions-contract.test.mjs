@@ -22,7 +22,20 @@ export declare const userQuestionProjectionDefinition: {
 };`;
 const current = {...contract, fold: currentFold, projections: `onChanged(listener: ProjectionChangeListener): () => void;
 stateOf(session: Session, key: string): unknown;`};
+const listBased = {...current, agents: `get(id: SessionId): Agent | undefined; list(): Agent[];`,
+ sessions: `interface SessionHeader { readonly parentSession?: SessionId; readonly origin?: 'subagent'; }`};
 describe("typed public question lifecycle contracts",()=>{
+ it("accepts the list-based registry with the explicit Session origin marker",()=>{
+  expect(questionLifecycleContract(listBased)).toEqual({kind:"timed + continued",missing:[]});
+ });
+ it.each([
+  ["agents", "list(): Agent[]", "list(): unknown[]", "live agent directory"],
+  ["sessions", "origin?", "parentOrigin?", "subagent session origin"],
+  ["sessions", "'subagent'", "string", "subagent session origin"],
+  ["sessions", "SessionHeader", "CreateSessionOptions", "subagent session origin"],
+ ])("rejects a changed list-based %s field %s",(field,before,after,label)=>{
+  expect(questionLifecycleContract({...listBased,[field]:listBased[field].replace(before,after)}).missing).toContain(label);
+ });
  it("accepts the 0.2.2 registered domain fold and retained registry reader",()=>{
   expect(questionLifecycleContract(current)).toEqual({kind:"timed + continued",missing:[]});
  });
@@ -52,7 +65,7 @@ describe("typed public question lifecycle contracts",()=>{
   ["projections","SessionProjectionStateMap[K] | undefined","unknown","authoritative Host projection read"],
   ["projections","onChanged(listener:","oldOnChanged(listener:","projection change subscription and disposal"],
   ["agents","get(id: SessionId)","get(id: string)","exact live agent lookup"],
-  ["agents","roots(): Agent[]","roots(): unknown[]","live runtime root directory"],
+  ["agents","roots(): Agent[]","roots(): unknown[]","live agent directory"],
  ])("rejects changed %s lifecycle field %s",(field,before,after,label)=>{
   expect(questionLifecycleContract({...contract,[field]:contract[field].replace(before,after)}).missing).toContain(label);
  });

@@ -176,6 +176,10 @@
   obtain a reader handle. Keep contract checks against both declaration generations.
   A question item's `intent.kind: "approval"` belongs to DSH, including mixed
   batches and continued projections; reject it before wire parsing drops intent.
+- DSH's list-based agent registry includes delegated sessions. Keep the exact
+  `agents.get(id) === agent` identity check and exclude `session.header.origin ===
+  "subagent"` from questions. `parentSession` is not a substitute: historical
+  ordinary forks can retain it. Older Hosts use `agents.roots()` instead.
 - Native GUI acceptance uses `tauri build --no-bundle`; plain `cargo build
   --release` can retain the development URL instead of embedded frontend assets.
   For isolated native acceptance, override the Tauri identifier in a local-only

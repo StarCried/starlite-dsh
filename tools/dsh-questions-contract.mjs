@@ -18,8 +18,13 @@ export function questionLifecycleContract(sources) {
     // questions.active before exposing any question and never owns registration.
     ["authoritative Host projection read", sources.projections, /stateOf<K\s+extends\s+keyof\s+SessionProjectionStateMap>\(session:\s*Session,\s*key:\s*K\):\s*SessionProjectionStateMap\[K\]\s*\|\s*undefined;|stateOf\(session:\s*Session,\s*key:\s*string\):\s*unknown;/u],
     ["exact live agent lookup", sources.agents, /get\(id:\s*SessionId\):\s*Agent\s*\|\s*undefined;/u],
-    ["live runtime root directory", sources.agents, /roots\(\):\s*Agent\[\];/u],
+    ["live agent directory", sources.agents, /(?:roots|list)\(\):\s*Agent\[\];/u],
   ];
+  // The list-based registry includes subagents. Its question service uses the
+  // durable origin marker, not parentSession (which ordinary forks may retain).
+  if (!/roots\(\):\s*Agent\[\];/u.test(withoutComments(sources.agents))) {
+    requirements.push(["subagent session origin", sources.sessions, /interface\s+SessionHeader\s*\{[^}]*readonly\s+origin\?:\s*'subagent';/u]);
+  }
   const missing = requirements.filter(([,text,pattern])=>!pattern.test(withoutComments(text))).map(([label])=>label);
   return {kind:"timed + continued",missing};
 }
